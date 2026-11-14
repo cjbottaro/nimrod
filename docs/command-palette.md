@@ -12,7 +12,7 @@ Linux uses the command palette instead of a File/Edit/Window/Help menu bar. **Op
 
 ## Harness-aware commands
 
-**New session** stays Pi-default. **New Copilot session** creates [Copilot](copilot.md), with the hint **Start a Copilot session**. This action is unbound by default. ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking/mode/context-window and Pi MCP commands reflect the selected
+**New session**, **New named session…** and **New temporary session** use your global/project default harness (initially Pi). The normal and temporary **with harness…** variants explicitly select a harness for one creation without changing that default; these two variants are bindable but initially unbound. **New named session…** always combines name and an inline harness list in one modal. Up/Down changes the harness while the name field keeps focus; typing preserves your selection. The effective default is selected when eligible, never the last-used harness. See [session creation](sessions.md#create-a-session). ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking/mode/context-window and Pi MCP commands reflect the selected
 session’s actual support. Unsupported session actions are absent. Application
 and project actions remain available without a selected session, so an empty
 project can still create or resume work. Commands remain Nimrod-owned, not agent

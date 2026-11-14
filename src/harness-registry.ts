@@ -9,25 +9,21 @@ import type { SavedSessionIdentity } from './session-lifecycle';
 export function defineHarness<T extends HarnessRegistration>(registration: T): T { return registration; }
 
 export function registerHarnessMetadata(registrations: readonly HarnessRegistration[]): void {
-  const ids = new Set<string>(), creationActions = new Set<string>();
+  const ids = new Set<string>();
   for (const registration of registrations) {
     if (ids.has(registration.id)) throw new Error(`Duplicate harness registration: ${registration.id}`);
     ids.add(registration.id);
-    const action = registration.creation.action;
-    if (action && creationActions.has(action.id)) throw new Error(`Ambiguous harness creation action: ${action.id}`);
-    if (action) creationActions.add(action.id);
   }
   for (const registration of registrations) {
     savedDraftScope(registration.id, 'registration');
     registerCardRenderer(registration.id, registration.cards);
-    if (registration.creation.action) registerHarnessAction({ ...registration.creation.action, context: 'project', defaults: [] });
     for (const action of registration.actions) registerHarnessAction({ ...action, defaults: [] });
   }
 }
 
 export class HarnessRegistry {
   readonly projects: readonly HarnessProject[];
-  constructor(registrations: readonly HarnessRegistration[], private readonly host: HarnessProjectHost, readonly defaultId: string, private readonly nativeInitializers: readonly (() => Promise<void>)[] = []) {
+  constructor(registrations: readonly HarnessRegistration[], private readonly host: HarnessProjectHost, readonly primaryId: string, private readonly nativeInitializers: readonly (() => Promise<void>)[] = []) {
     registerHarnessMetadata(registrations);
     const ids = new Set<string>();
     this.projects = registrations.map(registration => {
@@ -39,7 +35,7 @@ export class HarnessRegistry {
       if (project.creation !== registration.creation) throw new Error(`Harness factory changed creation capabilities: ${registration.id}`);
       return project;
     });
-    this.get(defaultId);
+    this.get(primaryId);
   }
   get(id: string): HarnessProject {
     const project = this.projects.find(project => project.id === id);
@@ -47,7 +43,7 @@ export class HarnessRegistry {
     return project;
   }
   projectActions(): readonly HarnessProjectAction[] {
-    const ids = new Set(this.projects.flatMap(project => project.creation.action ? [project.creation.action.id] : []));
+    const ids = new Set<string>();
     const actions = this.projects.filter(project => project.availability.available()).flatMap(project => project.actions.current());
     for (const action of actions) {
       if (ids.has(action.id)) throw new Error(`Ambiguous harness project action: ${action.id}`);
@@ -76,7 +72,10 @@ export class HarnessRegistry {
       if (!project.saved.accepts(request.reference)) throw new Error('Saved identity belongs to another harness');
     } else {
       if (!project.creation.modes.includes(request.mode)) throw new Error(`${project.label} does not support ${request.mode} sessions`);
-      if (request.initialName !== undefined && !project.creation.named) throw new Error(`${project.label} does not support initial naming`);
+      if (request.initialName !== undefined) {
+        if (!project.creation.named) throw new Error(`${project.label} does not support initial naming`);
+        request = { ...request, initialName: project.creation.validateName(request.initialName) };
+      }
     }
     const session = project.create(host, request);
     this.assertIdentity(project, session);
@@ -110,7 +109,7 @@ export class HarnessRegistry {
       this.host.notice({ id: `harness-discovery:${project.id}`, operation: `Find ${project.label} runtime`, message: String(error) });
     })));
     for (const initialize of this.nativeInitializers) void Promise.resolve().then(initialize).catch(error => this.host.notice({ id: 'native-initialization', operation: 'Initialize native owners', message: String(error) }));
-    // Preserve the default/native host's blocking boot contract. Other owners
+    // Preserve the primary/native host's blocking boot contract. Other owners
     // report source-local failures themselves and do not gate the application.
     for (const project of this.projects.filter(project => project.initialization.blocking)) await project.initialization.run();
     for (const project of this.projects.filter(project => !project.initialization.blocking)) void Promise.resolve().then(() => project.initialization.run()).catch(error => this.host.notice({ id: `harness-init:${project.id}`, operation: `Initialize ${project.label}`, message: String(error) }));

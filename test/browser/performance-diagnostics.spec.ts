@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { chooseSetting, demoFixture, visible } from './demo-fixture';
 import type { PerformanceReport } from '../../src/performance-diagnostics';
 
 // Offline WebKit, separate mocked Settings window and local report storage.
@@ -23,9 +23,9 @@ test('global opt-in captures only the project and preserves reading, draft and d
     await page.keyboard.press(primary + '+,');
     const settingsPage = await fixture.settingsWindow();
     await settingsPage.locator('#settings-category-diagnostics').click();
-    await expect(settingsPage.locator('#performance-mode')).toHaveValue('off');
+    await expect(settingsPage.locator('#performance-mode')).not.toBeChecked();
     await expect(settingsPage.locator('#performance-capture')).toBeHidden();
-    await settingsPage.locator('#performance-mode').selectOption('on');
+    await chooseSetting(settingsPage, 'performance-mode', 'on');
     await settingsPage.locator('#settings-back').click();
     await expect(prompt).toBeFocused();
     // Local fixture packet exercises the ordered event-to-shell probes without a prompt.
@@ -73,7 +73,7 @@ test('global opt-in captures only the project and preserves reading, draft and d
     await capture();
     const reopened = await fixture.settingsWindow();
     await reopened.locator('#settings-category-diagnostics').click();
-    await reopened.locator('#performance-mode').selectOption('off');
+    await chooseSetting(reopened, 'performance-mode', 'off');
     await expect(page.locator('#application-notices')).not.toContainText('Capturing five more seconds');
     await reopened.locator('#settings-back').click();
     await expect(prompt).toHaveValue('Private draft: never record this text');

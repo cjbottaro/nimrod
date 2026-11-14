@@ -6,8 +6,8 @@ import { installZoom, savedZoom, zoomShortcut, ZOOM_STORAGE_KEY } from '../src/z
 import { webviewHtml } from './view-fixture';
 
 function fixture(initial?: unknown, apply: (scale: number) => Promise<void> = async () => {}) {
-  const dom = new JSDOM('<select id="zoom"></select><span id="notice" hidden></span><textarea></textarea>');
-  const select = dom.window.document.querySelector('select')!;
+  const dom = new JSDOM('<button id="zoom">Change…</button><span id="notice" hidden></span><textarea></textarea>');
+  const select = dom.window.document.querySelector('button')!;
   const notice = dom.window.document.querySelector('span')!;
   const scales: number[] = [], saved: number[] = [];
   const zoom = installZoom(dom.window as unknown as Window, select, notice, {

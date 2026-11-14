@@ -8,6 +8,10 @@ node = "25.9.0"
 RUSTC_WRAPPER = "sccache"
 CARGO_INCREMENTAL = "0"
 
+[tasks.setup]
+description = "Install the pinned toolchain, npm dependencies and local nimrod launcher"
+run = ["mise install", "npm ci", "bash scripts/install-cli.sh"]
+
 [tasks.dev]
 run = "npm run tauri dev"
 

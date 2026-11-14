@@ -5,7 +5,8 @@ for (const entry of ['composer', 'palette']) test(`live permission change via ${
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     const prompt = page.locator(visible('prompt'));
     await expect(page.locator(visible('model'))).toHaveText('small');
     await prompt.fill('live permission change fixture'); await prompt.press('Enter');
@@ -67,7 +68,8 @@ test('screenshot regression: /permissions allow-all submits during streaming ins
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('model'))).toHaveText('small');
     const prompt = page.locator(visible('prompt'));
     for (const text of ['First fixture turn', 'Second fixture turn']) {

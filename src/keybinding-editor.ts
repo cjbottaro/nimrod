@@ -11,7 +11,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
 }) {
   const document = content.ownerDocument, mac = isMac(window);
   const section = document.createElement('section'); section.id = 'keybindings-section'; section.setAttribute('aria-labelledby', 'keybindings-title');
-  section.innerHTML = `<h2 id="keybindings-title">Keybindings</h2><p class="settings-description">Search actions or shortcuts. Changes apply immediately after saving.</p><div class="keybinding-toolbar"><input id="keybinding-search" type="search" aria-label="Search keybindings" placeholder="Search actions or shortcuts…"><button id="keybinding-reset-all" type="button" class="secondary">Reset all…</button></div><p class="settings-hint">Cmd on macOS, Ctrl on Linux. Project shortcuts pause while dialogs are open. Composer text editing and native menu shortcuts are not customizable here.</p><div id="keybinding-list"></div><p id="keybinding-status" role="status"></p>`;
+  section.innerHTML = `<h2 id="keybindings-title">Keybindings</h2><p class="settings-description">Search actions or shortcuts. Changes apply immediately after saving.</p><div class="keybinding-toolbar"><input id="keybinding-search" type="search" aria-label="Search keybindings" placeholder="Search actions or shortcuts…"><button id="keybinding-reset-all" type="button" class="secondary utility-button">Reset all…</button></div><p class="settings-hint">Cmd on macOS, Ctrl on Linux. Project shortcuts pause while dialogs are open. Composer text editing and native menu shortcuts are not customizable here.</p><div id="keybinding-list"></div><p id="keybinding-status" role="status"></p>`;
   section.className = 'settings-panel'; section.dataset.category = 'keybindings';
   section.setAttribute('role', 'tabpanel'); section.setAttribute('aria-labelledby', 'settings-category-keybindings'); section.tabIndex = 0; section.hidden = true;
   content.insertBefore(section, content.querySelector('[data-category="runtime"]'));
@@ -41,7 +41,7 @@ export function installKeybindingEditor(window: Window, content: HTMLElement, ho
       description.append(label, scope); row.append(description);
       const controls = document.createElement('div'); controls.className = 'keybinding-buttons';
       const button = (text: string, aria: string, run: () => void) => {
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary'; button.textContent = text; button.setAttribute('aria-label', aria); button.disabled = saving; button.addEventListener('click', run); controls.append(button);
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary utility-button'; button.textContent = text; button.setAttribute('aria-label', aria); button.disabled = saving; button.addEventListener('click', run); controls.append(button);
       };
       bindingsFor(action.id, overrides).forEach((binding, index) => {
         button(shortcutLabel(binding, mac), `Change ${action.label} shortcut ${shortcutLabel(binding, mac)}`, () => open({ id: action.id, index }));

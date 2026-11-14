@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createCodexConnection } from './connection';
+import { sessionName } from '../session-naming';
 import { nativeCodexTransport } from './native';
 import { CodexSessionHistory, codexHistoryKey } from './session-history';
 import { codexSessionDeletion } from './session-deletion';
@@ -15,7 +16,7 @@ import { commandInteraction } from '../command-interaction';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
-const creation = { action: { id: 'new-codex', label: 'New Codex session', detail: 'Start a Codex app-server session' }, defaultMode: 'saved', modes: ['saved'], named: false, title: 'Codex session' } satisfies import('../harness-contract').HarnessCreation;
+const creation = { defaultMode: 'saved', modes: ['saved'], named: true, validateName: sessionName, title: 'Codex session' } satisfies import('../harness-contract').HarnessCreation;
 export const codexHarness = defineHarness({ creation, cards: () => codexToolPlugin, id: 'codex', label: 'Codex', actions: [], create: createCodexProject });
 function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
   const availability = startupAvailability(() => invoke<boolean>('codex_runtime_available', { cli: projectHost.runtime().codex }));
@@ -61,12 +62,15 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
   let signature = '', sequence = 0, retiring = false;
   const lifecycle = createCodexConnection(() => owner, backend, {
+    initialName: request.mode === 'saved' ? request.initialName : undefined,
     project: host.project, transport: nativeCodexTransport(host.project, () => ({ cli: project.runtime().codex, generation: generation() })),
     current: lifetime.current, available: options => ready() && !project.deletionPending() && lifetime.available(options),
     tearingDown: () => lifetime.closing() || lifetime.deleting() || lifetime.reloading(),
     gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked',
     conflicts: id => lifetime.conflicts({ kind: 'codex', sessionId: id }), drafts: host.drafts,
     effects: { changed: effects.changed, identified: effects.identified, retire: effects.retire,
+      nameFailed: error => effects.notice({ id: 'rename', operation: 'Name new session',
+        message: 'The session was created, but its name could not be confirmed. Use Rename session to try again.', details: String(error) }),
       resolved: issue => effects.resolve(issue === 'cleanup' ? 'codex-cleanup' : 'connection'), hasConnectionOutcome: effects.hasConnectionOutcome,
       failure: failure => {
         if (retiring || lifetime.closing() || lifetime.deleting()) return;

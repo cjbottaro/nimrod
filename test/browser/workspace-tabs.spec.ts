@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { demoFixture, visible } from './demo-fixture';
+import { chooseSetting, demoFixture, visible } from './demo-fixture';
 
 const sessions = '#open-sessions .session-row';
 
@@ -213,7 +213,7 @@ test('Settings test notification is recorded without running another agent and O
     await settingsPage.getByRole('button', { name: 'Send test notification', exact: true }).click();
     await expect(settingsPage.locator('#notification-status')).toHaveText(/Test notification submitted to the OS/);
     expect(demo.calls.filter(c => c.command === 'test_notification')).toHaveLength(1);
-    await settingsPage.locator('#notification-mode').selectOption('off');
+    await chooseSetting(settingsPage, 'notification-mode', 'off');
     await expect(settingsPage.locator('#notification-test')).toBeDisabled();
     await settingsPage.getByRole('button', { name: 'Refresh notification diagnostics', exact: true }).click();
     await expect(settingsPage.locator('#notification-status')).toHaveText(/Notification diagnostics.*foreground handler calls: 1/);
@@ -549,7 +549,7 @@ test('named-session palette step is compact, single-line and cancels without dis
     const name = page.getByRole('textbox', { name: 'Session name', exact: true });
     await expect(name).toBeFocused(); await expect(name).toHaveAttribute('type', 'text');
     await expect(page.locator('#host-dialog')).not.toBeVisible();
-    for (const id of ['palette-list', 'palette-back', 'palette-refresh']) await expect(page.locator(`#${id}`)).toBeHidden();
+    for (const id of ['palette-back', 'palette-refresh']) await expect(page.locator(`#${id}`)).toBeHidden();
     await expect(page.locator('#palette-create')).toBeVisible();
     await expect(page.locator('#palette-create')).toBeDisabled();
     await name.fill('   '); await name.press('Enter');
@@ -557,9 +557,9 @@ test('named-session palette step is compact, single-line and cancels without dis
     await name.fill('A session name');
     await expect(page.locator('#palette-create')).toBeEnabled();
     const fieldBox = (await name.boundingBox())!, buttonBox = (await page.locator('#palette-create').boundingBox())!;
-    expect(Math.abs(fieldBox.y + fieldBox.height / 2 - buttonBox.y - buttonBox.height / 2)).toBeLessThan(2);
-    expect(buttonBox.x).toBeGreaterThan(fieldBox.x);
-    await expect(page.locator('#palette-status')).toHaveText('Enter to create · Esc to cancel');
+    expect(buttonBox.y).toBeGreaterThan(fieldBox.y + fieldBox.height);
+    await expect(page.getByRole('listbox', { name: 'Harness', exact: true })).toBeVisible();
+    await expect(page.locator('#palette-status')).toHaveText('Harness: Pi · ↑/↓ to choose · Enter to create · Esc to cancel');
     await name.press('Escape');
     await expect(page.locator('#command-palette')).not.toBeVisible();
     await expect(prompt).toBeFocused(); await expect(prompt).toHaveValue('Keep this unsent draft');

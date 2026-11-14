@@ -1,4 +1,5 @@
-import { createBundledHarnessRegistry } from './bundled-harnesses';
+import { creationChoices, creationDefault, supportsCreation, type SessionCreationKind } from './session-creation';
+import { createBundledHarnessRegistry, bundledHarnesses } from './bundled-harnesses';
 import type { HarnessProject, HarnessSession, SessionRequest, HarnessAction as SessionAction } from './harness-contract';
 import type { HarnessSessionHost, HarnessDeletionParticipant } from './harness-host';
 import { SessionDeletionCoordinator } from './session-deletion-coordinator';
@@ -17,6 +18,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { notificationPreview, sessionNotifications, type NotificationDispatch, type NotificationClick } from './notifications';
 import { SessionNavigation, SESSION_VIEWS, type SessionView, type SelectionIntent, type NavigationSnapshot } from './session-navigation';
 import { SessionConnection } from './session-connection';
+import { SessionPresenter } from './session-presenter';
 import { sessionName } from './session-naming';
 import { installSessionContextMenu } from './session-context-menu';
 import { installSidebarResize, sidebarWidthKey } from './sidebar-resize';
@@ -32,8 +34,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { AttachmentStore } from './attachment-store';
 import { readClipboardImage } from './clipboard-image';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { BUILTIN_THEMES, CATALOG_THEMES } from './themes/builtins';
-import type { ColorTheme } from './themes/theme';
+import { createThemeSelection } from './themes/selection';
+import { settingsChoicePage } from './settings-choice-controls';
 import { measureWork } from './performance-diagnostics';
 import { SessionDrafts } from './session-drafts';
 import { NativeDrafts } from './native-drafts';
@@ -57,6 +59,7 @@ import './workspace.css';
 import './keybindings.css';
 import './modal.css';
 import './application-notices.css';
+import './utility-button.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined;
@@ -109,7 +112,7 @@ const dialogs = new Dialogs();
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
   canCover: other => other.id === 'command-palette' && palette.isDeleting,
 });
-const settingsSurface = installSettingsSurface(preferences, notices);
+const settingsSurface = installSettingsSurface(preferences, notices, false, bundledHarnesses);
 const { settings, themes, zoom, runtime, notificationError, notificationProgress, capturePerformance } = settingsSurface;
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
@@ -123,12 +126,17 @@ let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
 let sidebarVisible = stored('nimrod.sidebar.visible') !== false;
 let active: Tab | undefined;
-// Remember navigation separately from the conversation actually shown by the filter.
-let presented: Tab | undefined;
+// Navigation selection remains independent from the conversation shown by the filter.
 const navigation = new SessionNavigation<Tab>({ needsAttention, isWorking, isConnected });
 const sessionContextMenu = installSessionContextMenu();
 // Read-only lifecycle/storage membership; UI order comes only from navigation projections.
 const tabs = navigation.open();
+const presentation = new SessionPresenter<Tab>({
+  sessions: () => tabs, conversation,
+  identity: required('project-session'), name: required('project-session-name'), badge: required('mode-badge'),
+  emptyFocus: () => required(`sidebar-${sidebarView}`),
+  switched: syncPopouts, controlsChanged: reloadControl,
+});
 let recency = new SessionRecency(undefined);
 const sidebarViews = SESSION_VIEWS;
 let sidebarView: SessionView = 'all';
@@ -146,7 +154,7 @@ const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function syncPopouts(): void {
   if (!workspace) return;
-  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.integration.references.file() ?? null })), presented?.id ?? null);
+  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.integration.references.file() ?? null })), presentation.current?.id ?? null);
 }
 interface Tab {
   readonly project: HarnessProject;
@@ -187,7 +195,7 @@ const sidebarResize = installSidebarResize(window, {
   save: width => { if (workspace) save(sidebarWidthKey(workspace), width); },
 });
 let drafts = makeDrafts();
-function lastSession() { return harnesses.get(harnesses.defaultId).saved.last(); }
+function lastSession() { return harnesses.get(harnesses.primaryId).saved.last(); }
 const previewResponse = notificationPreview(window);
 const notifySession = sessionNotifications({
   focused: () => getCurrentWindow().isFocused(),
@@ -195,7 +203,7 @@ const notifySession = sessionNotifications({
   send: (kind, target) => invoke<NotificationDispatch>('notify_session', { kind, session: target.session, target: target.target, selected: target.selected(), ...(target.preview ? { preview: target.preview } : {}) }),
 }, () => preferences.notificationsEnabled(), notificationError, notificationProgress);
 const selectedConnection = new SessionConnection<Tab>({
-  selected: () => presented,
+  selected: () => presentation.current,
   eligibility: tab => {
     if (!ready || unloading || !workspace || !tabs.includes(tab) || !tab.project.availability.available() || tab.closing || tab.reloading || tab.awaitingSelection) return 'unavailable';
     return tab.lifecycle.eligibility();
@@ -305,7 +313,11 @@ const unlistenNotificationClicks = await listen<NotificationClick>('nimrod-notif
     tab.view.scrollToBottom();
   })();
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
-preferences.subscribe(() => { void reloadCardPlugins(); refreshShortcutHints(); });
+let creationDefaultId = preferences.defaultHarness();
+preferences.subscribe(() => {
+  void reloadCardPlugins(); refreshShortcutHints();
+  if (creationDefaultId !== preferences.defaultHarness()) { creationDefaultId = preferences.defaultHarness(); controls(); }
+});
 const unlistenDraftErrors = await listen<string>('nimrod-draft-error', event => draftPersistenceError(event.payload));
 const unlistenDraftClose = await getCurrentWindow().onCloseRequested(() => {
   // Rust owns child shutdown/window destruction and flushes staged drafts.
@@ -335,12 +347,15 @@ function controls(): void {
   for (const id of ['workspace-new', 'workspace-resume', 'start-pi', 'start-temporary', 'resume-last', 'recover-draft', 'browse', 'cwd', 'enter-workspace', 'sidebar-new']) {
     (required(id) as HTMLButtonElement | HTMLInputElement).disabled = !ready;
   }
-  const defaultProject = harnesses.get(harnesses.defaultId), creation = defaultProject.creation;
-  for (const id of ['workspace-new', 'start-pi', 'start-temporary', 'sidebar-new']) required(id).hidden = !defaultProject.availability.available();
-  required<HTMLButtonElement>('start-temporary').disabled = !ready || !defaultProject.initialization.ready() || !creation.modes.includes('temporary');
+  const primaryProject = harnesses.get(harnesses.primaryId);
+  for (const id of ['workspace-new', 'start-pi', 'sidebar-new']) required(id).hidden = !creationChoices(harnesses.projects, 'saved').length;
+  required('start-temporary').hidden = !creationChoices(harnesses.projects, 'temporary').length;
+  required<HTMLButtonElement>('start-temporary').disabled = !ready;
+  const defaultLabel = harnesses.projects.find(project => project.id === preferences.defaultHarness())?.label ?? preferences.defaultHarness();
+  for (const id of ['workspace-new', 'start-pi', 'sidebar-new']) required(id).title = `New session · ${defaultLabel}`;
   cwd.readOnly = !!workspace;
-  required('resume-last').hidden = !defaultProject.availability.available() || !lastSession();
-  required('recover-draft').hidden = !defaultProject.availability.available() || !recoverableDrafts().length;
+  required('resume-last').hidden = !primaryProject.availability.available() || !lastSession();
+  required('recover-draft').hidden = !creationChoices(harnesses.projects, 'saved').length || !recoverableDrafts().length;
   required('session-sidebar').hidden = !workspace || !sidebarVisible;
   sidebarResize.refresh();
   required('toggle-sidebar').setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
@@ -356,14 +371,14 @@ function isConnected(tab: Tab): boolean {
   return tab.lifecycle.connection === 'connected' &&
     !tab.closing && !tab.reloading && !tab.deleting && !blocked(tab);
 }
-function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presented, active); }
+function navigationSnapshot(): NavigationSnapshot<Tab> { return navigation.snapshot(sidebarView, presentation.current, active); }
 function sidebarTabs(): readonly Tab[] { return navigationSnapshot().visible; }
 function touchTab(tab: Tab): void {
   tab.lastUsed = navigation.nextRecency();
   refreshTime(tab);
   renderSidebar(tab.rowNode);
   // Recency moves only within its pin group; Unread retains inbox arrival.
-  if (presented === tab && sidebarView !== 'unread') {
+  if (presentation.current === tab && sidebarView !== 'unread') {
     if (tab.pinned || !tabs.some(item => item.pinned)) required('sidebar-session-panel').scrollTop = 0;
     else revealSidebarRow(required('sidebar-session-panel'), tab.rowNode);
   }
@@ -408,7 +423,7 @@ function reconcileSidebar(moved?: HTMLElement): void {
   settingsSurface.performanceProbe.count?.('sidebar-rows', tabs.length);
   const visible = sidebarTabs();
   const membership = new Set(visible);
-  if (presented && !membership.has(presented)) presentConversation(undefined);
+  if (presentation.current && !membership.has(presentation.current)) presentation.show(undefined);
   const sidebar = required('sidebar-session-panel'), list = required('open-sessions');
   const restoreScroll = captureSidebarScroll(sidebar, [...list.children] as HTMLElement[], moved);
   const focused = document.activeElement;
@@ -453,44 +468,9 @@ function selectSidebarView(view: SessionView): void {
   if (workspace) save(`nimrod.sidebar.view:${workspace}`, view);
   const target = navigation.presented(navigationSnapshot());
   if (target) activate(target, 'restore');
-  else presentConversation(undefined);
+  else presentation.show(undefined);
   controls();
   if (returningToAll && target) revealSidebarRow(required('sidebar-session-panel'), target.rowNode);
-}
-function presentConversation(tab: Tab | undefined, focus = false): void {
-  const changed = presented !== tab;
-  if (changed) {
-    if (presented) {
-      presented.integration.interactions.setActive(false);
-      const focused = document.activeElement;
-      if (focused instanceof HTMLElement && presented.root.contains(focused)) {
-        presented.focus = focused;
-        if (!tab && !document.querySelector('dialog[open]')) required(`sidebar-${sidebarView}`).focus({ preventScroll: true });
-      }
-      presented.notices.setActive(false); presented.view.setActive(false); presented.root.hidden = true; presented.root.inert = true;
-    }
-    presented = tab;
-    conversation.hidden = !tab;
-    if (tab) { tab.root.hidden = false; tab.view.setActive(true); tab.notices.setActive(true); }
-    syncPopouts();
-  }
-  for (const item of tabs) {
-    item.root.inert = item.closing || item.reloading || item.deleting || item !== presented;
-    item.row.setAttribute('aria-current', String(item === presented));
-  }
-  const sessionIdentity = required('project-session'), sessionName = required('project-session-name');
-  const title = tab?.title || '';
-  sessionIdentity.hidden = !tab;
-  if (sessionName.textContent !== title) sessionName.textContent = title;
-  if (sessionIdentity.title !== title) sessionIdentity.title = title;
-  const badge = required('mode-badge');
-  badge.textContent = tab?.integration.presentation.snapshot().badge ?? '';
-  badge.title = tab?.integration.presentation.snapshot().badgeTitle ?? '';
-  reloadControl();
-  // Restore navigation focus after reveal/catch-up and inert reconciliation, but
-  // before a pending decision opens a picker and captures its return target.
-  if (focus && tab && !document.querySelector('dialog[open]')) (tab.focus?.isConnected ? tab.focus : tab.root.querySelector<HTMLElement>('[data-pi-id="prompt"]'))?.focus({ preventScroll: true });
-  if (changed && tab) tab.integration.interactions.setActive(true);
 }
 function promptPending(tab: Tab): boolean { return tab.integration.presentation.snapshot().pending; }
 function deletionBusy(tab: Tab): boolean {
@@ -502,7 +482,7 @@ function deletable(tab: Tab | undefined): boolean {
     !tab.deleting && !tab.starting && !tab.closing && !tab.reloading;
 }
 function reloadControl(): void {
-  const active = presented;
+  const active = presentation.current;
   const button = required<HTMLButtonElement>('reload-session');
   button.hidden = !!active && !active.project.availability.available();
   button.disabled = !ready || !active || !reloadable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.reloading;
@@ -607,7 +587,7 @@ function openSessionPicker(): PalettePage {
     items: navigation.all().map(tab => ({
       ...sessionListItem(sessionRow(tab)),
       id: tab.id,
-      keywords: tab === presented ? 'Current' : undefined,
+      keywords: tab === presentation.current ? 'Current' : undefined,
       run: () => activate(tab),
     })),
   };
@@ -678,7 +658,7 @@ async function paletteProjects(): Promise<PalettePage> {
   }) };
 }
 const palette = installCommandPalette(window, required<HTMLDialogElement>('command-palette'), {
-  canOpen: () => ready && !settings.isOpen,
+  canOpen: () => ready,
   error: (message, operation) => notices.report({ id: `palette:${operation}:${++noticeSequence}`, operation, message }),
   shortcuts: false,
   ranking: {
@@ -697,7 +677,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
   openSessions: openSessionPicker,
   projects: paletteProjects,
   commands: () => {
-    const active = presented;
+    const active = presentation.current;
     return [
     ...applicationCommands(window, runApplication),
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
@@ -706,9 +686,12 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
-    ...harnesses.projects.flatMap(project => project.creation.action && project.initialization.ready() ? [{ ...project.creation.action, run: () => newHarnessSession(project) }] : []),
+    ...creationActions().filter(action => creationChoices(harnesses.projects, action.kind).length).map(action => ({
+      id: action.id, label: actionDefinition(action.id).label,
+      detail: action.picker ? 'Choose a harness for this session only' : `${harnesses.projects.find(project => project.id === preferences.defaultHarness())?.label ?? preferences.defaultHarness()} · ${action.kind === 'temporary' ? 'Conversation without saved history' : action.kind === 'named' ? 'Choose a name before starting' : 'Persistent conversation'}`,
+      next: action.picker || action.kind === 'named', run: () => requestCreation(action.kind, action.picker),
+    })),
     ...harnesses.projectActions().filter(action => action.available()).map(action => ({ ...action, run: () => runProjectAction(action.id) })),
-    ...(harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.named ? [{ id: 'new-named', label: 'New named session…', detail: 'Choose a name before starting', next: true, run: newNamedSession }] : []),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
     ...(active && reloadable(active) ? [
@@ -717,7 +700,6 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...(active && tabDeletion(active)?.available() ? [{
       id: 'delete', label: tabDeletion(active)!.label, detail: tabDeletion(active)!.detail, run: () => runSessionRowAction(active, 'delete'),
     }] : []),
-    ...(harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.modes.includes('temporary') ? [{ id: 'temporary', label: 'New temporary session', detail: 'Conversation without saved history', run: () => newSession('temporary') }] : []),
     ...(active && active.project.availability.available() ? [{ id: 'rename', label: 'Rename session…', detail: 'Change this conversation’s harness-owned name', run: () => runSessionRowAction(active, 'rename') }] : []),
     ...(active ? [
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
@@ -725,44 +707,14 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ] : []),
     { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
     { id: 'settings', label: 'Global Settings…', detail: 'Defaults for all projects, notifications and keybindings', run: () => invoke('open_global_settings') },
-    ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global appearance and runtime defaults for this project', run: () => settings.open() }] : []),
+    ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global defaults for this project', run: () => settings.open() }] : []),
     { id: 'keybindings', label: 'Edit keybindings…', detail: 'Customize shortcuts for Nimrod commands', run: openKeybindings },
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
-let themePreviewGeneration = 0;
-function pickTheme(): void {
-  const request = palette.startPreviewSelection('Select theme', undefined, item => {
-    const theme = choices.get(item?.id || '');
-    if (item) themes.preview(theme);
-    else themes.restore();
-  }, () => themes.restore());
-  if (!request) return;
-  const previewGeneration = ++themePreviewGeneration;
-  const choices = new Map<string, ColorTheme | undefined>();
-  function show(): void {
-    const library = preferences.theme();
-    choices.clear(); choices.set('nimrod', undefined);
-    const items: PalettePage['items'] = [];
-    function add(id: string, label: string, detail: string, theme?: ColorTheme) {
-      if (items.some(item => item.id === id)) return;
-      choices.set(id, theme);
-      items.push({ id, label, detail, current: id === library.selected,
-        keywords: id === library.selected ? 'Current' : undefined,
-        run: async () => {
-          try { await preferences.selectTheme(id, id.startsWith('import-') ? theme : undefined); }
-          finally { if (themePreviewGeneration === previewGeneration) themes.restore(); }
-        },
-      });
-    }
-    add('nimrod', 'Nimrod (system)', 'Built-in · follows system appearance');
-    for (const theme of BUILTIN_THEMES) add(theme.id, theme.name, `Built-in · ${theme.mode}`, theme);
-    for (const theme of library.imports) add(theme.id, theme.name, `${theme.source?.provider === 'gogh' ? 'Saved Gogh' : 'Imported'} · ${theme.mode}${theme.source?.author ? ` · ${theme.source.author}` : ''}`, theme);
-    for (const entry of CATALOG_THEMES) add(entry.theme.id, entry.theme.name, `VS Code · ${entry.theme.mode} · ${entry.author}`, entry.theme);
-    request!.show({ items, notice: 'Arrow keys or hover to preview · Enter to apply · Esc to restore' }, library.selected);
-  }
-  show();
-}
+const pickTheme = createThemeSelection(palette, preferences, themes);
+settingsSurface.onSelectTheme(pickTheme);
+settingsSurface.onChooseSetting(settingsChoicePage(palette, required<HTMLDialogElement>('settings-page')));
 async function takeProjectPickerRequest(): Promise<void> {
   if (!ready || unloading) return;
   if (await invoke<boolean>('take_project_picker_request')) await palette.projects();
@@ -774,7 +726,7 @@ function button(text: string, click: () => void): HTMLButtonElement {
 function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost {
   const project = workspace ?? '';
   const current = () => !unloading && workspace === project && tabs.includes(tab);
-  const selected = () => presented === tab;
+  const selected = () => presentation.current === tab;
   let noticeResetToken: string | undefined;
   const focusComposer = () => {
     if (current() && selected() && !settings.isOpen && !tab.closing && !tab.reloading && !document.querySelector('dialog[open]'))
@@ -831,7 +783,7 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
     },
   };
 }
-function createTab(request: SessionRequest, project = harnesses.get(harnesses.defaultId), title = request.mode === 'temporary' ? 'Temporary session' : project.creation.title, used = 0, pinned = false, copyDraft?: string): Tab {
+function createTab(request: SessionRequest, project: HarnessProject, title = request.mode === 'temporary' ? 'Temporary session' : project.creation.title, used = 0, pinned = false, copyDraft?: string): Tab {
   const id = crypto.randomUUID();
   const root = document.createElement('section'); root.className = 'session-view'; root.id = `panel-${id}`; root.setAttribute('role', 'region'); root.hidden = true;
   root.innerHTML = transcript;
@@ -887,7 +839,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
   }
   root.addEventListener('nimrod-dispose-images', () => { imagesDisposed = true; for (const id of ephemeralImages) temporaryImages.delete(id); });
   function guardCardAction(): void {
-    if (!ready || !workspace || presented !== tab || !tabs.includes(tab) || tab.closing || tab.reloading || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
+    if (!ready || !workspace || presentation.current !== tab || !tabs.includes(tab) || tab.closing || tab.reloading || tab.deleting || document.querySelector('dialog[open]')) throw new Error('Card action is no longer available');
   }
   tab.view = mountConversationView({
     projectDirectory: workspace,
@@ -955,7 +907,7 @@ function createTab(request: SessionRequest, project = harnesses.get(harnesses.de
       if (message.type === 'popOutCode') {
         if (typeof message.text === 'string' && typeof message.language === 'string') {
           popouts.open({ session: tab.id, title: tab.title, text: message.text, language: message.language },
-            () => presented === tab && !tab.closing && tabs.includes(tab));
+            () => presentation.current === tab && !tab.closing && tabs.includes(tab));
         }
         return;
       }
@@ -989,12 +941,12 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
     if (workspace) save(`nimrod.sidebar.view:${workspace}`, sidebarView);
   }
   active = plan.target;
-  presentConversation(navigation.presented(navigationSnapshot()), plan.focus);
-  if (presented === tab) tab.unread = false;
+  presentation.show(navigation.presented(navigationSnapshot()), plan.focus);
+  if (presentation.current === tab) tab.unread = false;
   // Effects live at this one boundary; the model never touches Pi or drafts.
   for (const item of tabs) updateTab(item);
   persistTabs(); controls(); syncPopouts();
-  if (plan.reveal && presented === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, intent === 'startup' ? 'prefer-top' : 'nearest');
+  if (plan.reveal && presentation.current === tab) revealSidebarRow(required('sidebar-session-panel'), tab.rowNode, intent === 'startup' ? 'prefer-top' : 'nearest');
   selectedConnection.request();
 }
 function refreshTime(tab: Tab): void {
@@ -1016,22 +968,21 @@ function sessionRow(tab: Tab): SessionListEntry {
   };
 }
 function updateTab(tab: Tab): void {
-  measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presented === tab);
+  measureWork(settingsSurface.performanceProbe, 'sidebar-row-update', () => updateTabPresentation(tab), presentation.current === tab);
 }
 function updateTabPresentation(tab: Tab): void {
-  tab.root.inert = tab.closing || tab.reloading || tab.deleting || tab !== presented;
   const entry = sessionRow(tab), name = sessionListLabel(entry);
   tab.root.setAttribute('aria-busy', String(tab.integration.conversation.state?.busy === true));
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
-  tab.row.setAttribute('aria-current', String(tab === presented)); tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading;
+  tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading;
   tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
   tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));
   tab.pinButton.title = tab.pinned ? 'Unpin session' : 'Pin session';
   tab.pinButton.disabled = !canPin(tab);
   tab.rowNode.classList.toggle('pinned', tab.pinned);
   if (tab.pinned) tab.row.setAttribute('aria-label', `${tab.row.getAttribute('aria-label')} — Pinned`);
-  if (presented === tab) presentConversation(tab);
+  presentation.refresh(tab);
   renderSidebar();
 }
 function showNotice(tab: Tab, text: string, retry = false, details?: string): void {
@@ -1107,20 +1058,59 @@ async function pickConfigurationSetting(tab: Tab, setting: string, operation: st
   finally { request.finish(); if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined; }
 }
 function cycleTab(direction: 1 | -1): void {
-  if (!active || !tabs.length || (tabs.length < 2 && presented)) return;
+  if (!active || !tabs.length || (tabs.length < 2 && presentation.current)) return;
   const next = navigation.adjacent(active, direction);
   if (next) activate(next);
 }
-function newNamedSession(): void {
-  if (!ready || settings.isOpen) return;
-  palette.namedSession(name => newSession('saved', undefined, name));
+function creationActions() {
+  return [
+    { id: 'new', kind: 'saved', picker: false },
+    { id: 'new-named', kind: 'named', picker: false },
+    { id: 'temporary', kind: 'temporary', picker: false },
+    { id: 'new-with-harness', kind: 'saved', picker: true },
+    { id: 'temporary-with-harness', kind: 'temporary', picker: true },
+  ] as const;
 }
-async function newSession(mode: 'saved' | 'temporary' = harnesses.get(harnesses.defaultId).creation.defaultMode, copyDraft?: string, initialName?: string): Promise<void> {
-  return newHarnessSession(harnesses.get(harnesses.defaultId), mode, copyDraft, initialName);
+async function requestCreation(kind: SessionCreationKind, pick = false, copyDraft?: string): Promise<void> {
+  if (!ready || unloading || settings.isOpen) return;
+  const choices = creationChoices(harnesses.projects, kind);
+  const preferred = preferences.defaultHarness(), resolved = creationDefault(harnesses.projects, preferred, kind);
+  const picker = pick || !resolved.project;
+  if (kind === 'named') {
+    palette.namedSession((name, id) => {
+      const project = choices.find(project => project.id === id);
+      if (project) return newHarnessSession(project, 'saved', copyDraft, name);
+    }, { harnesses: choices, current: preferred, notice: resolved.notice });
+    return;
+  }
+  if (!picker) return newHarnessSession(resolved.project!, kind, copyDraft);
+  const request = palette.startSelection(kind === 'temporary' ? 'New temporary session with harness' : 'New session with harness', () => {}, undefined, true);
+  if (!request) return;
+  const id = await request.chooseItems(choices.map(project => ({ id: project.id, label: project.label })), preferred, resolved.notice, 'selection');
+  request.finish();
+  const project = choices.find(project => project.id === id);
+  if (project) return newHarnessSession(project, kind, copyDraft);
+}
+async function newSession(mode: 'saved' | 'temporary' = 'saved', copyDraft?: string): Promise<void> {
+  return requestCreation(mode, false, copyDraft);
 }
 async function newHarnessSession(project: HarnessProject, mode: 'saved' | 'temporary' = project.creation.defaultMode, copyDraft?: string, initialName?: string): Promise<void> {
-  if (!ready || !project.initialization.ready() || settings.isOpen || !await ensureWorkspace()) return;
+  if (!ready || settings.isOpen) return;
+  if (initialName !== undefined) {
+    try {
+      if (!project.creation.named) throw new Error(`${project.label} does not support named creation.`);
+      initialName = project.creation.validateName(initialName);
+    } catch (error) {
+      notices.report({ id: `create-session:${++noticeSequence}`, operation: 'Create session', message: String(error) });
+      return;
+    }
+  }
+  if (!await ensureWorkspace()) return;
   if (!ready || unloading || settings.isOpen) return;
+  if (!project.availability.available() || !project.initialization.ready() || !supportsCreation(project, initialName === undefined ? mode : 'named')) {
+    notices.report({ id: `create-session:${++noticeSequence}`, operation: 'Create session', message: `${project.label} is no longer available for this session type. Choose New session again; nothing was created.` });
+    return;
+  }
   project.history.associate();
   let tab: Tab;
   try { tab = createTab({ mode, initialName }, project, undefined, navigation.nextRecency(), false, copyDraft); }
@@ -1186,7 +1176,7 @@ async function reloadSession(tab: Tab): Promise<void> {
   } catch (error) { showNotice(tab, `Could not reload ${tab.lifecycle.label}: ${error}`); }
   finally {
     tab.reloading = false; if (tabs.includes(tab)) updateTab(tab); controls();
-    if (resumed && presented === tab && tab.lifecycle.connection === 'connected' && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
+    if (resumed && presentation.current === tab && tab.lifecycle.connection === 'connected' && !document.querySelector('dialog[open]')) tab.root.querySelector<HTMLTextAreaElement>('[data-pi-id="prompt"]')?.focus({ preventScroll: true });
   }
 }
 async function deleteSavedSession(saved: SavedSessionIdentity, title: string): Promise<void> {
@@ -1217,17 +1207,17 @@ function selectCleanupReplacement(before: NavigationSnapshot<Tab>): void {
   const replacement = navigation.replacement(before, navigationSnapshot());
   if (replacement.view !== sidebarView) selectSidebarView(replacement.view);
   if (replacement.target) activate(replacement.target, 'cleanup');
-  else { conversation.hidden = true; required('mode-badge').textContent = ''; }
+  else presentation.show(undefined);
 }
 function disposeTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
   tab.root.dispatchEvent(new Event('nimrod-dispose-images'));
-  tab.integration.interactions.dispose();
-  tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   navigation.remove(tab);
   if (active === tab) active = undefined;
-  if (presented === tab) { tab.view.setActive(false); presented = undefined; conversation.hidden = true; }
+  presentation.remove(tab);
+  tab.integration.interactions.dispose();
+  tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
   tab.view.dispose();
@@ -1237,15 +1227,16 @@ function disposeTab(tab: Tab): void {
 function detachTab(tab: Tab): void {
   if (!tabs.includes(tab)) return;
   tab.closing = true;
+  const before = navigationSnapshot();
+  // Deactivate while its interaction/notices/view ports are still alive.
+  presentation.remove(tab);
   tab.integration.interactions.dispose();
   tab.notices.dispose(); notices.store.resolveOwner(tab.id);
   if (tab.token) dialogs.cancel(tab.token);
   tab.cancelPreference?.(); tab.receive?.({ type: 'sessionDisconnected' }); tab.lifecycle.disconnect('Session closed');
-  const before = navigationSnapshot();
   navigation.remove(tab); tab.view.dispose();
   try { tab.drafts.discardTemporary(); } catch (e) { persistenceError(e); }
   tab.root.remove(); tab.rowNode.remove();
-  if (presented === tab) presentConversation(undefined);
   if (active === tab) {
     active = undefined;
     selectCleanupReplacement(before);
@@ -1313,8 +1304,8 @@ required('recover-draft').addEventListener('click', () => {
     const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', options[index].key);
   });
 });
-required('reload-session').addEventListener('click', () => { if (presented) void reloadSession(presented); });
-required('delete-session').addEventListener('click', () => { if (presented) void runSessionRowAction(presented, 'delete'); });
+required('reload-session').addEventListener('click', () => { if (presentation.current) void reloadSession(presentation.current); });
+required('delete-session').addEventListener('click', () => { if (presentation.current) void runSessionRowAction(presentation.current, 'delete'); });
 required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
 for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
 required('sidebar-views').addEventListener('keydown', event => {
@@ -1368,50 +1359,48 @@ const keybindingDispatch = installKeybindingDispatch(window, {
   enabled: id => {
     if (unloading) return false;
     const contributed = new Set<string>();
-    if (presented) {
-      for (const action of sessionActions(presented)) contributed.add(action.id);
+    if (presentation.current) {
+      for (const action of sessionActions(presentation.current)) contributed.add(action.id);
       contributed.add('close');
-      if (canPin(presented)) contributed.add('pin');
-      if (presented.project.availability.available() && canClose(presented) && !blocked(presented)) contributed.add('rename');
-      if (reloadable(presented)) contributed.add('reload');
-      if (tabDeletion(presented)?.available()) contributed.add('delete');
+      if (canPin(presentation.current)) contributed.add('pin');
+      if (presentation.current.project.availability.available() && canClose(presentation.current) && !blocked(presentation.current)) contributed.add('rename');
+      if (reloadable(presentation.current)) contributed.add('reload');
+      if (tabDeletion(presentation.current)?.available()) contributed.add('delete');
     }
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
     if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
-    const creation = harnesses.projects.find(project => project.creation.action?.id === id);
-    if (creation) return creation.initialization.ready();
+    const creation = creationActions().find(action => action.id === id);
+    if (creation) return !!creationChoices(harnesses.projects, creation.kind).length;
     const projectAction = harnesses.projectActions().find(action => action.id === id);
     if (projectAction) return projectAction.available();
     // Static integration metadata is bindable before capabilities are ready,
     // but an absent live contribution is unavailable, not an enabled no-op.
     if (id.startsWith('harness-') && actionDefinition(id).context === 'project') return false;
-    if (id === 'new-named') return harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.named;
-    if (id === 'temporary') return harnesses.get(harnesses.defaultId).initialization.ready() && harnesses.get(harnesses.defaultId).creation.modes.includes('temporary');
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename'].includes(id)) return !!presented && sessionActions(presented).some(action => action.id === id);
+    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename'].includes(id)) return !!presentation.current && sessionActions(presentation.current).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
     if (isApplicationAction(window, id)) return runApplication(id);
-    const creation = harnesses.projects.find(project => project.creation.action?.id === id);
-    if (creation) return newHarnessSession(creation);
+    const creation = creationActions().find(action => action.id === id);
+    if (creation) return requestCreation(creation.kind, creation.picker);
     const projectAction = harnesses.projectActions().find(action => action.id === id);
     if (projectAction) return runProjectAction(projectAction.id);
-    if (presented && sessionActions(presented).some(action => action.id === id)) return runSessionAction(presented, id);
+    if (presentation.current && sessionActions(presentation.current).some(action => action.id === id)) return runSessionAction(presentation.current, id);
     switch (id) {
       case 'open-recent-project': return palette.projects();
       case 'new': return newSession();
       case 'temporary': return newSession('temporary');
-      case 'delete': return presented ? runSessionRowAction(presented, 'delete') : undefined;
-      case 'rename': return presented ? runSessionRowAction(presented, 'rename') : undefined;
-      case 'pin': return presented ? runSessionRowAction(presented, 'pin') : undefined;
+      case 'delete': return presentation.current ? runSessionRowAction(presentation.current, 'delete') : undefined;
+      case 'rename': return presentation.current ? runSessionRowAction(presentation.current, 'rename') : undefined;
+      case 'pin': return presentation.current ? runSessionRowAction(presentation.current, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'palette': palette.open(); return;
-      case 'close': return presented ? runSessionRowAction(presented, 'close') : undefined;
+      case 'close': return presentation.current ? runSessionRowAction(presentation.current, 'close') : undefined;
       case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
       case 'previous': cycleTab(-1); return;
       case 'next': cycleTab(1); return;
@@ -1423,8 +1412,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'zoom-reset': zoom.run('reset'); return;
       case 'resume': return palette.sessions();
       case 'switch-session': return palette.openSessions();
-      case 'new-named': return newNamedSession();
-      case 'reload': return presented ? reloadSession(presented) : undefined;
+      case 'reload': return presentation.current ? reloadSession(presentation.current) : undefined;
     }
   },
   error: message => { error.textContent = String(message); },

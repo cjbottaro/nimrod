@@ -2,16 +2,17 @@
 
 ## Select and preview themes
 
-Run **Select theme…** from the command palette (**⌘/Ctrl ⇧ P**). It opens a
+Click **Change theme…** in **Settings → Appearance**, or run **Select theme…**
+from the command palette (**⌘/Ctrl ⇧ P**). Both open the same
 searchable picker containing built-in themes, saved imports, and a curated,
 **bundled VS Code theme catalog**.
 
 - Type to filter by name, light/dark appearance, source or author. A muted dot
   after the title marks the saved theme, independently of the preview highlight.
-- Use **↑/↓** or hover a row to preview its colors in the current project window.
+- Use **↑/↓** or hover a row to preview its colors in the current window.
   The conversation remains visible behind the compact picker.
-- Press **Enter** or click a row to save and apply it across project windows and
-  pop-outs.
+- Press **Enter** or click a row to save and apply it. Project selections create a project override;
+  Global Settings changes the default for inheriting windows.
 - **Escape**, closing the picker, or **Back** restores the latest saved theme.
   Preview never writes theme preferences or changes other windows.
 
@@ -32,7 +33,7 @@ remain usable; the old Gogh discovery/download feature is no longer present.
 
 ## Built-in themes
 
-Open **global Settings** using **⌘/Ctrl ,** or the native **Settings…** menu item, then use the **theme picker** under **Appearance**. Global selections apply to projects without theme overrides. The Project bar gear / **⌘/Ctrl+Shift+,** opens Project settings, where you can select a project override from the same library or **Use global default**. Imports and removal are global-only:
+Open **global Settings** using **⌘/Ctrl ,** or the native **Settings…** menu item, then click **Change theme…** under **Appearance**. Global selections apply to projects without theme overrides. The Project bar gear / **⌘/Ctrl+Shift+,** opens Project settings, where you can select a project override from the same library or **Remove override**. Imports and removal are global-only:
 
 - **Nimrod (system)** — the app's custom Nimrod scheme; follows macOS/Windows/Linux light/dark appearance. This remains the default.
 - **Dracula** — a dark adaptation of [Dracula's official palette](https://draculatheme.com/), including purple accents, pink keywords, yellow strings, and green functions. It stays dark even when the OS is light. Attribution and license are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
@@ -49,10 +50,10 @@ Filled buttons use a shared readability policy across every palette, including i
 ## Import a theme
 
 1. Obtain a **standalone VS Code color-theme JSON or JSONC file**.
-2. Open **Settings → Appearance**, then choose **Import color theme…** from the theme picker.
+2. Open **Settings → Appearance**, then click **Import color theme…**.
 3. Select the file. A valid theme is added to the picker, applied, and saved locally.
 
-To remove an imported theme, select it, then choose **Remove current imported theme**. This removes Nimrod's saved copy and returns to the Nimrod scheme. It never changes/deletes the original file. Duplicate names get a numeric suffix rather than silently replacing another theme.
+To remove an imported theme, select it, then click **Remove current imported theme**. This removes Nimrod's saved copy and returns to the Nimrod scheme. It never changes/deletes the original file. Duplicate names get a numeric suffix rather than silently replacing another theme.
 
 ### Where to get themes
 

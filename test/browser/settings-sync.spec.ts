@@ -14,14 +14,14 @@ test('file settings synchronize behind Settings without replacing the offline co
       return pane.scrollTop;
     });
     await fixture.editPreferences('{"appearance.theme":"dracula","runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
-    await expect(page.locator('#theme-picker')).toHaveValue('dracula');
+    await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'dracula');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dracula');
     await expect(page.locator('#pi-path')).toHaveValue('/unsaved/pi');
     await expect(page.locator('#runtime-status')).toContainText('unfinished edits are retained');
     await fixture.editPreferences('{broken}');
     await expect(page.locator('#application-notices')).toBeVisible();
     await expect(page.locator('#preferences-error')).toBeHidden();
-    await expect(page.locator('#theme-picker')).toHaveValue('dracula');
+    await expect(page.locator('#theme-picker')).toHaveAttribute('data-theme', 'dracula');
     await fixture.editPreferences('{"appearance.theme":"dracula","runtime.piPath":"/external/pi","runtime.nodePath":"/external/node"}');
     await expect(page.locator('#preferences-error')).toBeHidden();
     await page.locator('#settings-back').click();

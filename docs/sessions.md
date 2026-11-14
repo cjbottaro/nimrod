@@ -6,12 +6,21 @@ Each session has its own conversation, draft and agent process. Switching sessio
 
 | Action | Use |
 | --- | --- |
-| **New session** / **⌘/Ctrl+N** | Start a normal persistent Pi conversation, regardless of the selected session's backend. |
-| **New Copilot session** | Start built-in official-SDK Copilot (no default shortcut). |
-| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name, then press Enter or Create. Escape cancels. Requires Pi's native `--name` support. |
+| **New session** / **⌘/Ctrl+N** | Start a persistent conversation with the effective default harness. |
+| **New named session…** / **⌘+Option+N**, **Ctrl+Alt+N** | Enter a single-line name and choose a harness in one modal, then press Enter or Create. Escape cancels. |
 | **New temporary session** / **⌘/Ctrl+Shift+N** | Start without saved conversation history. Closing, quitting or reloading the app window discards its drafts, recovery items and pop-outs. |
+| **New session with harness…** | Pick a harness for one persistent conversation. |
+| **New temporary session with harness…** | Pick a harness supporting unsaved conversations. |
 
-Pi writes persistent history. The Project bar shows **Pi** from the start. Reload is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
+Set **Settings → Interaction → Default harness** globally, or override it in Project settings. The initial default is Pi. Ordinary palette actions identify the effective harness; selecting another session never changes it. The two **with harness…** actions are initially unbound and can be assigned shortcuts in Keybindings. They replace the former harness-specific creation actions and never change your default. In each creation picker, the dot moves with the highlighted harness as you navigate with the keyboard or pointer; it indicates what will be created, not a fixed default.
+
+Pickers offer only available, ready harnesses supporting the creation type. Pi, Copilot and Codex support named creation; only Pi supports temporary creation. **New named session…** always shows the name field and an inline harness list, with the name focused first. The effective default is selected when eligible; otherwise the first eligible harness is selected with an explanation. Up/Down changes the harness while you keep typing in the name field, or Tab focuses the list for navigation. Typing does not filter the harnesses or reset your selection. Clicking a harness selects it without creating; Enter or Create accepts both inputs. Left/Right and modified editing keys stay native, and IME composition is untouched. Each invocation starts from the effective default, not the last-used harness. Cancel/Escape creates nothing.
+
+Pi applies a requested name at launch. Copilot and Codex create the conversation, then immediately name it through their native APIs. Names are validated before creation; Copilot allows up to 100 characters. You can draft while naming finishes. If naming fails, the created conversation stays open with a session notice; use **Rename session…** for an explicit retry. Reload, Resume and reconnect never reapply the creation name, and no prompt is sent to name a session. Naming alone is not a guarantee of discoverable saved history, particularly for [untouched Codex threads](codex.md#history-drafts-and-close).
+
+If the default is unavailable or does not support the requested type, the ordinary action opens the appropriate picker with an explanation rather than silently using another harness. The configured default remains unchanged. If no harness supports an action, it is unavailable. Runtime availability is discovered at startup; see [Runtime settings](settings.md#runtime).
+
+The default applies only to new conversations—not Resume, Reload or existing sessions. Pi writes persistent history. The Project bar shows **Pi** from the start. Reload is disabled until the first verified save; its tooltip explains why. Naming an empty session alone may not save it. Hover over the Pi badge for its file path when available.
 
 ## Switch or resume
 

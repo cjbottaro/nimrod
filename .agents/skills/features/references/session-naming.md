@@ -46,6 +46,18 @@ Nimrod-only alias. This is a naming consumer interface, not a harness protocol.
   Live name events outrank a stale result; response application is synchronous
   in the ordered channel, before later events.
 
+## Named creation via native rename
+
+[Session creation](session-creation.md) owns the form, capabilities and preflight contract. Pi keeps native `--name`; Copilot/Codex adapters accept `SessionRequest.initialName` for new saved sessions, then call the same `CopilotSession.rename` / `CodexSession.rename` operations as explicit Rename. Copilot's `copilotSessionName` helper shares normalization and the 100-Unicode-code-point limit across both paths; Codex uses the shared nonempty/single-line/control-character validator.
+
+The adapters consume the requested name once before any launch await and bind the naming attempt to that exact token/session after successful native initialization. Startup completes and `owner.starting` clears before the naming request, which is dispatched without gating drafting/Send or waiting to close the creation modal. Pending native rename still counts as destructive work for Close/Reload review. Replies/events use the existing ordered native-title revision logic, not a local name override; subsequent authoritative names can supersede an earlier name acknowledgement.
+
+A connected rename rejection does not enter startup cleanup or stop/delete/recreate the new session. Its `Name new session` notice uses the shared session-owned `rename` occurrence, explains that creation succeeded but naming is unconfirmed, retains native details and directs an explicit Rename retry. Successful explicit Rename resolves that same occurrence. Transport-loss/disconnection keeps the native connection failure as the single presentation instead of duplicating a derivative naming notice. Retired/replaced/closing/deleting/reloading owners suppress late naming feedback. No callback selects a session, changes recency/drafts or reapplies the name.
+
+The one-shot creation name is not persisted as pending work. Initial failure/uncertain delivery, explicit reconnect, Reload and exact-ID Resume never retry it or rename a replacement. A runtime ID and a naming acknowledgement remain distinct from saved-history/discovery evidence; Codex's empty-thread list limitations still apply.
+
+Fixtures: registry/type preflight assertions; `test/codex-connection.test.ts` covers one-shot ordering, readiness, native rejection, retired completion and exact reconnect; shared shell fixtures cover Copilot/Codex native shapes, held naming with editable drafts, rejection without startup cleanup, explicit retry resolution, no prompt and no Reload replay. Browser named-Copilot fixtures use the production bridge with an offline SDK. These additions are authored, unrun; only the required compile check is automatic.
+
 ## Concrete mappings
 
 | Integration | Operation / semantics |

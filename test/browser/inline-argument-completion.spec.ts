@@ -6,8 +6,9 @@ test('inline argument hints and completions stay outside the draft and track wra
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session');
+    await page.locator('#palette-input').fill('New session with harness');
     await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     const token = String(demo.calls.find(call => call.command === 'start_copilot')!.args.token);
     // Synthetic catalog update only. No harness invocation or provider work.
@@ -79,8 +80,9 @@ test('autocomplete acceptance defaults to Tab and updates live in an existing mo
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session');
+    await page.locator('#palette-input').fill('New session with harness');
     await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     const prompt = page.locator(visible('prompt'));
     const commandCalls = () => demo.calls.filter(call => call.command === 'write_copilot' &&

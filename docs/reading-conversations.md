@@ -1,5 +1,7 @@
 # Reading conversations
 
+All buttons in the Status area—including model/thinking controls, actionable context-window metrics and recovered-message Restore—use a borderless, transparent ghost style, with hover feedback and a visible keyboard-focus outline. Pending-action review buttons, operation Cancel and edit-preview Copy/Wrap retain outlined secondary-button boundaries. Informational metrics remain plain text.
+
 The **transcript** contains user and assistant turns. An assistant turn can include reasoning, tool activity and response text—not just its final answer. The Status area below shows activity, model/thinking controls and Pi-reported usage metrics.
 
 Empty assistant text/reasoning entries do not display blank turn markers or gaps. This includes Copilot assistant messages with tool requests but no prose; their tool cards remain visible. If text arrives later, that assistant entry appears in its original position.

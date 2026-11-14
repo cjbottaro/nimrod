@@ -1,3 +1,4 @@
+import { navigateDialogActions } from './dialog-actions';
 import { showModal, closeModal } from './modal-motion';
 import { vscodeMruRanking, type CommandRanking } from './command-ranking';
 import { createPickerEnterHint } from './picker-hints';
@@ -58,7 +59,8 @@ export interface RetainedSelectionRequest {
 }
 export interface SelectionRequest {
   choose(options: string[], current?: string): Promise<string | undefined>;
-  chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string): Promise<string | undefined>;
+  /** Current marks an applied value; selection marks the highlighted candidate (creation pickers). */
+  chooseItems(options: readonly { id: string; label: string; detail?: string; keywords?: string }[], current?: string, notice?: string, marker?: 'current' | 'selection'): Promise<string | undefined>;
   error(message: string): void;
   finish(): void;
   cancel(): void;
@@ -79,6 +81,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   const retry = dialog.querySelector<HTMLButtonElement>('#palette-refresh')!;
   const create = dialog.querySelector<HTMLButtonElement>('#palette-create')!;
   const hint = dialog.querySelector<HTMLElement>('#palette-hint')!;
+  const nameHarnessLabel = doc.createElement('span');
+  nameHarnessLabel.id = 'palette-name-harness-label'; nameHarnessLabel.hidden = true;
+  nameHarnessLabel.textContent = 'Harness'; list.before(nameHarnessLabel);
+  const nameActions = doc.createElement('div'); nameActions.className = 'modal-actions'; nameActions.hidden = true;
+  const cancelName = doc.createElement('button'); cancelName.type = 'button'; cancelName.className = 'secondary utility-button'; cancelName.textContent = 'Cancel';
+  nameActions.append(cancelName, create); dialog.append(nameActions);
   const inspection = doc.createElement('section');
   inspection.id = 'palette-inspection'; inspection.hidden = true;
   inspection.setAttribute('aria-label', 'Selected item details');
@@ -93,6 +101,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'inspection' | 'name' = 'commands';
   let items: PaletteItem[] = [], matches: PaletteItem[] = [];
   let selected = 0;
+  let selectionMarker: 'current' | 'selection' = 'current';
+  const markerTracksSelection = () => mode === 'name' || (mode === 'selection' && selectionMarker === 'selection');
   let generation = 0;
   let historyRequest: AbortController | undefined;
   let bufferedHistory: PalettePage | undefined;
@@ -102,10 +112,12 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   let notice = '';
   let loading = false;
   let opener: HTMLElement | undefined;
+  let parentDialog: HTMLDialogElement | undefined;
+  const anotherDialog = () => [...doc.querySelectorAll('dialog[open]')].some(node => node !== dialog && node !== parentDialog);
   let afterClose: (() => void | Promise<void>) | undefined;
   let resolveChoice: ((value: string | undefined) => void) | undefined;
   let retryAction: (() => void) | undefined;
-  let createNamed: ((name: string) => void | Promise<void>) | undefined;
+  let createNamed: ((name: string, harness: string) => void | Promise<void>) | undefined;
   let composing = false;
   let closing = false;
   let disposed = false;
@@ -156,7 +168,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     closing = true;
     closeModal(dialog);
   }
-  function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value); }
+  function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value) && !!matches[selected]; }
   function filterItems(values: PaletteItem[]): PaletteItem[] {
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     return values.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
@@ -167,22 +179,24 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const restoreScroll = preserveScroll ? captureSidebarScroll(list, preferredRow ? [preferredRow, ...oldRows.filter(row => row !== preferredRow)] : oldRows) : undefined;
     const naming = mode === 'name';
     dialog.dataset.mode = mode;
-    list.hidden = naming; create.hidden = !naming; hint.hidden = naming;
+    list.hidden = false; create.hidden = !naming; hint.hidden = naming;
+    nameActions.hidden = !naming; nameHarnessLabel.hidden = !naming;
+    list.setAttribute('aria-label', naming ? 'Harness' : 'Navigation results');
+    if (naming) list.tabIndex = 0;
+    else { list.removeAttribute('tabindex'); list.removeAttribute('aria-activedescendant'); }
     inspection.hidden = mode !== 'inspection';
     if (mode !== 'inspection') inspection.replaceChildren();
     if (naming) {
       input.setAttribute('role', 'textbox');
       for (const attr of ['aria-expanded', 'aria-controls', 'aria-autocomplete', 'aria-activedescendant']) input.removeAttribute(attr);
       input.setAttribute('aria-busy', 'false');
-      create.disabled = !validName();
-      list.replaceChildren();
-      status.textContent = 'Enter to create · Esc to cancel';
-      return;
+    } else {
+      input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
+      input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     }
-    input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'true');
-    input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-autocomplete', 'list');
     const previous = preferredId;
-    matches = filterItems(items);
+    // A name is not a harness-search query.
+    matches = naming ? items : filterItems(items);
     if (mode === 'commands') matches = (options.ranking?.strategy ?? vscodeMruRanking).rank(matches, { query: input.value, usage: options.ranking?.usage() ?? [] });
     selected = Math.max(0, matches.findIndex(item => item.id === previous));
     const existing = mode === 'sessions' ? new Map(oldRows.map(row => [row.dataset.key, row])) : new Map<string, HTMLElement>();
@@ -211,7 +225,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (item.marker) {
         if (preview) heading.append(label);
         heading.append(createPaletteItemMarker(doc, item.marker));
-      } else if (mode === 'selection' || mode === 'projects') {
+      } else if (mode === 'selection' || mode === 'projects' || mode === 'name') {
         const marker = doc.createElement('span'); marker.className = 'palette-selection-marker';
         marker.setAttribute('aria-hidden', 'true'); marker.textContent = (mode === 'projects' ? item.projectOpen : item.current) ? '•' : '';
         if (preview) heading.append(label, marker);
@@ -232,7 +246,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (item.badge) { const badge = doc.createElement('span'); badge.className = 'palette-item-badge'; badge.textContent = item.badge; heading.append(badge); }
       const detail = doc.createElement('small'); detail.className = 'palette-item-description'; detail.textContent = item.detail || '';
       row.append(heading);
-      if (mode !== 'selection' || item.detail) row.append(detail);
+      if ((mode !== 'selection' && mode !== 'name') || item.detail) row.append(detail);
       row.title = item.keywords || item.detail || item.label;
       return row;
     });
@@ -246,20 +260,32 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     restoreScroll?.();
   }
   function updateStatus(): void {
+    if (mode === 'name') {
+      const harness = matches[selected];
+      status.textContent = [notice, harness ? `Harness: ${harness.label} · ↑/↓ to choose · Enter to create · Esc to cancel` : 'No harnesses support named sessions.'].filter(Boolean).join('\n');
+      return;
+    }
     const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use Open project… (Cmd/Ctrl+O by default) to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
   }
   function selection(reveal = true): void {
-    for (const [index, row] of [...list.children].entries()) row.setAttribute('aria-selected', String(index === selected));
+    for (const [index, row] of [...list.children].entries()) {
+      row.setAttribute('aria-selected', String(index === selected));
+      if (markerTracksSelection()) {
+        const marker = row.querySelector('.palette-selection-marker');
+        if (marker) marker.textContent = index === selected ? '•' : '';
+      }
+    }
     const row = list.children[selected] as HTMLElement | undefined;
     if (row) {
-      input.setAttribute('aria-activedescendant', row.id);
+      (mode === 'name' ? list : input).setAttribute('aria-activedescendant', row.id);
       if (reveal) {
         if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
         else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
       }
-    } else input.removeAttribute('aria-activedescendant');
+    } else (mode === 'name' ? list : input).removeAttribute('aria-activedescendant');
+    if (mode === 'name') { create.disabled = !validName(); updateStatus(); }
     const item = matches[selected];
     if (mode === 'inspection') {
       inspection.replaceChildren();
@@ -285,7 +311,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     historyRequest?.abort(); historyRequest = undefined;
     endRetained(); endPreview();
     deletionControls(false);
-    cancelChoice(); createNamed = undefined; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
+    cancelChoice(); createNamed = undefined; selectionMarker = 'current'; generation++; mode = 'commands'; loading = false; notice = ''; items = options.commands(); matches = []; selected = 0;
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
@@ -295,7 +321,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview();
     deletionControls(false);
     if (mode === 'commands') commandQuery = input.value;
-    cancelChoice(); createNamed = undefined; mode = kind; title.textContent = heading; input.placeholder = placeholder;
+    cancelChoice(); createNamed = undefined; selectionMarker = 'current'; mode = kind; title.textContent = heading; input.placeholder = placeholder;
     input.setAttribute('aria-label', kind === 'sessions' ? 'Search project sessions' : heading);
     back.hidden = false; retry.hidden = false; retryAction = onRetry;
     retry.textContent = kind === 'sessions' ? 'Refresh' : 'Retry';
@@ -328,7 +354,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
   }
   async function projects(refresh = false): Promise<void> {
-    if (!options.projects || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!options.projects || anotherDialog()) return;
     const request = beginPage('projects', 'Open recent project', 'Search recent projects…', () => { void projects(true); }, refresh);
     if (request === undefined) return;
     input.setAttribute('aria-label', 'Search recent projects'); retry.textContent = 'Refresh';
@@ -353,7 +379,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void, standalone = false): SelectionRequest | undefined {
+  function startSelection(heading: string, onRetry: () => void, onError?: (message: string) => void, standalone = false, parent?: HTMLDialogElement): SelectionRequest | undefined {
+    if (parent && (dialog.open || !parent.open || !open(parent))) return;
     const request = beginPage('selection', heading, 'Type to filter…', onRetry);
     if (request === undefined) return;
     if (standalone) { back.hidden = true; retry.hidden = true; }
@@ -364,15 +391,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       if (onError) { closeInteraction(); onError(message); }
       else { failure(message); draw(); }
     };
-    const chooseItems: SelectionRequest['chooseItems'] = (values, selectedValue) => {
+    const chooseItems: SelectionRequest['chooseItems'] = (values, selectedValue, guidance, marker = 'current') => {
       if (!current()) return Promise.resolve(undefined);
       return new Promise(resolve => {
-        cancelChoice(); resolveChoice = resolve;
-        items = values.map(value => ({ ...value, current: value.id === selectedValue,
-          keywords: [value.keywords, value.id === selectedValue ? 'Current' : undefined].filter(Boolean).join(' ') || undefined,
+        cancelChoice(); resolveChoice = resolve; selectionMarker = marker;
+        items = values.map(value => ({ ...value, current: marker === 'current' && value.id === selectedValue,
+          keywords: [value.keywords, marker === 'current' && value.id === selectedValue ? 'Current' : undefined].filter(Boolean).join(' ') || undefined,
           run: () => { accepted = true; resolve(value.id); } }));
         matches = items; selected = Math.max(0, items.findIndex(item => item.id === selectedValue));
-        loading = false; notice = ''; draw();
+        loading = false; notice = guidance || ''; draw();
       });
     };
     return {
@@ -404,14 +431,15 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         matches = []; selected = 0; input.value = ''; notice = page.notice || ''; loading = false;
         context.replaceChildren(details); context.hidden = false;
         draw();
-        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+        if (!anotherDialog()) input.focus({ preventScroll: true });
       },
       remaining(text) { if (current()) { remaining.textContent = text; remaining.hidden = !text; } },
-      focus() { if (current() && !doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true }); },
+      focus() { if (current() && !anotherDialog()) input.focus({ preventScroll: true }); },
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void): PreviewSelectionRequest | undefined {
+  function startPreviewSelection(heading: string, onRetry: (() => void) | undefined, onPreview: (item?: PaletteItem) => void, onCancel: () => void, parent?: HTMLDialogElement): PreviewSelectionRequest | undefined {
+    if (!dialog.open && !open(parent?.open ? parent : undefined)) return;
     const request = beginPage('selection', heading, 'Type to filter themes…', onRetry || (() => {}));
     if (request === undefined) return;
     preview = onPreview; cancelPreview = onCancel;
@@ -430,8 +458,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       cancel() { if (current()) closeInteraction(); },
     };
   }
-  function namedSession(onCreate: (name: string) => void | Promise<void>): void {
-    if (doc.querySelector('dialog[open]:not(#command-palette)')) return;
+  function namedSession(onCreate: (name: string, harness: string) => void | Promise<void>, choices: { harnesses: readonly { id: string; label: string }[]; current: string; notice?: string }): void {
+    if (anotherDialog()) return;
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
     deletionControls(false);
@@ -439,25 +467,29 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview(); cancelChoice(); generation++; mode = 'name'; createNamed = onCreate; composing = false;
     title.textContent = 'New named session'; input.placeholder = 'Session name…'; input.setAttribute('aria-label', 'Session name');
     input.value = ''; back.hidden = true; retry.hidden = true; retryAction = undefined;
-    loading = false; notice = ''; items = []; matches = []; selected = 0;
+    loading = false; notice = choices.notice || '';
+    items = choices.harnesses.map((harness, index) => ({ ...harness, run: () => { selected = index; selection(); } }));
+    matches = items; selected = Math.max(0, items.findIndex(harness => harness.id === choices.current));
     draw(); input.focus();
   }
   function submitName(): void {
-    if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || doc.querySelector('dialog[open]:not(#command-palette)')) return;
-    const action = createNamed, name = input.value.trim();
+    if (!dialog.open || mode !== 'name' || !createNamed || composing || !validName() || anotherDialog()) return;
+    const action = createNamed, name = input.value.trim(), harness = matches[selected].id;
     // Use the same post-close action boundary as selection, not a prompt.
-    closeInteraction(() => action(name));
+    closeInteraction(() => action(name, harness));
   }
-  function open(): boolean {
-    if (disposed || closing || !options.canOpen() || doc.querySelector('dialog[open]')) return false;
+  function open(parent?: HTMLDialogElement): boolean {
+    if (disposed || closing || !options.canOpen() || [...doc.querySelectorAll('dialog[open]')].some(node => node !== parent)) return false;
+    parentDialog = parent;
     opener = doc.activeElement instanceof realm.HTMLElement ? doc.activeElement : undefined;
     commandQuery = ''; afterClose = undefined;
     showModal(dialog); commands(); return true;
   }
   function choose(index = selected): void {
     const item = matches[index];
-    if (!dialog.open || !item || loading || deleting || doc.querySelector('dialog[open]:not(#command-palette)')) return;
-    if (mode === 'inspection') { selected = index; selection(); return; }
+    if (!dialog.open || !item || loading || deleting || anotherDialog()) return;
+    if (mode === 'inspection' || mode === 'name') { selected = index; selection(); return; }
+    if (markerTracksSelection()) { selected = index; selection(false); }
     if (mode === 'commands') options.ranking?.record(item.id);
     if (item.next) {
       if (dismissRetained) { selected = index; selection(); }
@@ -482,7 +514,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         const preferred = selectedId && survivors.has(selectedId) ? selectedId : neighbors.find(id => survivors.has(id));
         if (failure) { if (options.error) options.error(failure, 'Delete sessions'); else notice = [failure, notice].filter(Boolean).join(' '); }
         draw(true, preferred);
-        if (!doc.querySelector('dialog[open]:not(#command-palette)')) input.focus({ preventScroll: true });
+        if (!anotherDialog()) input.focus({ preventScroll: true });
       })();
       return;
     }
@@ -492,19 +524,29 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }
   input.addEventListener('compositionstart', () => { composing = true; }, { signal });
   input.addEventListener('compositionend', () => { composing = false; }, { signal });
-  input.addEventListener('input', () => { matches = []; selected = 0; draw(); }, { signal });
+  input.addEventListener('input', () => {
+    if (mode === 'name') { create.disabled = !validName(); return; }
+    matches = []; selected = 0; draw();
+  }, { signal });
   dialog.addEventListener('keydown', event => {
-    if (!dialog.open || event.isComposing || event.keyCode === 229 || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if (!dialog.open || event.isComposing || event.keyCode === 229 || mode === 'name' && composing || anotherDialog()) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeInteraction(); }
-    else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    else if (mode === 'name' && navigateDialogActions(event, cancelName, create)) return;
+    else if (mode === 'name' && (event.target === input || event.target === list) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length;
+        selection();
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) submitName(); }
+    } else if (!deleting && event.target === input && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); if (matches.length) selected = (selected + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length; selection();
-      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) { if (mode === 'name') submitName(); else choose(); } }
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) choose(); }
     } else if (event.target === create && event.key === 'Enter' && event.repeat) {
       event.preventDefault();
     }
   }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!doc.querySelector('dialog[open]:not(#command-palette)')) closeInteraction(); }, { signal });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); if (!anotherDialog()) closeInteraction(); }, { signal });
   dialog.addEventListener('close', () => {
     historyRequest?.abort(); historyRequest = undefined;
     bufferedHistory = undefined;
@@ -512,7 +554,8 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     endRetained(); endPreview();
     cancelChoice(); createNamed = undefined; retryAction = undefined; generation++;
     const action = afterClose; afterClose = undefined;
-    if (!doc.querySelector('dialog[open]') && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
+    if (!anotherDialog() && opener?.isConnected && !opener.closest('[hidden], [inert]')) opener.focus({ preventScroll: true });
+    parentDialog = undefined;
     if (action) void Promise.resolve().then(action).catch(error => {
       // An action error is not a reason to replay it (especially a launch).
       if (options.error) options.error(String(error), 'Command action');
@@ -524,12 +567,13 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
   }, { signal });
   list.addEventListener('mousemove', event => {
-    if ((!preview && mode !== 'inspection') || !dialog.open || doc.querySelector('dialog[open]:not(#command-palette)')) return;
+    if ((!preview && mode !== 'inspection' && !markerTracksSelection()) || !dialog.open || anotherDialog()) return;
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
-    if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(); }
+    if (row && selected !== Number(row.dataset.index)) { selected = Number(row.dataset.index); selection(!markerTracksSelection()); }
   }, { signal });
   create.addEventListener('click', submitName, { signal });
-  back.addEventListener('click', commands, { signal });
+  cancelName.addEventListener('click', () => closeInteraction(), { signal });
+  back.addEventListener('click', () => { if (parentDialog) closeInteraction(); else commands(); }, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
   win.addEventListener('keydown', event => {
     if (options.shortcuts === false || event.defaultPrevented) return;

@@ -42,7 +42,10 @@ pre > code { font-size:inherit; }
 .typography-row + .typography-row { border-top:1px solid color-mix(in srgb, var(--vscode-panel-border) 45%, transparent); }
 .typography-family { display:grid; grid-template-columns:minmax(130px, 1fr) minmax(0, 200px); align-items:center; gap:12px; min-width:0; }
 .settings-content .typography-family label { margin:0; }
-.typography-family button { width:100%; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.typography-font-value { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
+.typography-font-value > span { flex:1 1 100px; min-width:0; }
+.typography-family button { flex:none; }
+.typography-font-value .settings-choice-value { padding:0; min-height:0; }
 .typography-size { position:relative; }
 .settings-content .typography-size label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .typography-stepper { display:flex; align-items:center; gap:2px; }

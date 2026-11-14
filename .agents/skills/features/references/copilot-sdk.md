@@ -10,8 +10,7 @@ compatibility evidence is not native acceptance.
 
 Curated harnesses use their best supported bespoke interface: Pi native RPC and
 Copilot SDK. Generic ACP is a separate capability-driven fallback, not the
-mandatory internal protocol. Built-in creation is **New Copilot session**;
-**New session** and its shortcuts remain Pi-default. No universal controller,
+mandatory internal protocol. Built-in creation uses the shared [session-creation actions](session-creation.md), selecting Copilot explicitly or through the global/project default. No universal controller,
 duplicated transcript/composer/navigation engine, or SDK-to-ACP/Pi event adapter.
 
 The exact npm dependency is `@github/copilot-sdk@1.0.28`. Its released
@@ -153,9 +152,11 @@ contain only current supported identities. Agent-owned history is untouched.
 
 Visible harness labels are **Copilot** in the Project bar, sidebar and history;
 transport tags remain `copilot-sdk` for storage/API compatibility.
-**New Copilot session** has the concise hint **Start a Copilot session**.
+[Session creation](session-creation.md) owns shared picker/default actions; visible labels never expose the SDK transport tag.
 Generic ACP protocol/adapters are retained internally without a Copilot preset,
 creation/options actions or keybinding entries.
+
+[Named creation](session-naming.md#named-creation-via-native-rename) uses the existing native naming API once after SDK connection, with preflight validation and session-local failure retention. It does not invoke `/session rename` or submit synthetic input. Temporary Copilot creation remains unsupported.
 
 ## Send, events, controls and decisions
 

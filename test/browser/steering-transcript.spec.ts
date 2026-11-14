@@ -12,7 +12,7 @@ for (const readingHistory of [false, true]) test(`idle send previews before disp
       await expect.poll(async () => (await demo.metrics()).gap).toBeGreaterThan(100);
     }
     await demo.editPreferences(JSON.stringify({ 'appearance.autoFollowAfterSending': mode }));
-    await expect(page.locator('#send-auto-follow')).toHaveValue(mode);
+    await expect(page.locator('#send-auto-follow')).toHaveAttribute('value', mode);
     const preserveReading = readingHistory && mode === 'never';
     const readingTop = (await demo.metrics()).top;
     // Hold native dispatch: the renderer must show a turn before any Pi event/receipt.

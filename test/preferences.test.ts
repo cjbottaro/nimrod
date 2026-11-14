@@ -13,6 +13,32 @@ function fixture() {
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
 
+test('default harness layers future-launch defaults without rewriting equal overrides or unrelated JSONC', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.defaultHarness(), 'pi');
+    f.host.external('// Keep global comments\n{"custom":true}');
+    await p.saveDefaultHarness('copilot');
+    assert.equal(p.defaultHarness(), 'copilot');
+    f.host.value.projectPath = '/project/.nimrod/settings.json'; f.host.externalProject('// Project\n{}');
+    await p.saveDefaultHarness('copilot');
+    assert.equal(p.isOverridden('sessions.defaultHarness'), true);
+    f.host.external('// Global\n{"sessions.defaultHarness":"codex","custom":true}');
+    assert.equal(p.defaultHarness(), 'copilot');
+    await p.useGlobal('sessions.defaultHarness');
+    assert.equal(p.defaultHarness(), 'codex');
+    assert.equal(p.isOverridden('sessions.defaultHarness'), false);
+    assert.match(f.host.value.projectText!, /Project/);
+    assert.equal(parseSettings(f.host.value.text).custom, true);
+    f.host.externalProject('{"sessions.defaultHarness":false}');
+    assert.equal(p.defaultHarness(), 'codex', 'invalid external values retain last valid settings');
+    await assert.rejects(p.saveDefaultHarness('pi'));
+    f.host.externalProject('{}');
+    await p.saveDefaultHarness('future-harness');
+    assert.equal(p.defaultHarness(), 'future-harness', 'availability never rewrites the preference');
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('autocomplete acceptance defaults to Tab, layers project overrides and preserves JSONC and last valid values', async () => {
   const f = fixture(), p = await f.install();
   try {
@@ -512,6 +538,14 @@ test('project overrides merge over global defaults and reset removes keys rather
     await p.saveRuntime({ pi: '/project/pi', node: '/new/node' }, ['pi']);
     assert.deepEqual(p.runtime({ pi: 'pi', node: 'node' }), { version: 1, pi: '/project/pi', node: '/new/node', copilot: 'copilot' });
     assert.equal(p.isOverridden('runtime.nodePath'), false);
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }, 'global').pi, 'discovered-pi');
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }, 'global').node, '/new/node');
+    const globalText = f.host.value.text;
+    await p.useGlobal('runtime.piPath');
+    assert.equal(p.isOverridden('runtime.piPath'), false);
+    assert.equal(p.runtime({ pi: 'discovered-pi', node: 'discovered-node' }).pi, 'discovered-pi');
+    assert.equal(f.host.value.text, globalText, 'clearing a project runtime field never edits globals');
+    assert.equal(parseSettings(f.host.value.projectText!)['runtime.piPath'], undefined);
     await p.useGlobal('appearance.theme');
     assert.equal(p.theme().selected, 'tokyo-night'); assert.equal(p.isOverridden('appearance.theme'), false);
     assert.match(f.host.value.projectText!, /Project/); assert.match(f.host.value.text, /Global/);

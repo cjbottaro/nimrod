@@ -12,7 +12,7 @@ export function installFontPicker(doc: Document, host: {
   const dialog = doc.createElement('dialog');
   dialog.id = 'font-picker'; dialog.className = 'nimrod-modal modal-stack';
   dialog.setAttribute('aria-labelledby', 'font-picker-title');
-  dialog.innerHTML = '<header class="modal-header"><h2 id="font-picker-title" class="modal-title"></h2><button type="button" class="secondary" data-refresh>Refresh</button><button type="button" class="secondary" data-close aria-label="Close font picker">Close</button></header><input id="font-picker-search" type="search" role="combobox" aria-label="Search installed font families" aria-controls="font-picker-list" aria-autocomplete="list" aria-expanded="true" autocomplete="off" spellcheck="false"><div id="font-picker-list" class="modal-body font-picker-list" role="listbox" aria-label="Installed font families"></div><p class="modal-description" role="status"></p>';
+  dialog.innerHTML = '<header class="modal-header"><h2 id="font-picker-title" class="modal-title"></h2><button type="button" class="secondary utility-button" data-refresh>Refresh</button><button type="button" class="secondary" data-close aria-label="Close font picker">Close</button></header><input id="font-picker-search" type="search" role="combobox" aria-label="Search installed font families" aria-controls="font-picker-list" aria-autocomplete="list" aria-expanded="true" autocomplete="off" spellcheck="false"><div id="font-picker-list" class="modal-body font-picker-list" role="listbox" aria-label="Installed font families"></div><p class="modal-description" role="status"></p>';
   doc.body.append(dialog);
   const input = dialog.querySelector<HTMLInputElement>('input')!;
   const list = dialog.querySelector<HTMLElement>('[role=listbox]')!;

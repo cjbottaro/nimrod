@@ -8,11 +8,15 @@ Human guide: [Command interactions](../../../../docs/command-palette.md#pickers-
 
 One interaction owns every palette page and entry point. Escape dismisses the whole palette interaction, Back alone returns to commands, accepted actions run after focus restoration, and stale results cannot mutate or reopen dismissed pages. Ordinary one-shot choices resolve as cancelled; retained agent decisions follow [dismiss-and-resume](dismiss-and-resume.md), leaving the underlying request pending.
 
+[Session creation](session-creation.md) owns the default-harness and creation-type contract. `namedSession` always combines the name field and inline Harness listbox in this same shell, with shared footer navigation, Cancel and post-close acceptance. Its required choices argument carries adapter-filtered options and the effective default. Name-field Up/Down selects a harness without moving focus, changing the name or filtering choices; the list is separately Tab-focusable. Composition/modified editing keys stay native. `SelectionRequest.chooseItems` accepts optional non-error guidance for explicit default fallback.
+
 ## Ownership and extension points
 
 `src/command-palette.ts` owns the window-local command interaction. Commands, session pickers, model/thinking selections and naming are pages within that interaction—not a stack of parent dialogs. `src/main.ts` supplies commands and session-bound preference operations; `src/keybindings.ts` supplies entry-point dispatch. `index.html` supplies the shared modal and Escape hint.
 
 Color-theme preview uses `startPreviewSelection()` with lifecycle-owned rollback; see [themes](themes.md#bundled-catalog-and-command-palette-picker). Its hover handling is preview-only and leaves other picker behavior unchanged.
+
+Ordinary Settings field choices use `startSelection` with an explicit open Settings parent, alongside the existing theme preview exception. They cannot replace an already-open palette or bypass unrelated nested-dialog priority; cancellation leaves preferences unchanged and restores the field opener. [Control patterns](controls.md#settings-choice-lifecycle) owns this composition; field commits remain with the concrete Settings controllers.
 
 Read-only MCP inspection uses `startInspection()` in the same lifecycle: details follow the selected row, Enter does not execute a row action, Refresh replaces the page generation, and Escape/Back/cancellation suppress stale presentation. See [MCP inspector](mcp-inspector.md).
 
@@ -81,6 +85,12 @@ The [presentation extraction rationale](harness-presentation.md) documents this 
 - The close listener retains cleanup for external/native closes. Focus restoration checks that the opener is connected, visible/not inert, and no higher-priority dialog is open.
 - Only the explicit Back button calls `commands()`. Back cancels pending choice/naming state, invalidates stale results and restores the command query while keeping the modal open. Naming retains its compact UI without a Back button.
 - IME/229 remains excluded from keyboard cancellation/activation. Native modality and the shell dispatcher preserve higher-priority Pi dialogs. Genuine nested dialogs (Pi extension above the palette, recorder inside Settings) retain their own cancellation; Escape is not a global close-all-dialogs command.
+
+## Creation selection markers
+
+Creation pickers use the same aria-hidden 14px typographic-dot gutter as configuration choices, but their dot tracks the **highlighted candidate**, not an applied/default value. Normal/temporary creation opts into `chooseItems(..., current, guidance, 'selection')`; named creation uses this policy intrinsically. The effective default only initializes navigation. Keyboard navigation, filtering and pointer movement/clicks keep dot and `aria-selected` together, with one dot among the visible rows (none for an empty list). Marker changes patch the mounted row spans; pointer navigation preserves name/filter focus and does not auto-scroll the list. Pointer movement in named creation changes the candidate only; it never creates or modifies the typed name. Acceptance, cancellation, preference storage and capabilities are unchanged.
+
+Selection-tracking choices publish no `aria-current` or fixed Current search alias; `aria-selected` and the existing active-descendant/selected-harness live status expose the candidate. Page entry and ordinary choices reset marker policy to `current`, preserving model/thinking/Settings applied-value dots, configuration pointer behavior, project membership markers, preview and retained-choice semantics. New marker-policy, named-list, shell routing and offline browser fixtures are authored, unrun; compilation alone is not native visual acceptance.
 
 ## Model and thinking-level selection markers
 

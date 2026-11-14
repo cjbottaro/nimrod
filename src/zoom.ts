@@ -18,19 +18,15 @@ interface ZoomHost {
   save(percent: number): void | Promise<void>;
   apply(scale: number): Promise<void>;
   error?(message?: string): void;
+  present?(): void;
 }
 
 /** Native page zoom, not font-size or CSS transform. Serialize IPC so older changes cannot win. */
-export function installZoom(window: Window, select: HTMLSelectElement, notice: HTMLElement, host: ZoomHost, shortcuts = true): { ready: Promise<void>; run(action: 'in' | 'out' | 'reset'): void; reload(): Promise<void>; dispose(): void } {
+export function installZoom(window: Window, select: HTMLButtonElement, notice: HTMLElement, host: ZoomHost, shortcuts = true): { ready: Promise<void>; run(action: 'in' | 'out' | 'reset'): void; select(percent: number): void; reload(): Promise<void>; dispose(): void } {
   let applied = 100;
   let requested = DEFAULT_ZOOM;
   let work = Promise.resolve();
   let disposed = false;
-  select.replaceChildren(...ZOOM_LEVELS.map(percent => {
-    const option = select.ownerDocument.createElement('option');
-    option.value = String(percent); option.textContent = `${percent}%`;
-    return option;
-  }));
   select.disabled = true;
   select.value = String(applied);
 
@@ -42,7 +38,7 @@ export function installZoom(window: Window, select: HTMLSelectElement, notice: H
         await host.apply(percent / 100);
         if (disposed) return;
         applied = percent;
-        select.value = String(applied);
+        select.value = String(applied); host.present?.();
         notice.hidden = true;
         try { if (persist) await host.save(percent); host.error?.(); }
         catch {
@@ -52,7 +48,7 @@ export function installZoom(window: Window, select: HTMLSelectElement, notice: H
       } catch (error) {
         if (disposed) return;
         if (requested === percent) requested = applied;
-        select.value = String(applied);
+        select.value = String(applied); host.present?.();
         const text = `Could not change zoom: ${String(error)}`;
         if (host.error) host.error(text); else { notice.textContent = text; notice.hidden = false; }
       } finally { if (!disposed) select.disabled = false; }
@@ -78,7 +74,7 @@ export function installZoom(window: Window, select: HTMLSelectElement, notice: H
   let initial: unknown;
   try { initial = host.read(); } catch { /* use the personal default */ }
   const ready = change(savedZoom(initial), false);
-  return { ready, run, reload() {
+  return { ready, run, select(percent) { if (ZOOM_LEVELS.some(level => level === percent)) void change(percent); }, reload() {
     const percent = savedZoom(host.read());
     return percent === requested ? work : change(percent, false);
   }, dispose() {

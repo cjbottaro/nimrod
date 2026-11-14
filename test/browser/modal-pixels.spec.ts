@@ -7,7 +7,7 @@ test('Pixel dissolve previews a bounded mosaic and reverses a partial opening wi
     await fixture.editPreferences('{"appearance.modalAnimation":"pixel","appearance.modalAnimationDuration":500}');
     const settings = await fixture.settingsWindow(); await settings.setViewportSize({ width: 1000, height: 900 });
     await settings.emulateMedia({ reducedMotion: 'no-preference' });
-    await expect(settings.locator('#modal-animation-style')).toHaveValue('pixel');
+    await expect(settings.locator('#modal-animation-style')).toHaveAttribute('value', 'pixel');
     await expect(settings.locator('#modal-animation-value-label')).toHaveText('Duration (milliseconds)');
     const opening = await settings.evaluate(async () => {
       const dialog = document.querySelector<HTMLDialogElement>('#modal-animation-preview-dialog')!; dialog.style.height = '240px';

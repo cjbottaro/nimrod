@@ -98,13 +98,20 @@ export interface HarnessHistory {
   associate(): void;
   dispose(): Promise<void>;
 }
-export interface HarnessCreation {
-  readonly action: HarnessActionMetadata | undefined;
+export type HarnessCreation = {
   readonly title: string;
   readonly defaultMode: Exclude<LaunchMode, 'resume'>;
+  /** Temporary means unsaved history, never saved-then-delete emulation. */
   readonly modes: readonly Exclude<LaunchMode, 'resume'>[];
-  readonly named: boolean;
-}
+} & (
+  | { readonly named: false }
+  | {
+    /** Native initial naming or adapter-owned create-then-rename. Never inferred from the rename port. */
+    readonly named: true;
+    /** Normalize/reject before constructing a session or starting native work. */
+    validateName(name: string): string;
+  }
+);
 export interface HarnessProject {
   readonly id: string;
   readonly label: string;

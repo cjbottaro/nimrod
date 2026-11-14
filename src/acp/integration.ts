@@ -16,7 +16,7 @@ import type { HarnessSession, SessionRequest } from '../harness-contract';
 
 /** Retained adapter factory, not a product creation/profile UI. */
 export function createAcpHarness(profile: AcpProfile) {
-  const creation = { action: undefined, defaultMode: 'saved', modes: ['saved'] as const, named: false, title: `${profile.name} session` } satisfies import('../harness-contract').HarnessCreation;
+  const creation = { defaultMode: 'saved', modes: ['saved'] as const, named: false, title: `${profile.name} session` } satisfies import('../harness-contract').HarnessCreation;
   return defineHarness({ creation, cards: () => acpToolPlugin, id: 'acp', label: profile.name, actions: [{ id: 'harness-acp-options', label: 'ACP session options…', detail: 'Configuration selectors advertised by this ACP agent', context: 'session' }], create(project: HarnessProjectHost) {
     let ready = false;
     return { id: 'acp', label: profile.name,

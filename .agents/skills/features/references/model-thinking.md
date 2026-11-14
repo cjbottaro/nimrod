@@ -22,7 +22,7 @@ Cross-owner dependencies are unsupported. Permission slash commands and
 shortcuts belong to the separate [harness command owner](live-permissions.md),
 not this configuration port.
 
-The composition helper `sessionConfiguration` accesses the selected concrete owner's port. Session identity, transport, initialization, lifecycle, permissions and prompt/cancel semantics remain bespoke. Status projections read the same confirmed concrete configuration, behind their separate presentation interface.
+The composition helper `sessionConfiguration` accesses the selected concrete owner's port. Session identity, transport, initialization, lifecycle, permissions and prompt/cancel semantics remain bespoke. Status projections read the same confirmed concrete configuration, behind their separate presentation interface. Their clickable controls and integration-owned actionable metric segments use [ghost-button affordances](controls.md); noninteractive metrics remain text. Presentation does not add or reinterpret harness capabilities.
 
 ## Availability and pending intent
 

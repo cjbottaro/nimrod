@@ -17,7 +17,7 @@ The initial reviewed local protocol is **Codex CLI 0.162.0**, with the async-que
 
 | Workflow | Current implementation / boundary |
 | --- | --- |
-| Create, explicit Resume, multiple live sessions | Native app-server process per conversation; exact project/thread identity. Pi remains default New session. |
+| Create, explicit Resume, multiple live sessions | Native app-server process per conversation; exact project/thread identity. Shared [creation actions](../features/references/session-creation.md) use the global/project default (initially Pi) or explicit harness selection. |
 | Saved sidebar, pinning, recency, drafts | Tagged `codex` identity and `codex:<JSON-encoded thread ID>` scope; independent from Pi/Copilot even when IDs match. Restored rows await explicit selection. |
 | Discovery/history | Separate discovery process; project-scoped, non-archived, non-ephemeral top-level CLI/VS Code/app-server threads. Turn/item/model pagination with cursor-cycle protection and cancellation of consumer waits. |
 | Streaming and history reconciliation | Native IDs, optimistic `clientUserMessageId` → `userMessage.clientId` adoption, dirty rows, stable controls and live-over-history precedence. No duplicated transcript/composer engine. |
@@ -27,7 +27,7 @@ The initial reviewed local protocol is **Codex CLI 0.162.0**, with the async-que
 | Approvals | Command/file decisions, native request detail, retained FIFO picker, session-local banner, dismissal independent from settlement; terminal/server-resolved/disconnected callbacks abort. |
 | Model/effort | Advertised catalog, shared deferred configuration operations and exact result confirmation. Idle `thread/resume` overrides; installed-runtime application remains an acceptance gap. |
 | Status, alerts, diagnostics | Shared All/Unread/Working/input state, notices, notifications, pop-outs and native transcript logs. Token totals/last-turn window data only; no fabricated dollars/credits/current-context percent. |
-| Rename session | Required [session naming port](../features/references/session-naming.md) through exact-bound-thread `thread/name/set`, ordered name events and native deletion guards. Runtime/native acceptance pending. |
+| Rename session | Named creation supports one explicit create-then-native-rename attempt after readiness ([lifecycle](../features/references/session-naming.md#named-creation-via-native-rename)), never a reconnect/persistence workaround. Required [session naming port](../features/references/session-naming.md) through exact-bound-thread `thread/name/set`, ordered name events and native deletion guards. Runtime/native acceptance pending. |
 | Reload session | Required `SessionReload` port; observed owned app-server exit followed by exact-thread Resume, preserving mounted identity/draft without replay. [Shared lifecycle](../features/references/projects-and-sessions.md#reload-session-lifecycle); new fixtures unrun, native acceptance pending. |
 | Delete | Shared reviewed spawned-thread tree deletion through a guarded catalog; see [Codex deletion](references/deletion.md). Cross-project, incomplete-lineage and ambiguous-fork trees fail explicitly. |
 | Slash commands | Required command port: `/model`, `/rename`, native `/compact`, thread-scoped `/mcp`, `/status`, `/pwd` (`/cwd`), `/ps`, plus read-only `/skills` and `/hooks` subsets. No generic app-server command catalog. [Compatibility matrix](../slash-commands/references/codex.md); [complete inventory and upgrade audit](../slash-commands/references/codex-audit.md) is mandatory on Codex upgrades/command anomalies. Native acceptance pending. |
@@ -104,7 +104,7 @@ Current behavior in `src/codex/connection.ts`:
   unconfirmed history rather than claiming that a runtime ID is saved.
 - Missing-rollout errors retain complete diagnostics and any cleanup failure in
   Details, with a concise headline that does not falsely promise saved history.
-  Explicit New Codex session is separate user intent, never a recovery side effect.
+  Explicit New session with harness… → Codex is separate user intent, never a recovery side effect.
 
 The user's native-create → no-Send → quit → Nimrod requirement remains limited by
 Codex persistence/Resume/discovery in the reviewed version. Do not present removal

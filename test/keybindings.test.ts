@@ -70,8 +70,8 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('reload-card-plugins', { 'reload-card-plugins': [] }), []);
   assert.deepEqual(bindingsFor('select-theme', { 'select-theme': ['primary+j'] }), ['primary+j']);
   assert.deepEqual(bindingsFor('select-theme', { 'select-theme': [] }), []);
-  assert.equal(ACTIONS.some(action => ['demo', 'file', 'new-acp', 'acp-options'].includes(action.id)), false);
-  for (const id of ['reload', 'keybindings', 'new-copilot'] as const) {
+  assert.equal(ACTIONS.some(action => ['demo', 'file', 'new-acp', 'acp-options', 'new-named-with-harness'].includes(action.id)), false);
+  for (const id of ['reload', 'keybindings', 'new-with-harness'] as const) {
     assert.deepEqual(bindingsFor(id, { [id]: [] }), []);
     assert.deepEqual(bindingsFor(id, { [id]: ['primary+j'] }), ['primary+j']);
   }

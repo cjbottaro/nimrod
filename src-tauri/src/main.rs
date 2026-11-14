@@ -102,27 +102,11 @@ fn find_program(name: &str) -> Option<PathBuf> {
 
 #[tauri::command]
 async fn runtime_defaults(app: tauri::AppHandle) -> Defaults {
-    let node = if let Some(mise) = find_program("mise") {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            Command::new(mise).args(["which", "node"]).output(),
-        )
-        .await
-        {
-            Ok(Ok(output)) if output.status.success() => {
-                PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
-            }
-            _ => find_program("node").unwrap_or_else(|| "node".into()),
-        }
-    } else {
-        find_program("node").unwrap_or_else(|| "node".into())
-    };
+    // Keep defaults as command names; launch/availability resolve them on PATH.
+    // Installed versions and absolute paths belong to explicit Runtime overrides.
     Defaults {
-        pi: find_program("pi")
-            .unwrap_or_else(|| "pi".into())
-            .to_string_lossy()
-            .into_owned(),
-        node: node.to_string_lossy().into_owned(),
+        pi: "pi".into(),
+        node: "node".into(),
         home: app.path().home_dir().ok().map(|home| {
             std::fs::canonicalize(&home)
                 .unwrap_or(home)

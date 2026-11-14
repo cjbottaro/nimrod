@@ -90,6 +90,8 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 .palette-input-row { display:flex; align-items:center; gap:8px; }
 #palette-input { flex:1; min-width:0; }
 #palette-create { flex:none; }
+#palette-name-harness-label { color:var(--vscode-descriptionForeground); font-size:12px; }
+#command-palette[data-mode=name] #palette-list:focus-visible { outline:1px solid var(--vscode-focusBorder); outline-offset:2px; }
 #palette-list { overflow:auto; min-height:0; position:relative; }
 #palette-list [role=option] { padding:9px 10px; border-radius:4px; cursor:pointer; display:grid; gap:4px; }
 /* Sidebar rows use width:100%; picker rows must include padding in that width. */

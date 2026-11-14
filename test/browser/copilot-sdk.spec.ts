@@ -9,8 +9,9 @@ test('offline SDK bridge uses the shared shell for optimistic send, permissions,
     const pi = await page.locator('.session-view:not([hidden])').getAttribute('id');
     await page.locator(visible('prompt')).fill('Keep Pi draft');
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session');
+    await page.locator('#palette-input').fill('New session with harness');
     await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator('#mode-badge')).toHaveText('Copilot');
     await expect(page.locator(visible('send'))).toBeEnabled();
     const sdk = await page.locator('.session-view:not([hidden])').getAttribute('id');
@@ -65,7 +66,8 @@ test('shell session choices use secondary parsed/scope details and honor the nat
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     const full = 'git worktree add /fixture/tree -b task/example';
     const request = { kind: 'shell', canOfferSessionApproval: true, fullCommandText: full,
@@ -102,7 +104,8 @@ test('permission picker retains one shell, nests feedback and resumes through a 
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('send'))).toBeEnabled();
     await page.evaluate(() => {
       const dialog = document.querySelector<HTMLDialogElement>('#command-palette')!;
@@ -164,7 +167,8 @@ test('busy SDK configuration updates one queued transcript row and applies at id
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('model'))).toHaveText('small');
     const prompt = page.locator(visible('prompt'));
     const permission = page.locator('#command-palette');
@@ -216,7 +220,8 @@ test('queued configuration cancellation removes intent and restores focus withou
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('model'))).toHaveText('small');
     const prompt = page.locator(visible('prompt'));
     for (const content of ['First fixture turn', 'Second fixture turn']) {
@@ -245,7 +250,8 @@ test('SDK configuration accepted before the first prompt stays at the start as c
   const demo = await demoFixture(page);
   try {
     await page.keyboard.press('Meta+Shift+P');
-    await page.locator('#palette-input').fill('New Copilot session'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-input').fill('New session with harness'); await page.locator('#palette-input').press('Enter');
+    await page.locator('#palette-list [data-key="copilot-sdk"]').click();
     await expect(page.locator(visible('model'))).toHaveText('small');
     await page.locator(visible('model')).click();
     await page.locator('#palette-input').fill('Fixture large'); await page.locator('#palette-input').press('Enter');

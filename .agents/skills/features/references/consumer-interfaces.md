@@ -42,7 +42,7 @@ These projections read current owner state; they are not captured once at constr
 
 Shared `SessionLifecycleOwner` contains only token/starting/ended bookkeeping. `PiSessionLifecycleOwner` and `src/pi/session-file.ts` own Pi mode/file inputs; ACP receives its concrete profile/saved-ID state. Helpers accept the fields they actually need, and concrete adapters project controller availability to a boolean instead of imposing a common controller-state shape.
 
-Ordinary `connect` options carry only accepted-action context. Pi-only initial naming and draft-copy creation arguments stay on the concrete Pi creation path in `main.ts`, not on an interface where ACP would silently ignore them. New-session creation and connecting an existing selection are distinct consumers even when they reuse a concrete launch routine.
+Ordinary `connect` options carry only accepted-action context. Initial naming is an explicit creation request gated by the adapter's `HarnessCreation.named` capability and required validator when supported; create-then-native-rename sequencing belongs to the concrete adapters, never a shell fallback; draft-copy remains Nimrod-owned creation state. [Session creation](session-creation.md) owns discovery and default selection. Unsupported adapters must never silently ignore a requested name. New-session creation and connecting an existing selection are distinct consumers even when they reuse a concrete launch routine.
 
 ### Lifecycle guarantees
 
@@ -158,7 +158,7 @@ The shared consumer never guesses a setting from an action ID. Static creation/
 action metadata also registers in Settings/reference windows; live session
 contributions pass through the same bindable registry. New action IDs use
 `harness-` namespacing and empty default shortcuts. Native application actions
-retain their closed allowlist. Duplicate registrations/creation actions,
+retain their closed allowlist. Duplicate registrations/project actions,
 unsupported creation modes/naming, conflicting saved owners and inconsistent
 identity/key/draft-scope projections fail explicitly.
 

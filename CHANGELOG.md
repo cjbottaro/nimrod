@@ -6,6 +6,10 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- **Default harness** in global and Project settings controls new sessions (initially Pi). New normal and temporary **with harness…** actions choose a harness for one session without changing the default, replacing harness-specific creation commands. **New named session…** always combines the name field and an inline harness picker in one modal, with Up/Down changing the harness without leaving the name field; its existing shortcut stays unchanged and the separate named-picker action is removed. The effective default—not the last-used harness—is preselected when eligible, and creation-picker dots move with keyboard/pointer selection rather than staying on that default; configuration dots still mark the applied value; choices reflect adapter capabilities, and unavailable or unsupported defaults ask for an explicit choice rather than silently switching. Existing shortcuts, conversations, Resume and Reload remain unchanged. Named creation now supports Pi, Copilot and Codex: Pi applies names at launch, while Copilot/Codex create then issue one native rename without blocking drafting. Adapter validation—including Copilot's 100-character limit—runs before creation. Naming failures retain the created conversation with a session notice for explicit retry; Resume/Reload/reconnect never replay the name. Temporary creation remains Pi-only; native acceptance is pending.
+
+- `mise run setup` installs the pinned toolchain, npm dependencies and the local `nimrod` terminal launcher in one command, without building or launching the app. Existing unrelated commands and shell configuration are left untouched.
+
 - Codex slash commands include `/model`, `/rename`, native `/compact`, `/mcp [verbose]`, `/status`, `/pwd` (alias `/cwd`), `/ps`, and read-only `/skills` and `/hooks` catalogs. Model/name/compaction wait for idle; reports can run during work in accepted FIFO order. Compaction waits for its native item and terminal turn, not an empty acknowledgement. Skill invocation/toggles, hook edits and MCP login remain unsupported; native `/stop` is not aliased to Nimrod Stop. A pinned 65-command source inventory and repeatable upgrade audit track remaining gaps. Pi, Copilot and Codex now share a required command integration interface and retained Command cards: accepted commands preserve drafts/reader intent, output stays in the invocation card, and uncertain delivery never retries. Pi's advertised extension/template/skill commands retain native execution; unsupported commands keep the draft. New fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
 
 - **Rename session…** in the command palette and native session-row menu changes connected Pi, Copilot and Codex conversations through their native naming APIs. Its default shortcut is **⌘/Ctrl+Shift+R**, while **⌘/Ctrl+R** remains Reload session; both are configurable in Keybindings. The current name is selected on open so typing replaces it immediately. Background renames preserve selection, recency and drafts; disconnected sessions require Resume, and unsupported runtimes or failures show session-owned errors without prompt fallback. Installed-runtime and native acceptance remain pending.
@@ -50,6 +54,14 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 - Public card-plugin presentation/shell-output helpers, explicit harness/agent targeting and mount-time applicability, preserving legacy plugins as Pi-only by default.
 
 ### Changed
+
+- Settings extends value-plus-Change… pickers to autocomplete acceptance, zoom, modal animation, auto-follow and font controls; current values no longer look like dropdowns. Notification/logging/performance booleans use direct Enabled checkboxes. Shared outlined utility buttons make Settings, Keybindings, actionable notices, edit-preview Copy/Wrap, operation Cancel visibly clickable. All Status-area buttons use a borderless ghost style with hover and keyboard-focus feedback; navigation, disclosures, primary actions and informational metrics retain their roles.
+
+- Runtime defaults stay as PATH-resolved command names (`pi`, `node`, `copilot`, `codex`) instead of installation-specific Pi/Node paths or mise-selected versions. Saved global/project overrides are preserved.
+
+- Project settings makes its scope and global inheritance explicit. Runtime uses blank fields with inherited-path placeholders; clearing a field on blur or Enter removes its project override. Theme/autocomplete retain **Inherited** / **Project override** labels and **Remove override** controls. Settings files use compact, copyable project/global paths; app-managed state and card-plugin counts no longer clutter Project settings.
+
+- Settings replaces the color-theme dropdown with **Change theme…**, opening the existing searchable **Select theme…** action with live previews. The saved theme sits beside the button; project theme/autocomplete rows use a separate provenance column, collapsing below values in narrow panes. Settings utility buttons—including Global Settings, Change theme, Remove override and Copy path—have visible outlines before hover, while Back stays a text navigation control. Import and removal stay in Global Settings.
 
 - Subtle modal opening keeps background blur steady while fading the dimming and panel, improving Linux entrance smoothness with translucency. Closing retains its blur fade; the attempted steady-blur exit was reverted after a reported regression.
 
@@ -105,6 +117,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 ### Fixed
 
 - Empty projects no longer show the obsolete “PoC” placeholder in the Project bar. The harness label appears only when a session is displayed.
+
+- Deleting the last open session clears its name and tooltip from the Project bar, including repeated deletion through **⌘/Ctrl+Shift+Backspace**.
 
 - Selecting a session with a pending question or permission request now restores conversation focus before opening its picker, avoiding a stranded sidebar focus outline after answering or dismissing it. Keyboard-focus indicators remain available.
 

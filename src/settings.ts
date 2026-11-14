@@ -58,7 +58,12 @@ export function runtimePaths(value: unknown): RuntimePaths {
 /** Commit individual runtime fields on change/blur/Enter, never on each keystroke. */
 export function installRuntimeSettings(elements: {
   form: HTMLFormElement; fields: HTMLFieldSetElement; pi: HTMLInputElement; node: HTMLInputElement; copilot?: HTMLInputElement; codex?: HTMLInputElement; status: HTMLElement;
-}, host: { read(): unknown; save(paths: RuntimePaths & { version: 1 }, changed: RuntimeField[]): void | RuntimePaths | Promise<void | RuntimePaths>; error?(message?: string, field?: RuntimeField): void }): {
+}, host: {
+  read(): unknown;
+  save(paths: RuntimePaths & { version: 1 }, changed: RuntimeField[]): void | RuntimePaths | Promise<void | RuntimePaths>;
+  project?: { overridden(key: RuntimeField): boolean; inherited(): RuntimePaths; clear(key: RuntimeField): Promise<RuntimePaths> };
+  error?(message?: string, field?: RuntimeField): void;
+}): {
   initialize(defaults: RuntimePaths, legacy?: unknown): void;
   current(): RuntimePaths; resetField(key: RuntimeField): void; reload(): void; dispose(): void;
 } {
@@ -70,6 +75,8 @@ export function installRuntimeSettings(elements: {
   const versions = new Map<RuntimeField, number>();
   const attempts = new Map<RuntimeField, string>();
   const failures = new Map<RuntimeField, string>();
+  // Saved UI values are independent of effective launch paths and newer host snapshots.
+  const savedValues = new Map<RuntimeField, string>();
   let disposed = false, sequence = 0, applied = 0;
   const effective = (paths: RuntimePaths, key: RuntimeField) => paths[key] ?? key;
   fields.disabled = true;
@@ -78,8 +85,18 @@ export function installRuntimeSettings(elements: {
     if (error && host.error) { host.error(text); status.textContent = ''; status.classList.remove('error'); }
     else { status.textContent = text; status.classList.toggle('error', error); }
   };
-  const dirtyKeys = () => [...inputs].filter(([key, input]) => committed && (input.value !== effective(committed, key) || edited.has(key))).map(([key]) => key);
-  const show = () => { if (committed) for (const [key, input] of inputs) input.value = effective(committed, key); };
+  const displayValue = (paths: RuntimePaths, key: RuntimeField) => host.project && !host.project.overridden(key) ? '' : effective(paths, key);
+  const dirtyKeys = () => [...inputs].filter(([key, input]) => committed && (input.value !== savedValues.get(key) || edited.has(key))).map(([key]) => key);
+  const show = (dirty = new Set<RuntimeField>()) => {
+    if (!committed) return;
+    const inherited = host.project?.inherited();
+    for (const [key, input] of inputs) {
+      const value = displayValue(committed, key);
+      savedValues.set(key, value);
+      input.placeholder = inherited ? effective(inherited, key) : '';
+      if (!dirty.has(key)) input.value = value;
+    }
+  };
   const reportFailures = () => {
     if (host.error) {
       if (failures.size) { status.textContent = ''; status.classList.remove('error'); }
@@ -98,9 +115,10 @@ export function installRuntimeSettings(elements: {
     const request = ++sequence;
     try {
       // Validate only this field against committed paths, not other partial drafts.
-      const next = runtimePaths({ ...committed, [key]: value });
+      const inherit = !!host.project && !value.trim();
+      const next = inherit ? committed : runtimePaths({ ...committed, [key]: value });
       message('Saving… Applies to new sessions.');
-      const authoritative = await host.save({ version: 1, ...next }, [key]);
+      const authoritative = inherit ? await host.project!.clear(key) : await host.save({ version: 1, ...next }, [key]);
       if (disposed) return;
       const dirty = new Set(dirtyKeys());
       if (request >= applied) {
@@ -110,7 +128,7 @@ export function installRuntimeSettings(elements: {
       if ((versions.get(key) ?? 0) === version && field.value === value) {
         dirty.delete(key); edited.delete(key);
       }
-      for (const [name, element] of inputs) if (!dirty.has(name)) element.value = effective(committed, name);
+      show(dirty);
       if (attempts.get(key) === signature) failures.delete(key);
       reportFailures();
       if (!failures.size) message('Saved. Applies to new sessions.');
@@ -153,17 +171,21 @@ export function installRuntimeSettings(elements: {
       show(); fields.disabled = false;
     },
     reload() {
-      if (!committed) return;
+      if (disposed || !committed) return;
       const dirty = new Set(dirtyKeys()), saved = host.read(); if (saved == null) return;
       const next = runtimePaths(saved);
-      if ([...inputs.keys()].every(key => effective(next, key) === effective(committed!, key))) return;
+      const inherited = host.project?.inherited();
+      if ([...inputs].every(([key, input]) => effective(next, key) === effective(committed!, key)
+        && displayValue(next, key) === savedValues.get(key)
+        && input.placeholder === (inherited ? effective(inherited, key) : ''))) return;
       committed = next;
-      for (const [key, input] of inputs) if (!dirty.has(key)) input.value = effective(next, key);
+      show(dirty);
       if (!failures.size) message(dirty.size ? 'Saved paths changed. Your unfinished edits are retained.' : 'Updated from settings.json. Applies to new sessions.');
     },
     resetField(key) {
       if (!committed) return;
-      const input = inputs.get(key); if (input) input.value = effective(committed, key);
+      const dirty = new Set(dirtyKeys()); dirty.delete(key);
+      show(dirty);
       edited.delete(key); versions.set(key, (versions.get(key) ?? 0) + 1);
       attempts.delete(key); failures.delete(key); applied = ++sequence;
       reportFailures(); if (!failures.size) message('Applies to new sessions.');

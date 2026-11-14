@@ -46,7 +46,7 @@ test('registration alone connects an unknown harness through real input, draft, 
   assert.match(f.notices.at(-1)!.message, /Which option/); assert.match(f.notices.at(-1)!.details!, /choices/);
   assert.deepEqual(f.host.drafts.read(), { draft: 'Preserved before identity exists' }, 'fallback question display never mutates input or sends an answer');
   assert.equal(actionContextAvailable('harness-fixture-question', { project: true, sessionActions: new Set(actions.map(action => action.id)) }), true);
-  assert.deepEqual(bindingsFor('harness-new-fixture', {}), []);
+  assert.deepEqual(bindingsFor('new-with-harness', {}), []);
   assert.deepEqual(pluginTargets([{ backend: fixtureHarness.id }]), [{ backend: fixtureHarness.id }]);
   assert.equal(selectHarnessCard({ source: { backend: fixtureHarness.id }, name: 'unknown', native: { question: 'literal' } }).id, 'nimrod.tool');
   const source = project.history.source()!, history = await loadSessionHistory([source], new AbortController().signal, () => {});
@@ -113,6 +113,27 @@ test('registered factories reject duplicate/unknown identities and unsupported c
   assert.throws(() => registry.create(registry.get(fixtureHarness.id), f.host, { mode: 'temporary' }), /does not support/);
   assert.throws(() => registry.create(registry.get(fixtureHarness.id), f.host, { mode: 'saved', initialName: 'Not supported' }), /initial naming/);
   assert.throws(() => registry.create(registry.get(fixtureHarness.id), f.host, { mode: 'resume', reference: { kind: 'another', sessionId: 'same' } }), /another harness/);
+  f.dom.window.close();
+});
+
+test('named creation validates and normalizes through the advertised adapter before construction', () => {
+  const f = harnessHostFixture();
+  let created = 0, received: import('../src/harness-contract').SessionRequest | undefined;
+  const creation = { ...fixtureHarness.creation, named: true as const, validateName(value: string) {
+    if (value.trim().length > 5) throw new Error('Fixture name limit');
+    return value.trim();
+  } };
+  const registration = defineHarness({ ...fixtureHarness, creation, create(host: import('../src/harness-host').HarnessProjectHost) {
+    const project = fixtureHarness.create(host);
+    return { ...project, creation, create(sessionHost: import('../src/harness-host').HarnessSessionHost, request: import('../src/harness-contract').SessionRequest) {
+      created++; received = request; return project.create(sessionHost, request);
+    } };
+  } });
+  const registry = new HarnessRegistry([registration], f.project, registration.id), project = registry.get(registration.id);
+  assert.throws(() => registry.create(project, f.host, { mode: 'saved', initialName: 'Too long' }), /Fixture name limit/);
+  assert.equal(created, 0);
+  registry.create(project, f.host, { mode: 'saved', initialName: '  Clean  ' });
+  assert.equal(created, 1); assert.deepEqual(received, { mode: 'saved', initialName: 'Clean' });
   f.dom.window.close();
 });
 

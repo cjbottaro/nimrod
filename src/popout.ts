@@ -17,6 +17,7 @@ import { setCodeIcon, showCopyResult } from './pi/code-actions';
 import { isMarkdownLanguage, popoutTitle } from './popout-presentation';
 import { applyTypography, readTypography } from './typography';
 import './popout.css';
+import './utility-button.css';
 
 interface CodeSnapshot { session: string; title: string; text: string; language: string; }
 

@@ -227,7 +227,7 @@ export function installApplicationNotices(win: Window, store = new NoticeStore()
       else icon.textContent = notice.severity === 'info' ? 'ⓘ' : '⚠';
       const actions = document.createElement('div'); actions.className = 'application-notice-actions';
       notice.actions?.forEach((action, index) => {
-        const button = document.createElement('button'); button.type = 'button'; button.textContent = action.label; button.disabled = !enabled[index];
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = action.label; button.className = 'utility-button'; button.disabled = !enabled[index];
         button.dataset.actionIndex = String(index); actions.append(button);
       });
       if (notice.dismissible !== false) {

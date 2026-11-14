@@ -19,7 +19,7 @@ the supported SDK API, independently of Reload session.
 `AcpSession`/`AcpHost`, generic cards and runtime-only adapter code, with no creation/options actions or restored sidebar sessions. The former
 Copilot ACP preset, saved identities, discovery and deletion routes are removed.
 Old layout entries are ignored without reinterpreting IDs or migrating/deleting
-stored drafts or agent history. Generic ACP has no current product UI, including creation/options, persistence, Resume, deletion or Reload. New session stays Pi-default; harness identity is immutable.
+stored drafts or agent history. Generic ACP has no current product UI, including creation/options, persistence, Resume, deletion or Reload. New sessions use the global/project default harness (initially Pi); [session creation](session-creation.md) owns shared creation actions, capability discovery and fallback selection. Harness identity is immutable.
 Shared shell, mounted views and optimistic Send are unchanged. Updated fixtures
 are unrun; native acceptance remains pending. [Harness presentation](harness-presentation.md)
 owns the integration boundary.

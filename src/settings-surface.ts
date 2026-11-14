@@ -5,13 +5,14 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { installApplicationNotices } from './application-notices';
 import { installPreferences, type ProjectSettingKey } from './preferences';
-import { installSettings, installRuntimeSettings } from './settings';
+import { installSettings, installRuntimeSettings, type RuntimeField } from './settings';
 import { installSettingsNavigation } from './settings-navigation';
 import { installSidebarResize } from './sidebar-resize';
 import { installKeybindingEditor } from './keybinding-editor';
 import { isMac } from './keybindings';
 import { installThemes } from './themes/picker';
 import { installZoom } from './zoom';
+import { installSettingsChoiceControls, type ChooseSetting } from './settings-choice-controls';
 import { installModalMotion, showModal, closeModal } from './modal-motion';
 import { applyModalAnimation, type ModalAnimationStyle } from './modal-animation';
 import { updateRangeFill } from './range-input';
@@ -24,9 +25,11 @@ import type { NotificationDispatch } from './notifications';
 import { installTypography } from './typography-controls';
 import type { InstalledFont } from './font-picker';
 
-export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false) {
+export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false, harnesses: readonly { id: string; label: string }[] = []) {
   const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   let unloading = false, noticeSequence = 0;
+  let chooseSetting: ChooseSetting = async () => undefined;
+  let choiceControls: ReturnType<typeof installSettingsChoiceControls> | undefined;
   const feedback = (id: string, operation: string) => (message?: string) => {
     if (message) notices.report({ id, operation, message }); else notices.resolve(id);
   };
@@ -50,6 +53,10 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-send-auto-follow').hidden = true;
     required('settings-modal-animation').hidden = true;
   }
+  required('card-plugin-status').hidden = !global;
+  required('settings-project-inheritance').hidden = global;
+  required('settings-project-file').hidden = global;
+  required('settings-state-file').hidden = !global;
   const settingsNavigation = installSettingsNavigation(required<HTMLDialogElement>('settings-page'));
   const typography = installTypography(document.documentElement, {
     read: () => preferences.typography(),
@@ -71,6 +78,13 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     defaultWidth: () => 220, maxAvailableWidth: available => Math.min(available * .45, Math.max(0, available - 240)),
     active: () => settings.isOpen, allowedDialog: required<HTMLDialogElement>('settings-page'),
   });
+  const runtimeKeys: Record<RuntimeField, ProjectSettingKey> = { pi: 'runtime.piPath', node: 'runtime.nodePath', copilot: 'runtime.copilotPath', codex: 'runtime.codexPath' };
+  required('runtime-inheritance-hint').hidden = global;
+  if (!global) for (const id of ['pi-path', 'node-path', 'copilot-path', 'codex-path']) {
+    const field = required<HTMLInputElement>(id);
+    field.required = false;
+    field.setAttribute('aria-describedby', 'runtime-inheritance-hint');
+  }
   let runtimeDefaults: { pi: string; node: string } | undefined;
   const runtime = installRuntimeSettings({
     form: required<HTMLFormElement>('runtime-settings'), fields: required<HTMLFieldSetElement>('runtime-fields'),
@@ -81,19 +95,30 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       await preferences.saveRuntime(paths, fields);
       return preferences.runtime(runtimeDefaults ?? paths);
     },
+    project: global ? undefined : {
+      overridden: key => preferences.isOverridden(runtimeKeys[key]),
+      inherited: () => preferences.runtime(runtimeDefaults!, 'global'),
+      clear: async key => {
+        await preferences.useGlobal(runtimeKeys[key]);
+        return preferences.runtime(runtimeDefaults!);
+      },
+    },
     error: (message, field) => feedback(field ? 'runtime:' + field : 'runtime', 'Save runtime paths')(message),
   });
+  let selectTheme = () => {};
   const themes = installThemes({
     root: document.documentElement,
-    select: required<HTMLSelectElement>('theme-picker'), file: required<HTMLInputElement>('theme-file'),
+    select: required<HTMLButtonElement>('theme-picker'), current: required('theme-current'),
+    importButton: required<HTMLButtonElement>('theme-import'), removeButton: required<HTMLButtonElement>('theme-remove'), file: required<HTMLInputElement>('theme-file'),
     notice: required('theme-notice'), noticeText: required('theme-notice-text'), dismiss: required<HTMLButtonElement>('theme-notice-dismiss'),
   }, {
     read: () => preferences.theme(),
     save: library => preferences.saveTheme(library), newId: () => `import-${crypto.randomUUID()}`,
     error: feedback('themes', 'Color theme'),
-    libraryEdits: global,
+    libraryEdits: global, selectTheme: () => selectTheme(),
   });
-  if (!global) required('theme-hint').textContent = 'Choose a global-library theme for this project. Import or remove themes in global Settings.';
+  if (!global) required('theme-library-actions').hidden = true;
+  if (!global) required('theme-hint').hidden = true;
   const appearance = installNativeWindowAppearance({
     read: () => preferences.windowAppearance(),
     save: patch => preferences.saveWindowAppearance(patch),
@@ -104,12 +129,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     blurValue: required<HTMLOutputElement>('background-blur-value'),
     blurGroup: required('settings-background-blur'), hint: required('translucency-hint'),
   } : undefined);
-  const zoom = installZoom(window, required<HTMLSelectElement>('zoom-level'), required('zoom-error'), {
+  const zoom = installZoom(window, required<HTMLButtonElement>('zoom-level'), required('zoom-error'), {
     read: () => preferences.zoom(), save: percent => preferences.saveZoom(percent),
     apply: scale => getCurrentWebview().setZoom(scale),
-    error: feedback('zoom', 'App zoom'),
+    error: feedback('zoom', 'App zoom'), present: () => choiceControls?.paint(),
   }, false);
-  const transcriptLogPicker = required<HTMLSelectElement>('transcript-logs-mode');
+  const transcriptLogPicker = required<HTMLInputElement>('transcript-logs-mode');
   const transcriptLogStatus = required('transcript-logs-status');
   let transcriptLogPath = '', transcriptLogFailure = '', transcriptLogLoss = '';
   const transcriptLog = createTranscriptLog({
@@ -139,12 +164,12 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   function reloadTranscriptLog(): void {
     const enabled = preferences.transcriptLogEnabled();
     transcriptLog.setEnabled(enabled && !global);
-    transcriptLogPicker.value = enabled ? 'on' : 'off';
+    transcriptLogPicker.checked = enabled;
     transcriptLogStatus.textContent = transcriptLogFailure || transcriptLogLoss || `${enabled ? 'Transcript debug logging enabled for project windows.' : 'Transcript debug logging is off; existing logs are retained.'}${transcriptLogPath ? ` Logs: ${transcriptLogPath}` : ''}`;
   }
   transcriptLogPicker.addEventListener('change', () => {
     transcriptLogPicker.disabled = true;
-    void preferences.saveTranscriptLog(transcriptLogPicker.value === 'on').then(() => notices.resolve('transcript-logs-settings'))
+    void preferences.saveTranscriptLog(transcriptLogPicker.checked).then(() => notices.resolve('transcript-logs-settings'))
       .catch(error => notices.report({ id: 'transcript-logs-settings', operation: 'Save transcript debug logging setting', message: String(error) }))
       .finally(() => { if (!unloading) { reloadTranscriptLog(); transcriptLogPicker.disabled = false; } });
   });
@@ -165,7 +190,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       ...appearance.diagnostics(),
     },
   }));
-  const performancePicker = required<HTMLSelectElement>('performance-mode');
+  const performancePicker = required<HTMLInputElement>('performance-mode');
   const performanceCapture = required<HTMLButtonElement>('performance-capture');
   const performanceStatus = required('performance-status');
   let capturingPerformance = false;
@@ -174,7 +199,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const enabled = preferences.performanceEnabled();
     const changed = enabled !== performanceDiagnostics.enabled;
     performanceDiagnostics.setEnabled(enabled && !global);
-    performancePicker.value = enabled ? 'on' : 'off';
+    performancePicker.checked = enabled;
     performanceCapture.disabled = !enabled || capturingPerformance;
     if (changed || !enabled) performanceStatus.textContent = enabled ? 'Timing diagnostics enabled. Capture when the app feels slow.' : 'Performance diagnostics are off.';
   }
@@ -215,7 +240,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   performanceCapture.addEventListener('click', () => { void capturePerformance(); });
   performancePicker.addEventListener('change', () => {
     performancePicker.disabled = true;
-    void preferences.savePerformance(performancePicker.value === 'on').then(() => {
+    void preferences.savePerformance(performancePicker.checked).then(() => {
       notices.resolve('performance-settings');
     }).catch(error => {
       notices.report({ id: 'performance-settings', operation: 'Save performance diagnostics setting', message: String(error) });
@@ -223,7 +248,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   });
   reloadPerformance();
   const modalMotion = installModalMotion(document);
-  const animationStyle = required<HTMLSelectElement>('modal-animation-style');
+  const animationStyle = required<HTMLButtonElement>('modal-animation-style');
   const animationDuration = required<HTMLInputElement>('modal-animation-duration');
   const animationDurationValue = required<HTMLOutputElement>('modal-animation-duration-value');
   const animationPreview = required<HTMLDialogElement>('modal-animation-preview-dialog');
@@ -250,7 +275,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   function reloadModalAnimation(force = false): void {
     const animation = preferences.modalAnimation(pendingStyle);
     applyModalAnimation(document.documentElement, animation);
-    animationStyle.value = animation.style;
+    animationStyle.value = animation.style; choiceControls?.paint();
     const scan = isScanStyle(animation.style), kind = scan ? 'scanSpeed' : 'duration';
     const kindChanged = valueKind !== kind; valueKind = kind;
     animationDuration.step = scan ? '50' : '10';
@@ -330,19 +355,29 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const previewAnimation = () => { if (!animationPreview.open) showModal(animationPreview); };
   required('modal-animation-preview').addEventListener('click', previewAnimation);
   reloadModalAnimation();
-  const sendAutoFollowPicker = required<HTMLSelectElement>('send-auto-follow');
-  const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); };
-  sendAutoFollowPicker.addEventListener('change', () => {
+  const sendAutoFollowPicker = required<HTMLButtonElement>('send-auto-follow');
+  const reloadSendAutoFollow = () => { sendAutoFollowPicker.value = preferences.sendAutoFollow(); choiceControls?.paint(); };
+  const changeSendAutoFollow = () => {
     sendAutoFollowPicker.disabled = true;
     void preferences.saveSendAutoFollow(sendAutoFollowPicker.value as import('./pi/transcript-scroll').SendAutoFollow).then(() => {
       notices.resolve('send-auto-follow-settings');
     }).catch(error => {
       notices.report({ id: 'send-auto-follow-settings', operation: 'Save auto-follow setting', message: String(error) });
-    }).finally(() => { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; });
-  });
+    }).finally(() => { if (!unloading) { reloadSendAutoFollow(); sendAutoFollowPicker.disabled = false; } });
+  };
+  sendAutoFollowPicker.addEventListener('change', changeSendAutoFollow);
   reloadSendAutoFollow();
-  const autocompletePicker = required<HTMLSelectElement>('autocomplete-accept');
-  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); };
+  const defaultHarnessPicker = required<HTMLButtonElement>('default-harness');
+  const reloadDefaultHarness = () => { defaultHarnessPicker.value = preferences.defaultHarness(); choiceControls?.paint(); };
+  const changeDefaultHarness = () => {
+    void preferences.saveDefaultHarness(defaultHarnessPicker.value)
+      .then(() => notices.resolve('default-harness-settings'))
+      .catch(error => notices.report({ id: 'default-harness-settings', operation: 'Save default harness', message: String(error) }))
+      .finally(() => { if (!unloading) reloadDefaultHarness(); });
+  };
+  reloadDefaultHarness();
+  const autocompletePicker = required<HTMLButtonElement>('autocomplete-accept');
+  const reloadAutocomplete = () => { autocompletePicker.value = preferences.autocompleteAccept(); choiceControls?.paint(); };
   const changeAutocomplete = () => {
     autocompletePicker.disabled = true;
     void preferences.saveAutocompleteAccept(autocompletePicker.value as import('./autocomplete-settings').AutocompleteAccept)
@@ -352,13 +387,13 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   };
   autocompletePicker.addEventListener('change', changeAutocomplete);
   reloadAutocomplete();
-  const notificationPicker = required<HTMLSelectElement>('notification-mode');
+  const notificationPicker = required<HTMLInputElement>('notification-mode');
   const notificationStatus = required('notification-status');
   const notificationTest = required<HTMLButtonElement>('notification-test');
   const notificationDiagnostics = required<HTMLButtonElement>('notification-diagnostics');
   let testingNotification = false, readingNotificationDiagnostics = false;
   const reloadNotifications = () => {
-    notificationPicker.value = preferences.notificationsEnabled() ? 'on' : 'off';
+    notificationPicker.checked = preferences.notificationsEnabled();
     notificationTest.disabled = testingNotification || readingNotificationDiagnostics || !preferences.notificationsEnabled();
     notificationDiagnostics.disabled = testingNotification || readingNotificationDiagnostics;
   };
@@ -394,11 +429,19 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   reloadNotifications();
   notificationPicker.addEventListener('change', () => {
     notificationPicker.disabled = true;
-    void preferences.saveNotifications(notificationPicker.value === 'on').then(() => {
+    void preferences.saveNotifications(notificationPicker.checked).then(() => {
       notificationStatus.textContent = 'Saved. System notification settings still apply.'; notices.resolve('notification-settings');
     }).catch(error => { notificationStatus.textContent = ''; notices.report({ id: 'notification-settings', operation: 'Save notification settings', message: String(error) }); }).finally(() => {
       reloadNotifications(); notificationPicker.disabled = false;
     });
+  });
+
+  choiceControls = installSettingsChoiceControls(document, {
+    choose: (...args) => chooseSetting(...args),
+    harnesses,
+    apply: { 'default-harness': changeDefaultHarness, 'zoom-level': value => zoom.select(Number(value)), 'modal-animation-style': changeAnimationStyle,
+      'send-auto-follow': changeSendAutoFollow, 'autocomplete-accept': changeAutocomplete },
+    error: (id, error) => feedback('settings-choice:' + id, 'Change setting')(String(error)),
   });
 
   const sources = new Map<ProjectSettingKey, { status: HTMLElement; reset: HTMLButtonElement }>();
@@ -406,32 +449,34 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     const controls: [ProjectSettingKey, string][] = [
       ['appearance.theme', 'theme-picker'],
       ['interaction.autocompleteAccept', 'autocomplete-accept'],
-      ['runtime.piPath', 'pi-path'], ['runtime.nodePath', 'node-path'],
-      ['runtime.copilotPath', 'copilot-path'], ['runtime.codexPath', 'codex-path'],
+      ['sessions.defaultHarness', 'default-harness'],
     ];
-    const editVersions = new Map<string, number>();
     for (const [key, id] of controls) {
-      if (key.startsWith('runtime.')) required(id).addEventListener('input', () => editVersions.set(id, (editVersions.get(id) ?? 0) + 1));
       const row = document.createElement('div'); row.className = 'settings-source';
       const status = document.createElement('span'); status.id = id + '-source';
-      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary'; reset.textContent = 'Use global default';
-      reset.setAttribute('aria-label', 'Use global default for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'settings-reset secondary utility-button'; reset.textContent = 'Remove override';
+      reset.id = id + '-reset';
+      reset.setAttribute('aria-label', 'Remove override for ' + (document.querySelector('label[for="' + id + '"]')?.textContent ?? id));
       required(id).setAttribute('aria-describedby', [required(id).getAttribute('aria-describedby'), status.id].filter(Boolean).join(' '));
-      row.append(status, reset); required(id).after(row); sources.set(key, { status, reset });
+      const setting = required(id).closest<HTMLElement>('.settings-row')!;
+      setting.classList.add('settings-column-row', 'settings-provenance-row');
+      const field = setting.querySelector<HTMLElement>('.settings-field')!;
+      let actions = setting.querySelector<HTMLElement>('.settings-control-actions');
+      if (!actions) {
+        actions = document.createElement('div'); actions.className = 'settings-control-actions';
+      }
+      row.append(status); actions.append(reset);
+      field.after(row); row.after(actions);
+      sources.set(key, { status, reset });
       reset.addEventListener('click', () => {
-        const version = editVersions.get(id);
         const restoreFocus = document.activeElement === reset;
         reset.disabled = true;
         void preferences.useGlobal(key).then(() => {
           if (unloading) return;
-          if (key.startsWith('runtime.')) {
-            runtime.reload();
-            if (editVersions.get(id) === version) runtime.resetField(key === 'runtime.piPath' ? 'pi' : key === 'runtime.nodePath' ? 'node' : key === 'runtime.copilotPath' ? 'copilot' : 'codex');
-          }
           const nested = [...document.querySelectorAll('dialog[open], #dialog.open')].some(dialog => dialog !== required('settings-page'));
           if (restoreFocus && settings.isOpen && !nested && !required(id).closest<HTMLElement>('.settings-panel')?.hidden && (document.activeElement === reset || document.activeElement === document.body)) required(id).focus({ preventScroll: true });
-          feedback('settings-reset', 'Use global default')();
-        }).catch(error => feedback('settings-reset', 'Use global default')(String(error))).finally(reloadSources);
+          feedback('settings-reset', 'Remove override')();
+        }).catch(error => feedback('settings-reset', 'Remove override')(String(error))).finally(reloadSources);
       });
     }
   }
@@ -440,17 +485,43 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     required('settings-title').textContent = global ? 'Settings' : 'Project settings' + (project ? ' — ' + project.split(/[\\/]/).pop() : '');
     required('settings-scope-description').textContent = global
       ? 'Global defaults for all projects. Project overrides take precedence.'
-      : 'Settings for this project. Uses global settings unless overridden here.';
+      : 'Changes here apply only to this project directory and override Global Settings.';
     required('settings-scope-description').title = project ?? '';
     required('settings-title').title = project ?? 'Global Settings';
-    required('settings-file-path').textContent = global ? preferences.paths.settings : preferences.projectPath ?? '';
+    required('settings-file-path').textContent = preferences.paths.settings;
+    required('project-settings-file-path').title = preferences.projectPath ?? '';
+    required('copy-project-settings-path').title = preferences.projectPath ?? '';
     required('state-file-path').textContent = preferences.paths.state;
     for (const [key, { status, reset }] of sources) {
       const overridden = preferences.isOverridden(key);
-      status.textContent = overridden ? 'Project override' : 'Global default';
+      status.textContent = overridden ? 'Project override' : 'Inherited';
+      status.dataset.source = overridden ? 'project' : 'inherited';
       reset.hidden = !overridden; reset.disabled = false;
     }
   }
+  let copyRevision = 0;
+  const fileCopyBindings = [
+    { id: 'copy-project-settings-path', path: () => preferences.projectPath ?? '', label: 'project settings' },
+    { id: 'copy-global-settings-path', path: () => preferences.paths.settings, label: 'global settings' },
+    { id: 'copy-state-path', path: () => preferences.paths.state, label: 'app-managed state' },
+  ].map(({ id, path, label }) => {
+    const button = required<HTMLButtonElement>(id);
+    const copy = () => {
+      const value = path();
+      if (unloading || !value) return;
+      const revision = ++copyRevision;
+      required('settings-file-copy-status').textContent = '';
+      void writeText(value).then(() => {
+        if (unloading || revision !== copyRevision) return;
+        required('settings-file-copy-status').textContent = `Copied ${label} path.`;
+        feedback('settings-file-copy', 'Copy settings path')();
+      }).catch(error => {
+        if (!unloading && revision === copyRevision) feedback('settings-file-copy', 'Copy settings path')(String(error));
+      });
+    };
+    button.addEventListener('click', copy);
+    return () => button.removeEventListener('click', copy);
+  });
   required('settings-global-link').hidden = global;
   required('settings-global-link').addEventListener('click', () => {
     void invoke('open_global_settings').catch(error => feedback('open-settings', 'Open Settings')(String(error)));
@@ -463,11 +534,13 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadDefaultHarness(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
     settings, settingsNavigation, themes, zoom, runtime,
+    onSelectTheme(action: () => void) { selectTheme = action; },
+    onChooseSetting(choose: ChooseSetting) { chooseSetting = choose; },
     ready: Promise.all([appearance.ready, zoom.ready]).then(() => {}),
     async settled() { await appearance.ready; await zoom.reload(); await appearance.settled(); },
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
@@ -479,7 +552,9 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
     dispose() {
       unloading = true; unsubscribe();
-      typography.dispose();
+      fileCopyBindings.forEach(dispose => dispose());
+      typography.dispose(); choiceControls?.dispose();
+      sendAutoFollowPicker.removeEventListener('change', changeSendAutoFollow);
       autocompletePicker.removeEventListener('change', changeAutocomplete);
       required('modal-animation-preview').removeEventListener('click', previewAnimation);
       animationStyle.removeEventListener('change', changeAnimationStyle);

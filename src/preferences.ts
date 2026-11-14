@@ -1,3 +1,4 @@
+import { DEFAULT_HARNESS_SETTING, readDefaultHarness } from './session-creation';
 import { AUTOCOMPLETE_ACCEPT_SETTING, readAutocompleteAccept, type AutocompleteAccept } from './autocomplete-settings';
 import { readModalAnimation, MODAL_ANIMATION_KEYS, type ModalAnimation } from './modal-animation';
 import { DEFAULT_SEND_AUTO_FOLLOW, type SendAutoFollow } from './pi/transcript-scroll';
@@ -35,7 +36,7 @@ const TRANSCRIPT_LOGS_SETTING = 'diagnostics.transcriptLogs';
 // Read compatibility only; an explicit save replaces this key in the same JSONC edit.
 const LEGACY_TRANSCRIPT_LOGS_SETTING = 'diagnostics.toolCapture';
 
-export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', 'runtime.codexPath', AUTOCOMPLETE_ACCEPT_SETTING] as const;
+export const PROJECT_SETTING_KEYS = ['appearance.theme', 'runtime.piPath', 'runtime.nodePath', 'runtime.copilotPath', 'runtime.codexPath', AUTOCOMPLETE_ACCEPT_SETTING, DEFAULT_HARNESS_SETTING] as const;
 // Retain these old project-file entries without applying or migrating them.
 const LEGACY_PROJECT_SETTING_KEYS = ['appearance.zoom', 'appearance.autoFollowAfterSending'];
 export type ProjectSettingKey = typeof PROJECT_SETTING_KEYS[number];
@@ -63,6 +64,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   readModalAnimation(settings);
   readTypography(settings);
   readAutocompleteAccept(settings);
+  readDefaultHarness(settings);
   readKeyOverrides(settings[KEYBINDINGS_SETTING]);
   readPluginSettings(settings);
   const sendAutoFollow = settings['appearance.autoFollowAfterSending'];
@@ -213,7 +215,10 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     isOverridden(key: ProjectSettingKey) { return Object.hasOwn(projectSettings, key); },
     useGlobal(key: ProjectSettingKey) { return patch({ [key]: undefined }, true); },
     subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; },
-    runtime(defaults: { pi: string; node: string; copilot?: string; codex?: string }) { return { version: 1 as const, pi: settings['runtime.piPath'] as string ?? defaults.pi, node: settings['runtime.nodePath'] as string ?? defaults.node, copilot: settings['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot', codex: settings['runtime.codexPath'] as string ?? defaults.codex ?? 'codex' }; },
+    runtime(defaults: { pi: string; node: string; copilot?: string; codex?: string }, scope: 'effective' | 'global' = 'effective') {
+      const values = scope === 'global' ? globalSettings : settings;
+      return { version: 1 as const, pi: values['runtime.piPath'] as string ?? defaults.pi, node: values['runtime.nodePath'] as string ?? defaults.node, copilot: values['runtime.copilotPath'] as string ?? defaults.copilot ?? 'copilot', codex: values['runtime.codexPath'] as string ?? defaults.codex ?? 'codex' };
+    },
     saveRuntime(paths: { pi: string; node: string; copilot?: string; codex?: string }, fields: ('pi' | 'node' | 'copilot' | 'codex')[] = ['pi', 'node', ...(paths.copilot === undefined ? [] : ['copilot' as const]), ...(paths.codex === undefined ? [] : ['codex' as const])]) {
       return patch(Object.fromEntries(fields.map(key => [key === 'pi' ? 'runtime.piPath' : key === 'node' ? 'runtime.nodePath' : key === 'copilot' ? 'runtime.copilotPath' : 'runtime.codexPath', paths[key]])));
     },
@@ -275,6 +280,8 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }, false); },
     notificationsEnabled() { return globalSettings['notifications.enabled'] !== false; },
     saveNotifications(enabled: boolean) { return patch({ 'notifications.enabled': enabled }, false); },
+    defaultHarness(): string { return readDefaultHarness(settings); },
+    saveDefaultHarness(id: string) { return patch({ [DEFAULT_HARNESS_SETTING]: id }); },
     autocompleteAccept(): AutocompleteAccept { return readAutocompleteAccept(settings); },
     saveAutocompleteAccept(mode: AutocompleteAccept) { return patch({ [AUTOCOMPLETE_ACCEPT_SETTING]: mode }); },
     sendAutoFollow(): SendAutoFollow { return globalSettings['appearance.autoFollowAfterSending'] as SendAutoFollow ?? DEFAULT_SEND_AUTO_FOLLOW; },

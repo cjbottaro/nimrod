@@ -12,10 +12,11 @@ import type { ConversationViewMessage } from '../src/conversation-view-host';
 
 const project = '/fixture/codex';
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
-function fixture(options: { savedId?: string; historyAvailable?: boolean; freshId?: string; rejectResume?: boolean; bindError?: string; startGate?: Promise<string>; stop?: (token: string) => Promise<void> } = {}) {
+function fixture(options: { savedId?: string; initialName?: string; renameGate?: Promise<void>; renameError?: string; historyAvailable?: boolean; freshId?: string; rejectResume?: boolean; bindError?: string; startGate?: Promise<string>; stop?: (token: string) => Promise<void> } = {}) {
   const owner: SessionLifecycleOwner = { starting: false, ended: true };
   const backend: CodexBackend = { savedSessionId: options.savedId };
   const packets: CodexPacket[] = [], stops: string[] = [], starts: string[] = [], stages: NativeDraftRecord[] = [], errors: unknown[] = [];
+  const nameFailures: unknown[] = [];
   const publications: ConversationViewMessage[] = [], failures: Parameters<CodexConnectionHost['effects']['failure']>[0][] = [];
   const resolutions: string[] = [], identities: unknown[] = [];
   const writer = new NativeDrafts(project, error => errors.push(error), {
@@ -27,7 +28,7 @@ function fixture(options: { savedId?: string; historyAvailable?: boolean; freshI
   let receive: (packet: unknown) => void = () => {};
   let disconnected: (message: string) => void = () => {};
   const lifecycle = createCodexConnection(() => owner, backend, {
-    project, current: () => current, available: () => available, tearingDown: () => tearingDown,
+    project, initialName: options.initialName, current: () => current, available: () => available, tearingDown: () => tearingDown,
     conflicts: () => conflict, gate: () => available ? 'ready' : 'blocked',
     drafts: { read: () => drafts.read(), bindScope: scope => { if (options.bindError) throw new Error(options.bindError); drafts.bindScope(scope); } },
     transport: {
@@ -36,8 +37,14 @@ function fixture(options: { savedId?: string; historyAvailable?: boolean; freshI
       write: async (_token, packet) => {
         packets.push(packet);
         if (packet.method === 'initialized' || packet.method === undefined) return;
-        if (packet.method === 'turn/start' || packet.method === 'thread/compact/start' || packet.method === 'thread/name/set' || options.rejectResume && packet.method === 'thread/resume') {
+        if (packet.method === 'turn/start' || packet.method === 'thread/compact/start' || options.rejectResume && packet.method === 'thread/resume') {
           receive({ id: packet.id, error: { code: -32000, message: packet.method === 'thread/resume' ? `no rollout found for thread id ${options.savedId}` : 'fixture rejection after possible delivery' } }); return;
+        }
+        if (packet.method === 'thread/name/set') {
+          await options.renameGate;
+          if (options.renameError) receive({ id: packet.id, error: { code: -32000, message: options.renameError } });
+          else receive({ id: packet.id, result: {} });
+          return;
         }
         if (packet.method === 'thread/turns/list' && !backend.historyConfirmed && !options.historyAvailable) {
           receive({ id: packet.id, error: { code: -32600, message: 'thread/turns/list is unavailable before first user message' } }); return;
@@ -49,7 +56,6 @@ function fixture(options: { savedId?: string; historyAvailable?: boolean; freshI
         };
         else if (packet.method === 'thread/turns/list' || packet.method === 'model/list') {
           assert.equal(lifecycle.draftScope, codexScope(backend.savedSessionId!), 'identity and real drafts bind before history/catalog');
-          assert.deepEqual(drafts.read(), { draft: 'Keep newer draft' });
           result = { data: [], nextCursor: null };
         } else throw new Error(`Unexpected provider-facing operation: ${String(packet.method)}`);
         receive({ id: packet.id, result });
@@ -57,12 +63,12 @@ function fixture(options: { savedId?: string; historyAvailable?: boolean; freshI
     },
     ui: { publish: message => publications.push(message), changed() {}, notice: message => errors.push(message),
       approval: async () => 'cancel', completed() {} },
-    effects: { changed() {}, retire() {}, identified: () => identities.push(lifecycle.identity),
+    effects: { changed() {}, nameFailed: error => nameFailures.push(error), retire() {}, identified: () => identities.push(lifecycle.identity),
       resolved: issue => resolutions.push(issue), hasConnectionOutcome: () => hasOutcome, failure: failure => failures.push(failure) },
   });
   const coordinator = new SessionConnection({ selected: () => lifecycle, eligibility: target => target.eligibility(),
     connect: target => target.connect({ acceptedAction: true }), failed: (_target, error) => errors.push(error) });
-  return { owner, backend, lifecycle, coordinator, packets, stops, starts, publications, failures, resolutions, identities, stages, writer, drafts, errors,
+  return { owner, backend, lifecycle, coordinator, nameFailures, packets, stops, starts, publications, failures, resolutions, identities, stages, writer, drafts, errors,
     disconnect: (message: string) => disconnected(message),
     retire: () => { current = false; }, block: () => { available = false; },
     teardown: () => { tearingDown = true; }, conflict: () => { conflict = true; }, outcome: () => { hasOutcome = true; } };
@@ -86,6 +92,57 @@ test('Codex connection owner binds actual drafts before readiness, and selection
   assert.equal(f.packets.filter(packet => packet.method === 'thread/resume').length, 1);
   f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
   assert.deepEqual(f.errors, []);
+});
+
+test('Codex initial naming is one create-then-rename attempt and does not gate readiness or drafting', async () => {
+  let release!: () => void;
+  const f = fixture({ initialName: '  Initial name  ', historyAvailable: true, renameGate: new Promise(resolve => { release = resolve; }) });
+  await f.lifecycle.connect();
+  assert.equal(f.owner.starting, false); assert.equal(f.lifecycle.connection, 'connected');
+  assert.equal(f.backend.session!.hasPendingWork, true, 'Close/Reload sees the pending rename');
+  const rename = f.packets.find(packet => packet.method === 'thread/name/set')!;
+  assert.deepEqual(rename.params, { threadId: 'thread', name: 'Initial name' });
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/start').length, 1);
+  f.drafts.write({ draft: 'Newer draft' }); release(); await flush();
+  assert.equal(f.backend.session!.state.sessionName, 'Initial name');
+  assert.deepEqual(f.drafts.read(), { draft: 'Newer draft' });
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+  // A separate connect resumes the exact identity, never reapplying the creation name.
+  await f.lifecycle.connect(); await flush();
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/name/set').length, 1);
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/resume').length, 1);
+  assert.equal(f.packets.some(packet => packet.method === 'turn/start'), false);
+  assert.equal(f.nameFailures.length, 0);
+  await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('Codex initial rename rejection retains the created thread and is never replayed on reconnect', async () => {
+  const f = fixture({ initialName: 'Requested name', renameError: 'Name rejected' });
+  await f.lifecycle.connect(); await flush();
+  assert.equal(f.lifecycle.connection, 'connected'); assert.equal(f.backend.savedSessionId, 'thread');
+  assert.equal(f.stops.length, 0); assert.match(String(f.nameFailures[0]), /Name rejected/);
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/start').length, 1);
+  await f.lifecycle.stop(); f.lifecycle.disconnect('retry connection'); await f.lifecycle.connect(); await flush();
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/name/set').length, 1);
+  assert.equal(f.packets.filter(packet => packet.method === 'thread/start').length, 1);
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('Codex retired initial rename completion cannot publish into another owner', async () => {
+  let release!: () => void;
+  const f = fixture({ initialName: 'Old name', renameError: 'Late failure', renameGate: new Promise(resolve => { release = resolve; }) });
+  await f.lifecycle.connect(); f.retire(); release(); await flush();
+  assert.equal(f.nameFailures.length, 0);
+  assert.equal(f.backend.session!.state.sessionName, undefined);
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+});
+
+test('Codex Resume ignores initial naming and invalid new names never launch', async () => {
+  const f = fixture({ savedId: 'existing', initialName: 'Must not apply' });
+  await f.lifecycle.connect(); await flush();
+  assert.equal(f.packets.some(packet => packet.method === 'thread/name/set' || packet.method === 'thread/start'), false);
+  f.teardown(); await f.lifecycle.stop(); f.lifecycle.disconnect('done');
+  assert.throws(() => fixture({ initialName: 'Invalid\nname' }), /single-line/);
 });
 
 test('retired untouched markers never replace an exact reconnect candidate or move its draft', async () => {

@@ -12,8 +12,7 @@ For development, Rust, Node and sccache are pinned through mise:
 
 ```sh
 mise trust
-mise install
-npm ci
+mise run setup
 mise run dev
 ```
 
@@ -29,7 +28,7 @@ Starting Pi uses the project's normal Pi trust policy. Sending a prompt is real 
 
 ## Terminal launcher
 
-After packaging the app, install the launcher from the primary checkout:
+`mise run setup` installs the launcher from the current checkout. After packaging the app, use it below; to install the launcher separately, run `mise run install-cli` from the primary checkout:
 
 ```sh
 mise run install-cli       # creates ~/.local/bin/nimrod; does not edit your shell

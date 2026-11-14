@@ -72,9 +72,9 @@ export const editDomRenderer: DomCardRenderer<ToolCardBlock> = {
         let control = controls.get(part.key);
         if (!control) {
           const toolbar = context.document.createElement('div'); toolbar.className = 'edit-card-toolbar';
-          const button = context.document.createElement('button'); button.type = 'button'; button.className = 'card-plugin-copy';
+          const button = context.document.createElement('button'); button.type = 'button'; button.className = 'card-plugin-copy utility-button';
           button.textContent = 'Copy'; button.setAttribute('aria-label', 'Copy diff'); button.disabled = !context.capabilities.copy;
-          const wrap = context.document.createElement('button'); wrap.type = 'button'; wrap.className = 'edit-card-wrap'; wrap.textContent = 'Wrap'; wrap.setAttribute('aria-pressed', 'false');
+          const wrap = context.document.createElement('button'); wrap.type = 'button'; wrap.className = 'edit-card-wrap utility-button'; wrap.textContent = 'Wrap'; wrap.setAttribute('aria-pressed', 'false');
           const status = context.document.createElement('span'); status.className = 'card-plugin-copy-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
           control = { button, wrap, status, text: part.text, remove: () => {} }; controls.set(part.key, control);
           const owned = control;

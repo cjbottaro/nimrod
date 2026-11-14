@@ -646,6 +646,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       }
       if (controlsNode.children.item(position) !== node) controlsNode.insertBefore(node, controlsNode.children.item(position));
       position++;
+      if (!node.classList.contains('ghost-button')) node.classList.add('ghost-button');
       node.hidden = false; node.textContent = control.label; node.title = control.title; node.setAttribute('aria-label', control.title);
       node.disabled = control.disabled || state.sessionUnavailable === true;
     }
@@ -677,6 +678,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
         sessionMetrics.replaceChildren(...status.metricParts.map(part => {
           if (!part.actionId) return document.createTextNode(part.text);
           const button = element('button'); button.type = 'button'; button.textContent = part.text;
+          button.className = 'ghost-button';
           button.dataset.controlId = part.actionId; button.title = part.title || part.text;
           button.setAttribute('aria-label', button.title);
           return button;
@@ -701,7 +703,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       }
       for (const item of composer.recovered) {
         const row = activityRow(`Recovered ${item.kind}`, item.text);
-        const restore = element('button');
+        const restore = element('button', 'ghost-button');
         restore.type = 'button'; restore.dataset.recoveryId = item.id; restore.textContent = 'Restore';
         row.append(restore); queueActivity.append(row);
       }
