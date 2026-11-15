@@ -31,7 +31,7 @@ export interface CodexConnectionHost {
   };
 }
 
-/** Concrete app-server connection ownership. The shell binds Nimrod effects, not
+/** Concrete shared app-server client ownership. The shell binds Nimrod effects, not
  * startup sequencing, identity validation, packet routing or cleanup decisions.
  */
 export function createCodexConnection(readOwner: () => SessionLifecycleOwner, backend: CodexBackend, host: CodexConnectionHost): SessionLifecycle {
@@ -56,7 +56,7 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
     catch (error) {
       owner.starting = false;
       if (host.current()) {
-        host.effects.failure({ kind: 'connection', message: `Could not stop the previous Codex process: ${String(error)}`, resumable: !!savedId });
+        host.effects.failure({ kind: 'connection', message: `Could not detach the previous Codex connection: ${String(error)}`, resumable: !!savedId });
         host.effects.changed();
       }
       return;
@@ -72,7 +72,7 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       const failure = codexConnectionFailure(disconnectReason, !initialized, cleanup);
       if (host.effects.hasConnectionOutcome()) {
         if (cleanup !== undefined) host.effects.failure({ kind: 'cleanup',
-          message: 'Could not finish Codex cleanup; owned process exit is unconfirmed.', details: failure.details, resumable: false });
+          message: 'Could not finish Codex cleanup; client teardown is unconfirmed.', details: failure.details, resumable: false });
         return;
       }
       host.effects.failure({ kind: 'connection', ...failure, resumable: !!lifecycle.identity });
@@ -100,7 +100,7 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
         owner.ended = true; host.effects.retire(); host.ui.publish({ type: 'sessionDisconnected' });
         reportConnection();
         // Startup has one catch/cleanup owner; established disconnects share the
-        // same token-bound stop as Close/deletion, never a replacement's token.
+        // same token-bound client detach as Close/deletion, never a replacement's token.
         if (initialized && !host.tearingDown()) void stopToken(token).catch(error => reportConnection(error));
         host.effects.changed();
       },

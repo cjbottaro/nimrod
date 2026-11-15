@@ -278,6 +278,12 @@ macOS/Linux native presentation remain unverified; Windows launch is unavailable
 The [Codex integration skill](../../codex-integration/SKILL.md) owns the current
 capability matrix, limitations, policy questions and fixture locations.
 
+### Codex shared-daemon connections
+
+Managed local daemon attachment is source-implemented against reviewed Codex 0.169.0 lifecycle/control-socket source. Native fixture CLI/WebSocket tests cover lifecycle decoding, scoped ingress/replies and client-only detach; frontend fixtures cover pending-decision replay/resolution/bounds, catalog setup cancellation and stale-token isolation. Existing shell reload fixtures now qualify Codex's continuing shared work. These fixtures are authored **unrun**; no live daemon/thread probes, provider work, builds or app launch were performed for this implementation. The earlier read-only conflict investigation and user-confirmed idle-unload recovery are not acceptance of the new transport.
+
+Required post-merge TypeScript/Rust compile evidence will be recorded after merge. Installed-runtime and native macOS/Linux attachment, active-stream/history reconciliation, approvals across clients, Close/Reload/window quit, daemon restarts and deletion/unknown-outcome acceptance remain pending. Nimrod's Windows transport remains unavailable. [Daemon contract](../../codex-integration/references/daemon.md) owns behavior and protocol evidence.
+
 ### Codex new-session model changes
 
 The model/effort path now uses live `thread/settings/update` rather than saved-rollout Resume, based on targeted experimental schema generation from installed CLI 0.169.0. Client fixtures cover acknowledgement/notification ordering, exact thread/project/value, unsupported methods, disconnect and confirmation timeout; session fixtures cover changing a new thread with missing rollout history and the `/model` path; native fixtures constrain settings to one model/effort field. These new fixtures are authored **unrun**. No live app-server connection, user-session mutation, model request, app build or launch was performed. Installed-runtime notification/application and native macOS/Linux acceptance remain pending.

@@ -8,6 +8,8 @@ struct Reservation {
     root: String,
     threads: HashSet<String>,
     stopped: bool,
+    // A detached catalog cannot prove an already-sent daemon mutation finished.
+    uncertain: bool,
     // A local-removal fence may stop owned writers, but never authorizes native history deletion.
     local_only: bool,
 }
@@ -24,8 +26,12 @@ impl Reservation {
 #[derive(Default)]
 pub(super) struct Gate { current: Option<Reservation> }
 impl Gate {
+    pub(super) fn mark_uncertain(&mut self, token: &str) {
+        if let Some(reserved) = self.current.as_mut().filter(|r| r.token == token) { reserved.uncertain = true; }
+    }
     pub(super) fn validate_deletion(&self, metadata: &HashMap<String, CatalogThread>, cwd: &PathBuf) -> Result<(), String> {
         let reserved = self.current.as_ref().ok_or("Codex deletion is not reserved")?;
+        if reserved.uncertain { return Err("A previous Codex deletion outcome is unconfirmed; its native fence is retained".into()); }
         if reserved.local_only { return Err("Local Codex removal cannot delete native history".into()); }
         validate_scope(metadata, cwd, &reserved.root, &reserved.threads)
     }
@@ -41,8 +47,8 @@ impl Gate {
             }
             if method == Some("thread/delete") {
                 let r = self.current.as_ref().ok_or("Codex deletion requires a native reservation")?;
-                if r.local_only || r.token != token || !r.stopped || value["params"]["threadId"].as_str() != Some(r.root.as_str()) {
-                    return Err("Codex deletion requires the reserved root and observed affected-writer exit".into());
+                if r.local_only || r.uncertain || r.token != token || !r.stopped || value["params"]["threadId"].as_str() != Some(r.root.as_str()) {
+                    return Err("Codex deletion requires the reserved root and completed affected-client teardown".into());
                 }
             }
         } else {
@@ -135,7 +141,7 @@ pub async fn reserve_codex_deletion(
     if let Some(current) = &mut gate.current {
         current.extend_scope(ids, local_only)?;
     } else {
-        gate.current = Some(Reservation { window: window.label().into(), token, operation: operation_id, root: root_id, threads: ids, stopped: false, local_only });
+        gate.current = Some(Reservation { window: window.label().into(), token, operation: operation_id, root: root_id, threads: ids, stopped: false, uncertain: false, local_only });
     }
     Ok(())
 }
@@ -159,7 +165,8 @@ pub async fn stop_codex_deletion(
         let mut windows = host.windows.lock().await;
         for id in &tokens { windows.retired.insert((window.label().into(), id.clone())); }
     }
-    // No native transition lock is held while waiting for owned process exit.
+    // Detach only affected Nimrod clients. The reviewed native delete owns thread shutdown,
+    // including shared activity; this is never authority to stop the daemon.
     host.stop_matching(|id, _| tokens.contains(id)).await?;
     let mut gate = host.deletion.write().await;
     let current = matching(&mut gate, window.label(), &token, &operation_id)?;
@@ -173,6 +180,9 @@ pub async fn release_codex_deletion(
 ) -> Result<(), String> {
     let mut gate = host.deletion.write().await;
     if gate.current.as_ref().is_some_and(|r| r.window == window.label() && r.token == token && r.operation == operation_id) {
+        if gate.current.as_ref().is_some_and(|r| r.uncertain) {
+            return Err("Codex deletion outcome is unconfirmed; disconnecting its catalog cannot cancel shared-server work. The native fence is retained.".into());
+        }
         if let Some(owner) = host.sessions.lock().await.get(&token) {
             if owner.delete_request.lock().await.is_some() { return Err("Codex delete is still in flight; stop its catalog before releasing guards".into()); }
         }
@@ -183,13 +193,13 @@ pub async fn release_codex_deletion(
 impl CodexHost {
     pub(super) async fn release_window_deletion(&self, window: &str) {
         let mut gate = self.deletion.write().await;
-        if gate.current.as_ref().is_some_and(|r| r.window == window) { gate.current = None; }
+        if gate.current.as_ref().is_some_and(|r| r.window == window && !r.uncertain) { gate.current = None; }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn gate(stopped: bool) -> Gate { Gate { current: Some(Reservation { window: "window".into(), token: "catalog".into(), operation: "operation".into(), root: "root".into(), threads: ["root".into(), "child".into()].into_iter().collect(), stopped, local_only: false }) } }
+    fn gate(stopped: bool) -> Gate { Gate { current: Some(Reservation { window: "window".into(), token: "catalog".into(), operation: "operation".into(), root: "root".into(), threads: ["root".into(), "child".into()].into_iter().collect(), stopped, uncertain: false, local_only: false }) } }
     #[test]
     fn native_scope_blocks_affected_writes_but_not_other_threads_or_discovery() {
         let gate = gate(false);
@@ -268,6 +278,17 @@ mod tests {
         metadata.get_mut("child").unwrap().cwd = cwd.clone();
         metadata.insert("fork".into(), CatalogThread { cwd: cwd.clone(), parent: None, fork: Some("root".into()), ephemeral: false });
         assert!(validate_scope(&metadata, &cwd, "root", &ids).is_err());
+    }
+    #[test]
+    fn detached_catalog_with_unconfirmed_delete_cannot_authorize_another_mutation() {
+        let mut gate = gate(true);
+        gate.mark_uncertain("unrelated-client");
+        assert!(!gate.current.as_ref().unwrap().uncertain);
+        gate.mark_uncertain("catalog");
+        assert!(gate.current.as_ref().unwrap().uncertain);
+        assert!(gate.blocks("root"));
+        assert!(gate.check(true, None, "catalog", &serde_json::json!({"method":"thread/delete","params":{"threadId":"root"}})).is_err());
+        assert!(gate.check(true, None, "catalog", &serde_json::json!({"method":"thread/read","params":{"threadId":"root","includeTurns":false}})).is_ok());
     }
     #[test]
     fn deletion_requires_the_catalog_reserved_root_and_stopped_scope() {

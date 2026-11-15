@@ -158,6 +158,39 @@ test('Codex catalog captures and reports unsupported server interactions without
   await history.dispose();
 });
 
+test('catalog disposal cancels pending daemon setup without waiting for readiness or starting RPC work', async () => {
+  let entered!: () => void, rejectStart!: (error: Error) => void;
+  const starting = new Promise<void>(resolve => { entered = resolve; });
+  const stopped: string[] = [], sent: CodexPacket[] = [];
+  const history = new CodexSessionHistory(cwd, {
+    start: (_token, _receive) => { entered(); return new Promise<string>((_resolve, reject) => { rejectStart = reject; }); },
+    write: async (_token, packet) => { sent.push(packet); },
+    stop: async token => { stopped.push(token); rejectStart(new Error('Fixture setup detached')); },
+  }, () => {});
+  const pending = assert.rejects(history.initialize(), /setup detached/);
+  await starting; await history.dispose(); await pending;
+  assert.equal(stopped.length, 1);
+  assert.equal(sent.length, 0);
+});
+
+test('retired catalog callbacks cannot disconnect or stop a replacement daemon client', async () => {
+  const listeners: ((packet: unknown) => void)[] = [], disconnects: ((reason: string) => void)[] = [];
+  const stopped: string[] = [];
+  const history = new CodexSessionHistory(cwd, {
+    start: async (_token, receive, disconnected) => { listeners.push(receive); disconnects.push(disconnected); return cwd; },
+    write: async (_token, packet) => { if (packet.method === 'initialize') listeners.at(-1)!({ id: packet.id, result: { userAgent: 'fixture' } }); },
+    stop: async token => { stopped.push(token); },
+  }, () => {});
+  await history.initialize(); disconnects[0]('Fixture daemon loss');
+  await history.initialize();
+  assert.equal(listeners.length, 2);
+  disconnects[0]('Late retired disconnect'); listeners[0]({ method: 'thread/closed', params: { threadId: 'foreign' } });
+  await Promise.resolve();
+  assert.equal(stopped.length, 1);
+  await history.initialize(); assert.equal(listeners.length, 2);
+  await history.dispose(); assert.equal(stopped.length, 2);
+});
+
 test('aborted Codex catalog consumer does not spawn work, disposal does not delete sessions', async () => {
   const f = fixture(), signal = new AbortController(); signal.abort();
   await assert.rejects(f.history.list({ signal: signal.signal }));

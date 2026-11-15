@@ -61,13 +61,13 @@ automatically. Installed-runtime and native macOS/Linux acceptance remain pendin
 
 ## Close a session
 
-Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for that agent to stop.
+Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for the integration to release its connection/resources.
 
 - Saved history, its draft and saved pop-outs remain available when reopened.
 - If the harness confirms there is no saved history after stopping, Close discards the local session entry and its draft/attachments—just like Delete. This includes sessions created without ever sending a message. A connection or history-lookup failure is not proof of absence: Close still removes the row, but preserves the uncertain draft.
 - Temporary state is discarded; temporary or active-work Close asks for confirmation.
 - Cancel or failed shutdown keeps the session and draft available.
-- Closing a window stops its agents; quitting stops all Nimrod-owned agents. There is no background daemon or process continuity.
+- Closing a window stops its owned agents; quitting stops all Nimrod-owned agents. Codex instead detaches its clients from the shared daemon; active Codex work may continue. See [Codex Close](codex.md#history-drafts-and-close).
 
 After closing or deleting the selected session, Nimrod prefers the most recently used connected session in the current view, then across All. With none connected, it chooses the most recently used remaining session in the current view, then across All if the view is empty. This uses message/creation recency, not row adjacency—even in Unread's arrival-ordered view. Deleting a background session leaves the current selection unchanged. An inactive saved replacement loads and connects immediately unless that specific session is still locked for deletion. Removing the last session never creates one.
 
@@ -75,9 +75,9 @@ After closing or deleting the selected session, Nimrod prefers the most recently
 
 Use the Project bar's reload-style icon, **Reload session** in the palette, or **⌘/Ctrl+R**.
 
-Reload works with Pi, Copilot and Codex. It stops only the selected session's agent process, then reopens the same saved conversation in the same conversation area. It does not reload the whole window. The draft remains; saved history reloads and disclosure state resets. Active/pending work requires confirmation. Queues and in-flight work do not continue, and prompts are never replayed.
+Reload works with Pi, Copilot and Codex. It reopens the same saved conversation in the same conversation area without reloading the whole window. Pi and Copilot replace only the selected session's owned agent process; their queues and in-flight work do not continue. Codex replaces only Nimrod's client connection to the shared daemon, so active work may continue. The draft remains and disclosure state resets. Active/pending work requires harness-specific confirmation; prompts are never replayed.
 
-Reload is unavailable for temporary sessions, before a saved identity exists (Pi's first verified save), or during lifecycle transitions. Failed shutdown or resume leaves a visible error; retry is explicit. Use [Stop](writing-messages.md#stop-and-recover) to interrupt work without ending its process; Reload is the escape hatch for a stuck saved session.
+Reload is unavailable for temporary sessions, before a saved identity exists (Pi's first verified save), or during lifecycle transitions. Failed shutdown or resume leaves a visible error; retry is explicit. Use [Stop](writing-messages.md#stop-and-recover) to interrupt work without ending its process; Reload refreshes the connection and conversation view; for Pi/Copilot it also replaces the owned agent. Codex Reload does not restart a stuck shared daemon.
 
 ## Delete session tree
 

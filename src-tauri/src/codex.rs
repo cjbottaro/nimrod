@@ -1,41 +1,31 @@
-//! Codex app-server stdio ownership; Codex protocol semantics remain concrete.
+//! Window/token-scoped Codex daemon connections; the shared server is never Nimrod-owned.
 use crate::{
     process::{Output, Packet},
     workspace_windows::WorkspaceWindows,
 };
-use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    process::Stdio,
     sync::Arc,
     time::Duration,
 };
 use tauri::{Manager, ipc::Channel};
 use tokio::{
-    io::AsyncWriteExt,
-    process::{Child, Command},
     sync::{Mutex, RwLock, mpsc, oneshot},
     task::JoinHandle,
-    time::timeout,
 };
-use tokio_util::codec::{FramedRead, LinesCodec};
+#[path = "codex_daemon.rs"]
+mod daemon;
 
 // Codex history is paginated; cap each wire record independently.
 const MAX_RECORD: usize = 16 * 1024 * 1024;
 type Write = (Value, oneshot::Sender<Result<Option<String>, String>>);
-struct FailedStop {
-    child: Child,
-    group: u32,
-    error: String,
-}
-type Stop = (oneshot::Sender<()>, JoinHandle<Result<(), FailedStop>>);
+type Stop = (oneshot::Sender<()>, JoinHandle<()>);
 #[derive(Default)]
 struct StopState {
     task: Option<Stop>,
-    failed: Option<FailedStop>,
     poison: Option<String>,
 }
 #[path = "codex_deletion.rs"]
@@ -153,23 +143,10 @@ impl CodexHost {
                 errors.push(error.clone());
                 continue;
             }
-            if let Some(mut failed) = stop.failed.take() {
-                if let Err(error) = terminate(&mut failed.child, failed.group, None).await {
-                    failed.error = error.clone();
-                    stop.failed = Some(failed);
-                    errors.push(error);
-                    continue;
-                }
-            }
             if let Some((signal, task)) = stop.task.take() {
                 let _ = signal.send(());
                 match task.await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(failed)) => {
-                        errors.push(failed.error.clone());
-                        stop.failed = Some(failed);
-                        continue;
-                    }
+                    Ok(()) => {}
                     Err(error) => {
                         let error = error.to_string();
                         stop.poison = Some(error.clone());
@@ -177,6 +154,10 @@ impl CodexHost {
                         continue;
                     }
                 }
+            }
+            // Socket closure does not cancel a mutation already accepted by a shared server.
+            if owner.catalog && owner.delete_request.lock().await.is_some() {
+                self.deletion.write().await.mark_uncertain(&id);
             }
             let mut sessions = self.sessions.lock().await;
             if sessions
@@ -336,7 +317,7 @@ pub async fn start_codex(
     let cli = resolve_cli(config.cli)?;
     #[cfg(not(unix))]
     return Err(
-        "Codex process-tree ownership is currently implemented for macOS and Linux only"
+        "Codex daemon connections are currently implemented for macOS and Linux only"
             .into(),
     );
     #[cfg(unix)]
@@ -358,45 +339,18 @@ pub async fn start_codex(
         if sessions.contains_key(&token) {
             return Err("Codex token is already owned".into());
         }
-        let mut command = Command::new(&cli);
-        command
-            .arg("app-server")
-            .arg("--listen")
-            .arg("stdio://")
-            .current_dir(&cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .process_group(0);
-        let mut paths = Vec::new();
-        if let Some(path) = cli.parent() {
-            paths.push(path.to_path_buf());
-        }
-        paths.extend(std::env::split_paths(
-            &std::env::var_os("PATH").unwrap_or_default(),
-        ));
-        command.env(
-            "PATH",
-            std::env::join_paths(paths).map_err(|error| error.to_string())?,
-        );
-        let mut child = command
-            .spawn()
-            .map_err(|error| format!("Could not start Codex app-server: {error}"))?;
-        let stdin = child.stdin.take().ok_or("Missing app-server stdin")?;
-        let stdout = child.stdout.take().ok_or("Missing app-server stdout")?;
-        let stderr = child.stderr.take().ok_or("Missing app-server stderr")?;
         let (writer, writes) = mpsc::channel(32);
         let (stop, stopped) = oneshot::channel();
+        let (ready, readiness) = oneshot::channel();
         let output = Output::channel(on_event);
         let binding = Arc::new(Mutex::new(None));
         let metadata = Arc::new(Mutex::new(HashMap::new()));
         let delete_request = Arc::new(Mutex::new(None));
         let wire_owner = WireOwner { catalog: config.catalog, token: token.clone(), cwd: cwd.clone(),
-            binding: binding.clone(), metadata: metadata.clone(), delete_request: delete_request.clone(), gate: host.deletion.clone() };
-        let task = tokio::spawn(supervise(
-            child, stdin, stdout, stderr, writes, stopped, output, wire_owner,
-        ));
+            binding: binding.clone(), metadata: metadata.clone(), delete_request: delete_request.clone(),
+            incoming: Arc::new(Mutex::new(HashSet::new())), gate: host.deletion.clone() };
+        // Setup is cancellable and does not hold window transition locks while Codex starts.
+        let task = tokio::spawn(daemon::supervise(cli, writes, stopped, ready, output, wire_owner));
         sessions.insert(
             token,
             Arc::new(Owned {
@@ -410,6 +364,11 @@ pub async fn start_codex(
                 }),
             }),
         );
+        drop(sessions);
+        drop(windows);
+        // Do not start frontend RPC deadlines until the daemon socket is usable.
+        // Teardown can retire/stop this token while setup is pending.
+        readiness.await.map_err(|_| "Codex daemon setup ended without readiness".to_owned())??;
         Ok(cwd)
     }
 }
@@ -486,87 +445,8 @@ struct WireOwner {
     binding: Arc<Mutex<Option<String>>>,
     metadata: Arc<Mutex<HashMap<String, CatalogThread>>>,
     delete_request: Arc<Mutex<Option<Value>>>,
+    incoming: Arc<Mutex<HashSet<String>>>,
     gate: Arc<RwLock<deletion::Gate>>,
-}
-async fn supervise(
-    mut child: Child,
-    stdin: tokio::process::ChildStdin,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-    writes: mpsc::Receiver<Write>,
-    mut stop: oneshot::Receiver<()>,
-    output: Output,
-    owner: WireOwner,
-) -> Result<(), FailedStop> {
-    let group = child.id().expect("newly spawned owned child has a PID");
-    let mut records = FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_RECORD));
-    let mut errors = FramedRead::new(stderr, LinesCodec::new_with_max_length(64 * 1024));
-    let mut stderr_open = true;
-    let mut tail = String::new();
-    let reason = {
-        let writer = write_records(stdin, writes, owner.clone());
-        tokio::pin!(writer);
-        loop {
-            tokio::select! {
-                reason = &mut writer => break reason,
-                _ = &mut stop => break "Codex connection stopped by Nimrod".to_owned(),
-                record = records.next() => match record {
-                    Some(Ok(line)) if line.trim().is_empty() => {},
-                    Some(Ok(line)) => match serde_json::from_str::<Value>(&line) {
-                        Ok(value) if value.is_object() && value.get("jsonrpc").is_none() => {
-                            let observed = tokio::select! {
-                                _ = &mut stop => break "Codex connection stopped by Nimrod".to_owned(),
-                                reason = &mut writer => break reason,
-                                result = observe_record(&owner, &value) => result,
-                            };
-                            if let Err(error) = observed { break error; }
-                            tokio::select! {
-                                _ = &mut stop => break "Codex connection stopped by Nimrod".to_owned(),
-                                result = output.send(Packet::Rpc { value }) => if result.is_err() { break "Codex frontend disconnected".into(); },
-                                reason = &mut writer => break reason,
-                            }
-                        },
-                        _ => break "Invalid Codex app-server record".into(),
-                    },
-                    Some(Err(error)) => break format!("Invalid Codex app-server stdout: {error}"),
-                    None => break format!("Codex app-server closed: {tail}"),
-                },
-                line = errors.next(), if stderr_open => match line {
-                    Some(Ok(line)) => tail = line.chars().rev().take(2000).collect::<Vec<_>>().into_iter().rev().collect(),
-                    Some(Err(error)) => break format!("Codex stderr framing failed: {error}"),
-                    None => stderr_open = false,
-                },
-            }
-        }
-    };
-    // Closing stdin is the app-server shutdown boundary. Signal only the owned
-    // group and keep its leader unreaped until the last signal.
-    let result = {
-        let stopping = async {
-            // Give stdin EOF a bounded flush opportunity while still draining both pipes.
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            terminate(&mut child, group, None).await
-        };
-        tokio::pin!(stopping);
-        let mut stdout_open = true;
-        loop {
-            tokio::select! {
-                result = &mut stopping => break result,
-                record = records.next(), if stdout_open => { if record.is_none() { stdout_open = false; } },
-                line = errors.next(), if stderr_open => { if line.is_none() { stderr_open = false; } },
-            }
-        }
-    };
-    let message = match &result {
-        Ok(()) => reason,
-        Err(error) => format!("{reason}; {error}"),
-    };
-    let _ = output.notify(Packet::Disconnected { message });
-    result.map_err(|error| FailedStop {
-        child,
-        group,
-        error,
-    })
 }
 async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> {
     if value.get("result").is_some() || value.get("error").is_some() {
@@ -611,58 +491,6 @@ async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> 
     }
     Ok(())
 }
-async fn write_records(
-    mut stdin: tokio::process::ChildStdin,
-    mut writes: mpsc::Receiver<Write>,
-    owner: WireOwner,
-) -> String {
-    while let Some((value, reply)) = writes.recv().await {
-        // Recheck at actual write, not merely when enqueuing. The read lease
-        // excludes scope changes until this bounded pipe write completes.
-        let gate = owner.gate.read().await;
-        let mut binding = owner.binding.lock().await;
-        let validation = gate.check(owner.catalog, binding.as_deref(), &owner.token, &value);
-        if let Err(error) = validation { let _ = reply.send(Ok(Some(error))); continue; }
-        if value["method"] == "thread/delete" {
-            let metadata = owner.metadata.lock().await;
-            if let Err(error) = gate.validate_deletion(&metadata, &owner.cwd) { let _ = reply.send(Ok(Some(error))); continue; }
-        }
-        if !owner.catalog {
-            if let Some(id) = value["params"]["threadId"].as_str() {
-                if binding.as_ref().is_some_and(|current| current != id) { let error = "Codex writer changed its bound thread".to_owned(); let _ = reply.send(Err(error.clone())); return error; }
-                *binding = Some(id.into());
-            }
-        }
-        drop(binding);
-        if owner.catalog && value["method"] == "thread/list" && value["params"]["archived"] == false
-            && value["params"]["sourceKinds"].as_array().is_some_and(|kinds| kinds.len() == 10)
-            && value["params"].get("cwd").is_none() && value["params"].get("cursor").is_none() {
-            owner.metadata.lock().await.clear();
-        }
-        if value["method"] == "thread/delete" {
-            let mut pending = owner.delete_request.lock().await;
-            if pending.is_some() { let error = "A Codex deletion is already in flight".to_owned(); let _ = reply.send(Err(error.clone())); return error; }
-            *pending = Some(value["id"].clone());
-        }
-        let mut bytes = serde_json::to_vec(&value).expect("JSON value serializes");
-        bytes.push(b'\n');
-        let result = match timeout(Duration::from_secs(5), stdin.write_all(&bytes)).await {
-            Ok(Ok(())) => Ok(None),
-            Ok(Err(error)) => Err(format!(
-                "Codex app-server write failed; delivery is unknown: {error}"
-            )),
-            Err(_) => Err("Codex app-server write timed out; delivery is unknown".into()),
-        };
-        let error = result.as_ref().err().cloned();
-        let _ = reply.send(result);
-        if let Some(error) = error {
-            return error;
-        }
-    }
-    "Codex app-server writer closed".into()
-}
-
-use crate::owned_process::terminate;
 #[cfg(test)]
 #[path = "codex_tests.rs"]
 mod tests;

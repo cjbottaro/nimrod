@@ -1,6 +1,6 @@
 # Codex startup binding and cleanup diagnostics
 
-**Status: source fix; post-fix native acceptance pending.** [Verification](../../features/references/verification.md#codex-startup-draft-binding) owns observed evidence and executed checks.
+**Status: source fix; post-fix native acceptance pending.** The draft-binding/error-correlation findings remain relevant. The owned-process teardown analysis below describes the former stdio transport; current Codex [daemon-client teardown](daemon.md) no longer signals an app-server group. [Verification](../../features/references/verification.md#codex-startup-draft-binding) owns observed evidence and executed checks.
 
 ## Observed failure and cause
 

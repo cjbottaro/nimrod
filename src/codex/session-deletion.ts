@@ -36,7 +36,7 @@ export function codexSessionDeletion(history: () => CodexDeletionHistory | undef
             if (plan) await source.reserveDeletion(operationId, rootId, [...scopeIds]);
             else await source.reserveLocalRemoval(operationId, rootId);
             if (!await context.review({ id: operationId, title: plan ? 'Delete Codex thread tree' : 'Delete Codex session', sessions: plan?.review ?? [{ key: scope, title, parentKey: null }],
-              description: `Permanently delete ${title}, its local draft and any saved spawned thread tree, including history or descendants saved during review/shutdown. Stops affected Nimrod-owned agents. Project files are not removed by Nimrod. External writers are not coordinated. This cannot be undone.` })) return;
+              description: `Permanently delete ${title}, its local draft and any saved spawned thread tree, including history or descendants saved during review/shutdown. Disconnects affected Nimrod clients. Native deletion shuts down the reviewed Codex threads, including shared activity. Project files are not removed by Nimrod. External writers are not coordinated. This cannot be undone.` })) return;
             // Like Pi, confirmation covers current descendants, not just a stale review snapshot.
             for (let round = 0; ; round++) {
               if (round >= 32) throw new Error('Codex descendants did not stabilize after 32 shutdown/discovery rounds. Nothing was deleted.');
@@ -46,13 +46,13 @@ export function codexSessionDeletion(history: () => CodexDeletionHistory | undef
               const fresh = await source.previewTree(rootId, context.signal);
               if (!fresh) {
                 if (plan) throw new Error('Codex saved history disappeared during deletion. Its native scope is uncertain; nothing was removed locally.');
-                // Native absence was rechecked after all owned writers stopped,
+                // Native absence was rechecked after all affected Nimrod clients detached,
                 // while the exact-ID native fence still blocks new attachments.
                 context.signal.throwIfAborted(); context.progress('deleting');
                 context.removed(localTargets); return;
               }
               if (!plan) {
-                // EOF/shutdown may save a formerly runtime-only thread. Upgrade
+                // Shared activity may save a formerly runtime-only thread. Upgrade
                 // the same guarded operation rather than orphaning new history.
                 for (const id of fresh.ids) scopeIds.add(id);
                 plan = fresh;
@@ -84,8 +84,8 @@ export function codexSessionDeletion(history: () => CodexDeletionHistory | undef
           } catch (error) {
             throw new Error(`Codex tree deletion did not fully complete: ${String(error)}. Only authoritative removals were reconciled; unconfirmed identities/drafts remain. Nothing was retried.`);
           } finally {
-            // On uncertainty the catalog process must exit before native guards release.
-            // A stop failure retains the reservation instead of advertising safe reuse.
+            // Detaching cannot cancel a shared-server mutation. Unknown outcomes
+            // retain native guards instead of advertising safe reuse or replaying deletion.
             await source.finishDeletion(operationId, uncertain);
           }
         },

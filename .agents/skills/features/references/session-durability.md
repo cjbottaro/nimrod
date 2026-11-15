@@ -56,7 +56,7 @@ responses, a missing filtered list entry and connection errors are unknown, not
 absence. `forget()` retires integration-owned local pointers after local removal;
 it never deletes native history.
 
-After observed owned stop, Close checks again. Confirmed absence discards exact
+After observed integration-owned teardown, Close checks again. Codex detaches only its daemon client; it does not shut down shared work ([daemon lifecycle](../../codex-integration/references/daemon.md)). Confirmed absence discards exact
 sidebar/layout membership, draft/attachments, recency and local pointers, including
 provisional unassigned drafts. Retired draft owners reject late writes. Saved or
 unknown history preserves drafts; unknown lookup must not trap a row in the
