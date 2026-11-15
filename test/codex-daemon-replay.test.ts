@@ -8,7 +8,7 @@ const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve()
 async function fixture(hooks: CodexClientHooks) {
   const sent: CodexPacket[] = [];
   const client = new CodexClient({ write: packet => { sent.push(packet); } }, hooks);
-  const request = (method: string) => sent.findLast(packet => packet.method === method)!;
+  const request = (method: string) => [...sent].reverse().find(packet => packet.method === method)!;
   const initialized = client.initialize();
   client.receive({ id: request('initialize').id, result: { userAgent: 'fixture/0.169.0' } });
   await initialized;
