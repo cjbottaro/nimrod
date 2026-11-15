@@ -1,7 +1,9 @@
 import { RpcWriteRejected } from '../json-rpc-connection';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { CodexPacket } from './protocol';
-/** Session and catalog consumers need only this project-bound owned-process port. */
+/** Session and catalog consumers need only this project-bound owned-client port.
+ * start discovers/starts Codex's managed daemon and connects; stop detaches this token only.
+ */
 export interface CodexTransport {
   start(token: string, receive: (packet: unknown) => void, disconnected: (message: string) => void): Promise<string>;
   write(token: string, packet: CodexPacket): Promise<void>;

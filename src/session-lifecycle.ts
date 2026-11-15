@@ -18,7 +18,9 @@ export interface SessionPersistence {
   readonly draftScope: string | undefined;
 }
 
-/** Connection coordinator and shell teardown port, not prompt cancellation or history discovery. */
+/** Connection coordinator and shell teardown port, not prompt cancellation or history discovery.
+ * Concrete integrations own teardown semantics: owned-child exit or shared-server client detach.
+ */
 export interface SessionConnectivity {
   readonly label: string;
   readonly connection: SessionConnectionState;
@@ -28,13 +30,14 @@ export interface SessionConnectivity {
    * Read connection state for readiness. Never submits/replays a prompt or navigates on completion.
    */
   connect(options?: ConnectSessionOptions): Promise<void>;
-  /** Observe owned child exit; concurrent calls for one token share work. Failure retains ownership
-   * and permits a later explicit retry. Valid while disconnected or without saved history;
-   * no owned token is a no-op. Consumers must not connect/Resume in order to Close.
-   * This is not the composer's Stop/cancel-turn action.
+  /** Await release of this integration's owned connection/resources; concurrent calls for one
+   * token share work. Process-backed adapters observe owned-child exit; shared-server adapters
+   * detach only their client. Failure retains ownership for explicit retry. Valid while
+   * disconnected or without saved history; no token is a no-op. Never connect/Resume to Close.
+   * This is not the composer's Stop/cancel-turn action and does not imply interrupting shared work.
    */
   stop(): Promise<void>;
-  /** Synchronously retire local transport/pending operations. Does not itself await native exit;
+  /** Synchronously retire local transport/pending operations. Does not itself await native teardown;
    * concrete disconnect observers may request stop. Saved identity/drafts remain intact.
    */
   disconnect(reason: string): void;
@@ -59,7 +62,8 @@ export function sessionConnectionState(owner: Pick<SessionLifecycleOwner, 'start
   return owner.starting ? 'connecting' : !owner.ended && available ? 'connected' : 'disconnected';
 }
 
-/** Token-bound teardown also serves retired attempts: late cleanup must never stop a replacement.
+/** Token-bound resource teardown (historical helper name) also serves retired attempts:
+ * late cleanup must never stop a replacement connection.
  * Keep completed work for this owner's lifetime; failed work permits an explicit retry.
  */
 export function ownedProcessStop(stop: SessionLifecycleHost['stop']): (token: string) => Promise<void> {
@@ -72,7 +76,7 @@ export function ownedProcessStop(stop: SessionLifecycleHost['stop']): (token: st
   };
 }
 
-/** Keep the reservation after a failed stop; deduplicate repeated teardown for one owned token. */
+/** Keep ownership after failed teardown; deduplicate repeated release for one owned token. */
 export function ownedSessionStop(owner: () => Pick<SessionLifecycleOwner, 'token'>, stop: SessionLifecycleHost['stop']): () => Promise<void> {
   const stopToken = ownedProcessStop(stop);
   return async () => { const token = owner().token; if (token) await stopToken(token); };

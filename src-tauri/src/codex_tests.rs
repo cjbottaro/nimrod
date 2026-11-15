@@ -16,6 +16,7 @@ async fn catalog_read_records_a_hidden_saved_root_without_binding_a_conversation
         binding: Arc::new(Mutex::new(None)),
         metadata: Arc::new(Mutex::new(HashMap::new())),
         delete_request: Arc::new(Mutex::new(None)),
+        incoming: Arc::new(Mutex::new(HashSet::new())),
         gate: Arc::new(RwLock::new(deletion::Gate::default())),
     };
     observe_record(&owner, &serde_json::json!({"id":1,"result":{"thread":{

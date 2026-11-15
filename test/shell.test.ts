@@ -4737,7 +4737,7 @@ for (const harness of ['copilot', 'codex'] as const) {
     } finally { f.win.close(); }
   });
 
-  test(`${label} reload waits for owned exit, resumes exact identity and preserves mounted drafts without replay or sibling focus theft`, async () => {
+  test(`${label} reload waits for owned teardown, resumes exact identity and preserves mounted drafts without replay or sibling focus theft`, async () => {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessStop: async () => gate });
@@ -4756,7 +4756,7 @@ for (const harness of ['copilot', 'codex'] as const) {
       assert.match(f.rows()[1].getAttribute('aria-label')!, /Reloading/);
       f.element<HTMLButtonElement>('reload-session').click();
       f.rows()[0].click(); await f.tick(); f.rows()[1].click(); await f.tick();
-      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length, 'reselection cannot launch before owned exit');
+      assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length, 'reselection cannot reconnect before owned teardown');
       prompt.value = 'Newer draft during reload'; prompt.dispatchEvent(new f.win.Event('input'));
       f.rows()[0].click(); sibling.focus();
       release(); await f.tick(); await f.tick();
@@ -4764,7 +4764,7 @@ for (const harness of ['copilot', 'codex'] as const) {
       assert.notEqual(replacement.args.token, token);
       assert.equal(f.calls.filter(call => call.command === `start_${harness}`).length, starts.length + 1);
       const stops = f.calls.slice(before).filter(call => call.command === `stop_${harness}`);
-      assert.deepEqual(stops.map(call => call.args.token), [token], 'only the old conversation child stops, not discovery');
+      assert.deepEqual(stops.map(call => call.args.token), [token], 'only the old conversation connection tears down, not discovery');
       assert.ok(f.calls.indexOf(stops[0]) < f.calls.indexOf(replacement));
       assert.equal(f.calls.slice(before).some(call => call.command === 'stop_pi'), false);
       assert.equal(f.win.document.activeElement, sibling); assert.equal(sibling.value, 'Pi sibling draft');
@@ -4790,6 +4790,10 @@ for (const harness of ['copilot', 'codex'] as const) {
       const before = f.calls.length;
       f.element<HTMLButtonElement>('reload-session').click(); await f.tick();
       assert.match(f.element('host-dialog-title').textContent!, /Reload/);
+      if (harness === 'codex') {
+        assert.match(f.element('host-dialog').textContent!, /work in the shared daemon may continue/);
+        assert.doesNotMatch(f.element('host-dialog').textContent!, /in-flight work will not continue|interrupts this session/);
+      }
       assert.equal(f.element('host-dialog').querySelector('[value="ok"]')?.textContent, 'Reload session');
       f.element<HTMLDialogElement>('host-dialog').close('cancel'); await f.tick();
       assert.equal(f.calls.slice(before).some(call => call.command === `stop_${harness}` || call.command === `start_${harness}`), false);

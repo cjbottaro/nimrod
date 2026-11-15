@@ -55,6 +55,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Codex connects to the CLI's managed local daemon instead of launching competing app-server writers, allowing Resume of threads already owned by that daemon. Close, window close and quit detach only Nimrod's clients; Reload reconnects the same thread without restarting shared work. Stop remains an explicit thread interrupt. Replayed approvals wait for validated identity and retire when another client answers; uncertain deletion outcomes retain their safety fence. Shared interface signatures and Pi/Copilot lifecycle behavior are unchanged. Installed-runtime and native macOS/Linux acceptance remain pending.
+
 - Settings extends value-plus-Change… pickers to autocomplete acceptance, zoom, modal animation, auto-follow and font controls; current values no longer look like dropdowns. Notification/logging/performance booleans use direct Enabled checkboxes. Shared outlined utility buttons make Settings, Keybindings, actionable notices, edit-preview Copy/Wrap, operation Cancel visibly clickable. All Status-area buttons use a borderless ghost style with hover and keyboard-focus feedback; navigation, disclosures, primary actions and informational metrics retain their roles.
 
 - Runtime defaults stay as PATH-resolved command names (`pi`, `node`, `copilot`, `codex`) instead of installation-specific Pi/Node paths or mise-selected versions. Saved global/project overrides are preserved.
@@ -73,7 +75,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 - Settings has a quieter, more compact layout: restrained category navigation, grouped preference rows, shorter sliders, and paired font/size controls with an integrated live specimen. Detailed appearance help and configuration-file paths use expandable disclosures. Global Settings defines defaults without an open-project override inventory; inspect and reset overrides in Project settings. Override semantics and immediate preference behavior are unchanged.
 
-- **Reload session** replaces **Restart session** and now supports Pi, Copilot and Codex through a required integration interface. The Project bar, palette and ⌘/Ctrl+R reopen the same saved conversation with a fresh agent process, retaining drafts without replaying work or affecting other sessions. Existing custom shortcuts remain effective. Copilot/Codex installed-runtime and native acceptance remain pending.
+- **Reload session** replaces **Restart session** and now supports Pi, Copilot and Codex through a required integration interface. The Project bar, palette and ⌘/Ctrl+R reopen the same saved conversation, retaining drafts without replaying work or affecting other sessions. Pi/Copilot replace the owned agent process; Codex reconnects its client to the shared daemon. Existing custom shortcuts remain effective. Copilot/Codex installed-runtime and native acceptance remain pending.
 
 - New persistent Pi sessions show **Pi** immediately instead of **Pi · awaiting first save**. Reload still waits for verified saved history, with the reason in its tooltip; temporary sessions remain explicitly labelled.
 

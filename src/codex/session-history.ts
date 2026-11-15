@@ -11,7 +11,7 @@ export interface CodexHistoryDiagnostics {
   transcriptLog?: TranscriptLogSink;
   interactionFailure?(failure: CodexInteractionFailure): void;
 }
-/** Discovery has its own owned process and never binds or prompts a conversation. */
+/** Discovery has its own daemon client connection and never binds or prompts a conversation. */
 export class CodexSessionHistory implements SessionHistory {
   readonly id = 'codex'; readonly label = 'Codex';
   private owner: { token?: string } = {};
@@ -25,7 +25,9 @@ export class CodexSessionHistory implements SessionHistory {
   get supportsDeletion(): boolean { return !this.disposed && !this.cleanupFailed && !!this.host.deletion; }
   private stop: () => Promise<void>;
   constructor(private cwd: string, private host: CodexTransport & { deletion?: CodexDeletionControl }, private error: (error: unknown) => void, private diagnostics: CodexHistoryDiagnostics = {}) {
-    this.stop = ownedSessionStop(() => this.owner, token => this.launching ? this.launching.then(() => host.stop(token), () => host.stop(token)) : host.stop(token));
+    // Native setup reserves the token before connecting. Stop can cancel setup;
+    // retired-token fencing also rejects a delayed start that has not reached IPC yet.
+    this.stop = ownedSessionStop(() => this.owner, token => host.stop(token));
   }
   initialize(): Promise<void> {
     if (this.disposed) return Promise.reject(new Error('Codex history is closed'));
@@ -38,6 +40,7 @@ export class CodexSessionHistory implements SessionHistory {
     await this.stop(); if (this.disposed) throw new Error('Codex history is closed');
     const token = crypto.randomUUID(); this.owner.token = token;
     const client = this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'catalog.request' : 'catalog.response', packet, token); return this.host.write(token, packet); } }, { disconnected: error => {
+      if (this.owner.token !== token) return;
       const reportDiscoveryFailure = !this.disposed && !this.deleting;
       if (reportDiscoveryFailure) this.error(error);
       void this.stop().catch(error => { if (reportDiscoveryFailure && !this.disposed) this.error(error); });
@@ -49,7 +52,10 @@ export class CodexSessionHistory implements SessionHistory {
       }
     } });
     try {
-      this.launching = this.host.start(token, packet => { this.capture('catalog.receive', packet, token); client.receive(packet); }, reason => client.disconnect(reason));
+      this.launching = this.host.start(token, packet => {
+        if (this.owner.token !== token) return;
+        this.capture('catalog.receive', packet, token); client.receive(packet);
+      }, reason => { if (this.owner.token === token) client.disconnect(reason); });
       const confirmed = await this.launching;
       if (this.disposed || confirmed !== this.cwd) throw new Error('Codex history project was not confirmed');
       await client.initialize();
@@ -125,7 +131,7 @@ export class CodexSessionHistory implements SessionHistory {
   }
   async finishDeletion(operationId: string, uncertain: boolean): Promise<void> {
     try {
-      if (uncertain) { this.client?.disconnect('Codex deletion outcome is unconfirmed; retire its owned server before releasing guards'); await this.stop(); }
+      if (uncertain) { this.client?.disconnect('Codex deletion outcome is unconfirmed; detach its catalog without cancelling shared-server work'); await this.stop(); }
       if (this.owner.token && this.host.deletion) await this.host.deletion.release(this.owner.token, operationId);
     } catch (error) { this.cleanupFailed = true; throw new Error(`Codex deletion cleanup was not confirmed; native guards remain reserved. ${String(error)}`); }
     finally { this.deleting = false; this.confirmed = undefined; }

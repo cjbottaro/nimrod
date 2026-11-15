@@ -9,7 +9,7 @@ import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
 import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, explicitSelection, noReferences, savedClose, taggedSavedSessions } from '../harness-defaults';
+import { configurationActions, noProjectActions, explicitSelection, noReferences, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { commandInteraction } from '../command-interaction';
@@ -119,8 +119,8 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     reload: {
       available: () => !!lifecycle.identity && backend.historyConfirmed === true,
       reason: () => !lifecycle.identity || !backend.historyConfirmed ? 'Reload session — available after saved Codex history is confirmed' : lifetime.reloading() ? 'Reloading session…' : 'Reload session',
-      detail: 'Reload this conversation with a fresh Codex process',
-      confirmation: 'This interrupts this session’s agent and resumes its saved history. Your draft stays; in-flight work will not continue. Nothing is sent again automatically.',
+      detail: 'Reconnect and reload this Codex conversation',
+      confirmation: 'This reconnects Nimrod to the same Codex thread. Your draft stays; work in the shared daemon may continue. Pending local controls are retired, and nothing is sent again automatically.',
       needsConfirmation: inputPending => inputPending || !owner.ended && !!backend.session?.hasPendingWork,
       async run() {
         if (!lifecycle.identity || !backend.historyConfirmed) throw new Error('Reload requires confirmed saved Codex history');
@@ -138,6 +138,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       if (lifecycle.connection !== 'connected' || !backend.session) throw new Error('Resume this Codex session before renaming it.');
       await backend.session.rename(name);
     } },
-    close: savedClose, selection: explicitSelection, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
+    close: { alwaysConfirm: false, label: 'Close session',
+      message: 'This disconnects Nimrod from this Codex thread without stopping its shared daemon or active work. Saved history and your draft remain; confirmed-unsaved local state is discarded.' }, selection: explicitSelection, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
   };
 }

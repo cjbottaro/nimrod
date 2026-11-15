@@ -7,7 +7,7 @@ import { item, nonempty, page, record, thread, turn, type CodexApproval, type Co
   type CodexItemEntry, type CodexPacket, type CodexPage, type CodexPhase, type CodexThread, type CodexTurn } from './protocol';
 
 /** Native host supplies ordered writes and calls receive with ordered decoded records.
- * Framing/size bounds, executable discovery and observed owned-process exit are NOT this port.
+ * Framing/size bounds, daemon discovery and observed client teardown are NOT this port.
  */
 export interface CodexWriter { write(packet: CodexPacket): void | Promise<void>; }
 export interface CodexInteractionFailure { method: string; requestId: RpcId; reason: string; }
@@ -45,6 +45,9 @@ export class CodexClient {
   private configurationAttempt?: { setting: 'model' | 'effort'; value: string; confirmed: boolean; finish(outcome: { settings?: RpcRecord; error?: Error }): void };
   private early: CodexEvent[] = [];
   private earlyBytes = 0;
+  private earlyRequestCount = 0;
+  private earlyRequestBytes = 0;
+  private openingReady?: { promise: Promise<void>; resolve(): void };
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly decisions = new Map<RpcId, { turnId: string; controller: AbortController }>();
 
@@ -57,6 +60,7 @@ export class CodexClient {
         this.compactAttempt?.finish({ error });
         this.configurationAttempt?.finish({ error });
         this.state = 'disconnected'; this.early = []; this.earlyBytes = 0;
+        this.openingReady?.resolve();
         for (const timer of this.timers) clearTimeout(timer);
         this.timers.clear();
         for (const decision of this.decisions.values()) decision.controller.abort();
@@ -167,6 +171,8 @@ export class CodexClient {
     nonempty(cwd, 'project cwd');
     if (savedThreadId !== undefined) nonempty(savedThreadId, 'saved thread ID');
     this.state = 'opening';
+    let resolve!: () => void;
+    this.openingReady = { promise: new Promise<void>(ready => { resolve = ready; }), resolve: () => resolve() };
     let opened!: CodexThread;
     try {
       await this.rpc(savedThreadId === undefined ? 'thread/start' : 'thread/resume',
@@ -191,6 +197,7 @@ export class CodexClient {
         });
       return opened;
     } catch (error) { this.disconnect(error); throw error; }
+    finally { this.openingReady?.resolve(); this.openingReady = undefined; }
   }
 
   async startTurn(text: string, clientUserMessageId: string, images: readonly ImageContent[] = []): Promise<void> {
@@ -342,7 +349,7 @@ export class CodexClient {
     const params = record(value ?? {}, 'notification parameters');
     if (this.state === 'opening' && !this.bound) {
       const bytes = new TextEncoder().encode(JSON.stringify(params)).byteLength;
-      if (this.early.length >= MAX_EARLY_EVENTS || this.earlyBytes + bytes > MAX_EARLY_BYTES) throw new Error('Codex pre-identity event buffer exceeded');
+      if (this.early.length + this.earlyRequestCount >= MAX_EARLY_EVENTS || this.earlyBytes + this.earlyRequestBytes + bytes > MAX_EARLY_BYTES) throw new Error('Codex pre-identity event buffer exceeded');
       this.early.push({ method, params }); this.earlyBytes += bytes; return;
     }
     if (method === 'thread/deleted') this.hooks.deleted?.(nonempty(params.threadId, 'deleted thread ID'));
@@ -400,7 +407,21 @@ export class CodexClient {
     this.currentTurn = { id: value.id, completed: value.status !== 'inProgress' };
     this.state = value.status === 'inProgress' ? 'working' : 'idle';
   }
-  private request(method: string, value: unknown, signal: AbortSignal, id: RpcId): Promise<unknown> {
+  private async request(method: string, value: unknown, signal: AbortSignal, id: RpcId): Promise<unknown> {
+    // A shared daemon replays outstanding approvals/questions while Resume is opening.
+    // Await validated identity; never reject another client's pending decision merely
+    // because the response binding has not reached this ordered channel yet.
+    if (this.state === 'opening' && !this.bound && this.openingReady) {
+      const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+      if (this.early.length + this.earlyRequestCount >= MAX_EARLY_EVENTS || this.earlyBytes + this.earlyRequestBytes + bytes > MAX_EARLY_BYTES) {
+        this.disconnect('Codex pre-identity request buffer exceeded');
+        throw new RpcConnectionError('Codex pre-identity request buffer exceeded');
+      }
+      this.earlyRequestCount++; this.earlyRequestBytes += bytes;
+      try { await this.openingReady.promise; }
+      finally { this.earlyRequestCount--; this.earlyRequestBytes -= bytes; }
+    }
+    if (signal.aborted || !this.connection.connected) throw new RpcResponseError(-32800, 'Codex interaction is no longer pending');
     let pending: Promise<unknown>;
     try { pending = this.routeRequest(method, value, signal, id); }
     catch (error) { this.reportInteractionFailure(method, id, error); throw error; }
