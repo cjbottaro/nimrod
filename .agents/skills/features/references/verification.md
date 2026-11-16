@@ -17,8 +17,11 @@ fixtures: `test/codex-project-cwd.test.ts`, client/replay/connection/shell fixtu
 updates, `src-tauri/src/codex_project_tests.rs` and a native socket-bound Resume
 preflight guard. Tests remain unrun. Native Nimrod Resume/Delete/new-session
 acceptance across host/Distrobox and macOS remains pending; metadata reproduction
-is not end-to-end acceptance. No app build/launch is part of this fix. Required
-post-merge TypeScript/Rust compile results are reported separately.
+is not end-to-end acceptance. No app build/launch is part of this fix. Post-merge
+`mise run check` on primary `main` passed in Distrobox (TypeScript plus Rust).
+An initial fixture status-literal typing error was fixed in the task worktree
+and merged before the passing run; the existing unused `Arc` import warning
+remains. This is compile evidence only, not test or native-runtime acceptance.
 
 ## Session presentation boundary
 
