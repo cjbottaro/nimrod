@@ -52,11 +52,11 @@ use sessions::{LaunchMode, SessionFile};
 use process::Packet;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+#[cfg(target_os = "macos")]
+use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 use tauri::{Manager, ipc::Channel};
 use tokio::process::Command;

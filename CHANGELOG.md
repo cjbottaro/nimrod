@@ -120,6 +120,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Restore macOS builds after a shared-pointer import used by single-instance startup was removed; the import remains macOS-only to avoid unused-import warnings on Linux.
+
 - Codex history keeps host/Distrobox project paths separate without trusting the daemon's alias-normalizing cwd filter, preventing sessions from appearing in a project that cannot resume or delete them. Resume validates exact saved-project membership before attaching and accepts only native-verified equivalent runtime paths; deletion remains exact-project scoped. Path errors now include expected/reported directories. Existing drafts/layouts are not migrated or purged; native acceptance is pending.
 
 - Empty composer prompt fields no longer expose a horizontal scrollbar on Linux; wrapped text and vertical scrolling remain unchanged.
