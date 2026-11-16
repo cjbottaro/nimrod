@@ -129,6 +129,13 @@ async fn write(socket: &mut Socket, owner: &WireOwner, value: &Value) -> Result<
         if let Err(error) = gate.validate_deletion(&metadata, &owner.cwd) { return Ok(Some(error)); }
     }
     if !owner.catalog {
+        if value["method"] == "thread/resume" {
+            let metadata = owner.metadata.lock().await;
+            if value["params"]["threadId"].as_str().and_then(|id| metadata.get(id))
+                .is_none_or(|thread| thread.cwd != owner.cwd || thread.ephemeral) {
+                return Ok(Some("Codex Resume requires an exact saved-project metadata read first".into()));
+            }
+        }
         if let Some(id) = value["params"]["threadId"].as_str() {
             if binding.as_ref().is_some_and(|current| current != id) { return Err("Codex connection changed its bound thread".into()); }
             *binding = Some(id.into());
@@ -172,15 +179,16 @@ async fn run(socket: &mut Socket, writes: &mut mpsc::Receiver<Write>, stop: &mut
                 let accepted = tokio::select! {
                     _ = &mut *stop => return "Codex connection detached by Nimrod".into(),
                     result = async {
-                        if !accepts(owner, &value).await? { return Ok(false); }
+                        if !accepts(owner, &value).await? { return Ok(None); }
+                        let paths = runtime_cwds(owner, &value).await?;
                         observe_record(owner, &value).await?;
-                        Ok::<_, String>(true)
+                        Ok::<_, String>(Some(paths))
                     } => result,
                 };
-                match accepted { Ok(false) => continue, Err(error) => return error, Ok(true) => {} }
+                let runtime_cwds = match accepted { Ok(None) => continue, Err(error) => return error, Ok(Some(paths)) => paths };
                 tokio::select! {
                     _ = &mut *stop => return "Codex connection detached by Nimrod".into(),
-                    result = output.send(Packet::Rpc { value }) => if result.is_err() { return "Codex frontend disconnected".into(); },
+                    result = output.send(Packet::Rpc { value, runtime_cwds }) => if result.is_err() { return "Codex frontend disconnected".into(); },
                 }
             },
             packet = writes.recv() => {

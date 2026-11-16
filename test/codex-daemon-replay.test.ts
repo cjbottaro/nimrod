@@ -13,6 +13,10 @@ async function fixture(hooks: CodexClientHooks) {
   client.receive({ id: request('initialize').id, result: { userAgent: 'fixture/0.169.0' } });
   await initialized;
   const resume = client.open(cwd, 'shared-thread');
+  client.receive({ id: request('thread/read').id, result: { thread: {
+    id: 'shared-thread', cwd, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'notLoaded' },
+  } } });
+  await flush();
   const resumed = () => client.receive({ id: request('thread/resume').id, result: { cwd,
     thread: { id: 'shared-thread', cwd, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'active', activeFlags: [] } } } });
   const approval = (id = 'approval') => client.receive({ id, method: 'item/commandExecution/requestApproval',

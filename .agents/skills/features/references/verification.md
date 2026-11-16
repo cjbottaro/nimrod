@@ -2,6 +2,24 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Codex host/Distrobox project cwd
+
+The user-requested provider-free metadata investigation against the existing
+managed Codex 0.169.0 daemon reproduced disagreement between cwd-filtered
+listings and unfiltered/exact metadata. [Protocol evidence](../../codex-integration/references/protocol-evidence.md#distrobox-cwd-filter-disagreement-01690)
+owns the observed shapes and limits. Lifecycle reported `alreadyRunning`;
+only initialize/list/metadata-read were sent, with no thread Resume, prompt,
+configuration change, interrupt, deletion or daemon restart/stop.
+
+Source changes preserve exact saved-project partitioning while admitting only
+native-verified runtime aliases after exact metadata preflight. Authored
+fixtures: `test/codex-project-cwd.test.ts`, client/replay/connection/shell fixture
+updates, `src-tauri/src/codex_project_tests.rs` and a native socket-bound Resume
+preflight guard. Tests remain unrun. Native Nimrod Resume/Delete/new-session
+acceptance across host/Distrobox and macOS remains pending; metadata reproduction
+is not end-to-end acceptance. No app build/launch is part of this fix. Required
+post-merge TypeScript/Rust compile results are reported separately.
+
 ## Session presentation boundary
 
 Source-implemented: private presented-session ownership through `SessionPresenter`,

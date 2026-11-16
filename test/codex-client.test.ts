@@ -75,6 +75,8 @@ test('Codex retirement during buffered replay suppresses remaining events', asyn
 
 test('Codex resume uses exact ID without prompt, history injection, or a replacement thread', async () => {
   const f = fixture(); await f.initialize(); const pending = f.client.open(cwd, 'saved');
+  assert.deepEqual(f.last('thread/read').params, { threadId: 'saved', includeTurns: false });
+  f.respond('thread/read', { thread: thread('saved') }); await flush();
   assert.deepEqual(f.last('thread/resume').params, { threadId: 'saved', cwd, excludeTurns: true });
   f.respond('thread/resume', { cwd, thread: thread('saved') }); await pending;
   assert.equal(f.sent.some(packet => ['thread/start', 'turn/start'].includes(String(packet.method))), false);
@@ -135,6 +137,7 @@ test('Codex identity/project mismatch, ephemeral history and binding rejection f
   for (const scenario of ['id', 'cwd', 'outer-cwd', 'ephemeral', 'binding']) {
     const f = fixture({ identified: () => { if (scenario === 'binding') throw new Error('Draft scope conflict'); } });
     await f.initialize(); const pending = f.client.open(cwd, 'saved'); const checked = assert.rejects(pending);
+    f.respond('thread/read', { thread: thread('saved') }); await flush();
     f.respond('thread/resume', { cwd: scenario === 'outer-cwd' ? '/other' : cwd,
       thread: { ...thread(scenario === 'id' ? 'other' : 'saved', scenario === 'cwd' ? '/other' : cwd), ephemeral: scenario === 'ephemeral' } });
     await checked; assert.equal(f.client.phase, 'disconnected');
@@ -208,6 +211,7 @@ test('Codex steer and interrupt target only the identified active turn; interrup
 
 test('Codex live paginated resume stays busy without inventing an active turn ID', async () => {
   const f = fixture(); await f.initialize(); const pending = f.client.open(cwd, 'saved');
+  f.respond('thread/read', { thread: thread('saved') }); await flush();
   f.respond('thread/resume', { cwd, thread: { ...thread('saved'), status: { type: 'active', activeFlags: [] } } }); await pending;
   assert.equal(f.client.phase, 'working');
   await assert.rejects(f.client.startTurn('unsafe', 'id'), /not idle/);
@@ -218,6 +222,7 @@ test('Codex live paginated resume stays busy without inventing an active turn ID
 
 test('Codex discovery keeps pagination and filters foreign projects, ephemeral threads and subagents', async () => {
   const f = fixture(); await f.initialize(); const listing = f.client.listThreads(cwd);
+  assert.equal((f.last('thread/list').params as Record<string, unknown>).cwd, undefined);
   f.respond('thread/list', { data: [thread('saved'), thread('foreign', '/other'), { ...thread('temp'), ephemeral: true }, { ...thread('child'), parentThreadId: 'parent' }], nextCursor: 'next' });
   assert.deepEqual(await listing, { data: [thread('saved')], nextCursor: 'next' });
   const next = f.client.listThreads(cwd, 'next'); assert.equal((f.last('thread/list').params as Record<string, unknown>).cursor, 'next');

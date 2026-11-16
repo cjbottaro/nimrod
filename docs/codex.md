@@ -37,6 +37,28 @@ Startup failures preserve your local draft and do not replay a prompt. If cleanu
 
 [Reload session](sessions.md#reload-session) reconnects and rehydrates this same thread while keeping your draft. It replaces Nimrod's connection, not the daemon or thread runtime; active shared work may continue. Reload remains unavailable until exact Resume or a successful native saved-history read confirms persistence; deletion is independent of that confirmation. These read-only checks run after readiness and supported native lifecycle changes, without delaying Send; Close remains available independently. Installed-runtime/native daemon attachment and reload acceptance remain pending. Close is not deletion.
 
+### Project paths and Distrobox
+
+Nimrod keeps host and Distrobox projects separate when their canonical project
+paths differ—for example, `/var/home/you/Projects/app` versus
+`/home/you/Projects/app`. Saved-session discovery uses Codex's unfiltered
+metadata and matches that saved project path exactly. It does not combine these
+projects' histories or migrate their drafts/layouts, even if both paths access
+the same files.
+
+Resume checks the exact saved thread/project before attaching. The daemon may
+then report an equivalent runtime cwd with a different spelling; Nimrod accepts
+that only after native filesystem verification. Deletion still requires every
+saved thread in the reviewed tree to belong to the exact project, not merely an
+equivalent filesystem location. Path-mismatch errors include expected and
+reported directories. An old sidebar entry belonging to the other project is
+retained on failure; open its saved project to resume or delete it.
+
+This does not move the shared daemon into your launch environment. Codex retains
+its own startup environment, and Nimrod cannot promise that an already-running
+daemon preserves every requested new-session cwd. A new thread reported under a
+different project fails explicitly instead of being silently assigned here.
+
 ## Delete a Codex thread tree
 
 Use **Delete session…** in the session-row menu or command palette, the Project bar trash control, or **Delete sessions…** to review a Codex thread tree. The conversation does **not** need to be connected: Nimrod validates the saved target through its separate history catalog, without resuming it or sending a message. If Codex never saved the thread, the same **Delete session…** action detaches Nimrod's client and removes the local session and draft after confirmation; you do not need to use Close instead. Nimrod checks the exact native thread rather than trusting its potentially filtered history list, and rechecks after shutdown so newly saved history is deleted too. Failed lookups, uncertain deletion results or failed client teardown retain local state. **Close session** (⌘/Ctrl+W) remains separate and keeps your draft. The existing shared review shows the root and its spawned descendants, including archived and non-interactive descendants. Confirmation authorizes the current spawned subtree, including descendants created during review or shutdown; Nimrod rescans after detaching affected clients before submitting one recursive deletion request. That explicit deletion asks Codex to shut down and remove the reviewed thread runtimes, including shared activity; it never stops the entire daemon.

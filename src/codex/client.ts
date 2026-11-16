@@ -9,7 +9,11 @@ import { item, nonempty, page, record, thread, turn, type CodexApproval, type Co
 /** Native host supplies ordered writes and calls receive with ordered decoded records.
  * Framing/size bounds, daemon discovery and observed client teardown are NOT this port.
  */
-export interface CodexWriter { write(packet: CodexPacket): void | Promise<void>; }
+export interface CodexWriter {
+  write(packet: CodexPacket): void | Promise<void>;
+  /** Native, token-scoped filesystem verification, for runtime paths only. Never history membership. */
+  runtimeCwdMatches?(actual: string, project: string): boolean;
+}
 export interface CodexInteractionFailure { method: string; requestId: RpcId; reason: string; }
 export interface CodexClientHooks {
   /** Identity validation and draft binding must finish synchronously before replay/publication. */
@@ -39,6 +43,7 @@ export class CodexClient {
   private readonly connection: JsonRpcConnection;
   private state: CodexPhase = 'new';
   private bound?: CodexThread;
+  private projectCwd?: string;
   private currentTurn?: { id: string; completed: boolean };
   private startingTurn?: StartingTurn;
   private compactAttempt?: CompactAttempt;
@@ -51,7 +56,7 @@ export class CodexClient {
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly decisions = new Map<RpcId, { turnId: string; controller: AbortController }>();
 
-  constructor(writer: CodexWriter, private hooks: CodexClientHooks = {}, private timeoutMs = 20_000) {
+  constructor(private writer: CodexWriter, private hooks: CodexClientHooks = {}, private timeoutMs = 20_000) {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Codex timeout must be positive');
     this.connection = new JsonRpcConnection(packet => writer.write(packet), {
       notification: (method, params) => this.notification(method, params),
@@ -68,6 +73,10 @@ export class CodexClient {
         hooks.disconnected?.(error);
       },
     }, { label: 'Codex', versionMember: false });
+  }
+  private runtimeCwdMatches(actual: unknown): boolean {
+    return typeof actual === 'string' && this.projectCwd !== undefined
+      && (actual === this.projectCwd || this.writer.runtimeCwdMatches?.(actual, this.projectCwd) === true);
   }
   get phase(): CodexPhase { return this.state; }
   get threadId(): string | undefined { return this.bound?.id; }
@@ -87,7 +96,7 @@ export class CodexClient {
     const threadId = this.requireBound(); let result!: CodexThread;
     await this.rpc('thread/read', { threadId, includeTurns: false }, value => {
       result = thread(record(value, 'thread read').thread);
-      if (result.id !== threadId || result.cwd !== this.bound?.cwd) throw new Error('Codex report returned a conflicting thread or project');
+      if (result.id !== threadId || !this.runtimeCwdMatches(result.cwd)) throw new Error('Codex report returned a conflicting thread or project');
       for (const field of ['name', 'model', 'reasoningEffort']) if (result[field] != null && typeof result[field] !== 'string') throw new Error(`Invalid Codex thread report ${field}`);
     });
     return result;
@@ -124,7 +133,7 @@ export class CodexClient {
     return result;
   }
   async projectCatalog(kind: 'skills' | 'hooks'): Promise<RpcRecord> {
-    this.requireBound(); const cwd = this.bound!.cwd; let result!: RpcRecord;
+    this.requireBound(); const cwd = this.projectCwd!; let result!: RpcRecord;
     await this.rpc(`${kind}/list`, { cwds: [cwd] }, value => { result = projectEntry(value, cwd, kind); });
     return result;
   }
@@ -170,16 +179,27 @@ export class CodexClient {
     if (this.state !== 'ready') throw new Error('Codex thread opening is unavailable');
     nonempty(cwd, 'project cwd');
     if (savedThreadId !== undefined) nonempty(savedThreadId, 'saved thread ID');
+    this.projectCwd = cwd;
     this.state = 'opening';
     let resolve!: () => void;
     this.openingReady = { promise: new Promise<void>(ready => { resolve = ready; }), resolve: () => resolve() };
     let opened!: CodexThread;
     try {
+      if (savedThreadId !== undefined) {
+        // Codex's cwd-filtered listing can canonicalize aliases and rewrite row cwd.
+        // Verify the exact saved metadata before attaching to any runtime.
+        await this.rpc('thread/read', { threadId: savedThreadId, includeTurns: false }, value => {
+          const saved = thread(record(value, 'saved project read').thread);
+          if (saved.id !== savedThreadId || saved.cwd !== cwd || saved.ephemeral)
+            throw new Error(`Codex saved project mismatch: expected ${JSON.stringify(cwd)}, received ${JSON.stringify(saved.cwd)} (thread ${saved.id})`);
+        });
+      }
       await this.rpc(savedThreadId === undefined ? 'thread/start' : 'thread/resume',
         savedThreadId === undefined ? { cwd, ephemeral: false } : { threadId: savedThreadId, cwd, excludeTurns: true }, value => {
           const result = record(value, 'thread response'); const candidate = thread(result.thread);
-          if (candidate.cwd !== cwd || result.cwd !== cwd || candidate.ephemeral || savedThreadId !== undefined && candidate.id !== savedThreadId)
-            throw new Error('Codex returned a conflicting thread identity or project');
+          const candidateMatches = savedThreadId === undefined ? candidate.cwd === cwd : this.runtimeCwdMatches(candidate.cwd);
+          if (!candidateMatches || !this.runtimeCwdMatches(result.cwd) || candidate.ephemeral || savedThreadId !== undefined && candidate.id !== savedThreadId)
+            throw new Error(`Codex returned a conflicting thread identity or project: expected ${JSON.stringify(cwd)}, thread cwd ${JSON.stringify(candidate.cwd)}, runtime cwd ${JSON.stringify(result.cwd)}`);
           const active = candidate.turns.filter(entry => entry.status === 'inProgress');
           if (active.length > 1) throw new Error('Codex returned multiple active turns');
           const status = candidate.status.type;
@@ -242,9 +262,10 @@ export class CodexClient {
     if (this.state !== 'ready') throw new Error('Codex discovery requires an unbound initialized connection');
     nonempty(cwd, 'project cwd'); if (cursor !== undefined) nonempty(cursor, 'history cursor');
     let result!: CodexPage<CodexThread>;
-    await this.rpc('thread/list', { cwd, ...(cursor === undefined ? {} : { cursor }), limit: 100, sortKey: 'updated_at', sortDirection: 'desc', modelProviders: [], sourceKinds: ['cli', 'vscode', 'appServer'], archived: false }, value => {
+    await this.rpc('thread/list', { ...(cursor === undefined ? {} : { cursor }), limit: 100, sortKey: 'updated_at', sortDirection: 'desc', modelProviders: [], sourceKinds: ['cli', 'vscode', 'appServer'], archived: false }, value => {
       const decoded = page(value, thread);
-      // Server filtering is not an authorization boundary. Never return another project.
+      // Do not send cwd: the daemon normalizes its filter and can rewrite returned cwd.
+      // Unfiltered metadata preserves the saved project spelling; partition it exactly here.
       result = { ...decoded, data: decoded.data.filter(entry => entry.cwd === cwd && !entry.ephemeral && entry.parentThreadId == null) };
     });
     return result;
@@ -293,7 +314,7 @@ export class CodexClient {
   async configure(cwd: string, setting: 'model' | 'effort', value: string): Promise<RpcRecord> {
     if (this.state !== 'idle' || this.configurationAttempt) throw new Error('Codex configuration requires idle');
     const threadId = this.requireBound(); nonempty(value, 'configuration value');
-    if (cwd !== this.bound!.cwd) throw new Error('Codex configuration project does not match the bound thread');
+    if (cwd !== this.projectCwd) throw new Error('Codex configuration project does not match the bound thread');
     let finish!: (outcome: { settings?: RpcRecord; error?: Error }) => void;
     const confirmation = new Promise<{ settings?: RpcRecord; error?: Error }>(resolve => { finish = resolve; });
     const attempt = { setting, value, finish, confirmed: false };
@@ -382,7 +403,7 @@ export class CodexClient {
     if (method === 'thread/settings/updated' && this.configurationAttempt && !this.configurationAttempt.confirmed) {
       const settings = record(params.threadSettings, 'thread settings');
       const attempt = this.configurationAttempt;
-      if (settings.cwd !== this.bound.cwd || this.state !== 'idle' || settings[attempt.setting] !== attempt.value)
+      if (!this.runtimeCwdMatches(settings.cwd) || this.state !== 'idle' || settings[attempt.setting] !== attempt.value)
         throw new Error('Codex did not confirm the requested setting on this loaded thread');
       attempt.confirmed = true; attempt.finish({ settings });
     }

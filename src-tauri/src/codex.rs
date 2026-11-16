@@ -1,8 +1,8 @@
 //! Window/token-scoped Codex daemon connections; the shared server is never Nimrod-owned.
-use crate::{
-    process::{Output, Packet},
-    workspace_windows::WorkspaceWindows,
-};
+use crate::workspace_windows::WorkspaceWindows;
+#[path = "codex_output.rs"]
+mod output;
+use output::{Output, Packet};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
@@ -408,11 +408,9 @@ pub async fn write_codex(
         && message["params"]["cwd"].as_str() != owner.cwd.to_str() {
         return Err("Codex opening/discovery requires its exact project".into());
     }
-    if message["method"] == "thread/list" && message["params"].get("cwd").is_none() {
-        let kinds = message["params"]["sourceKinds"].as_array().ok_or("Unscoped Codex catalog requires all source kinds")?;
-        let expected = ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"];
-        if !owner.catalog || kinds.len() != expected.len() || expected.iter().any(|kind| !kinds.iter().any(|value| value.as_str() == Some(kind))) || !message["params"]["archived"].is_boolean() {
-            return Err("Unscoped Codex inventory requires a catalog and complete source/archive filters".into());
+    if message["method"] == "thread/list" {
+        if !owner.catalog || !valid_unfiltered_list(&message["params"]) {
+            return Err("Unfiltered Codex listing requires a catalog and reviewed history/inventory filters".into());
         }
     }
     let (reply, result) = oneshot::channel();
@@ -448,6 +446,33 @@ struct WireOwner {
     incoming: Arc<Mutex<HashSet<String>>>,
     gate: Arc<RwLock<deletion::Gate>>,
 }
+fn valid_unfiltered_list(params: &Value) -> bool {
+    if params.get("cwd").is_some() { return false; }
+    let Some(kinds) = params["sourceKinds"].as_array() else { return false; };
+    let history = ["cli", "vscode", "appServer"];
+    let inventory = ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"];
+    let matches = |expected: &[&str]| kinds.len() == expected.len()
+        && expected.iter().all(|kind| kinds.iter().any(|value| value.as_str() == Some(kind)));
+    matches(&history) && params["archived"] == false || matches(&inventory) && params["archived"].is_boolean()
+}
+
+/// Runtime equivalence never grants saved-project membership. Only a preceding exact
+/// metadata response on this token permits an alias in a conversation response.
+async fn runtime_cwds(owner: &WireOwner, value: &Value) -> Result<Vec<String>, String> {
+    if owner.catalog { return Ok(Vec::new()); }
+    let mut verified = Vec::new();
+    for path in [&value["result"]["cwd"], &value["result"]["thread"]["cwd"], &value["params"]["threadSettings"]["cwd"]] {
+        let Some(path) = path.as_str() else { continue; };
+        if Some(path) == owner.cwd.to_str() { continue; }
+        if !PathBuf::from(path).is_absolute()
+            || tokio::fs::canonicalize(path).await.ok().as_ref() != Some(&owner.cwd) {
+            return Err(format!("Codex runtime project mismatch: expected {}, received {path}", owner.cwd.display()));
+        }
+        verified.push(path.to_owned());
+    }
+    Ok(verified)
+}
+
 async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> {
     if value.get("result").is_some() || value.get("error").is_some() {
         let mut pending = owner.delete_request.lock().await;
@@ -479,9 +504,19 @@ async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> 
             }
         }
     } else if let Some(id) = value["result"]["thread"]["id"].as_str() {
-        if id.is_empty() || id.len() > 128 || value["result"]["thread"]["cwd"].as_str() != owner.cwd.to_str() {
-            return Err("Codex returned a conflicting native thread/project".into());
+        let reported = value["result"]["thread"]["cwd"].as_str();
+        let mut metadata = owner.metadata.lock().await;
+        if id.is_empty() || id.len() > 128 || value["result"]["thread"]["ephemeral"] != false
+            || !metadata.contains_key(id) && reported != owner.cwd.to_str() {
+            return Err(format!("Codex saved project mismatch: expected {}, received {} (thread {id})",
+                owner.cwd.display(), reported.unwrap_or("<missing cwd>")));
         }
+        // First metadata read/start must match literally. Later runtime views may
+        // differ only after filesystem verification by runtime_cwds before delivery.
+        metadata.entry(id.to_owned()).or_insert_with(|| CatalogThread {
+            cwd: owner.cwd.clone(), parent: None, fork: None, ephemeral: false,
+        });
+        drop(metadata);
         let gate = owner.gate.read().await;
         let mut bound = owner.binding.lock().await;
         if bound.as_ref().is_some_and(|current| current != id) || bound.is_none() && gate.blocks(id) {
@@ -494,3 +529,6 @@ async fn observe_record(owner: &WireOwner, value: &Value) -> Result<(), String> 
 #[cfg(test)]
 #[path = "codex_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "codex_project_tests.rs"]
+mod project_tests;

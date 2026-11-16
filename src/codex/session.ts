@@ -74,7 +74,10 @@ export class CodexSession {
       send: text => this.submitMessage({ id: `codex-answer:${crypto.randomUUID()}`, text, mode: 'normal' }, true),
       error: message => ui.notice(message),
     });
-    this.client = new CodexClient({ write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); } }, {
+    this.client = new CodexClient({
+      write: packet => { this.capture(typeof packet.method === 'string' ? 'request' : 'response', packet); return writer.write(packet); },
+      runtimeCwdMatches: writer.runtimeCwdMatches,
+    }, {
       identified: (thread, settings) => {
         ui.identified(thread.id); this.applySettings(settings);
         this.state = { ...this.state, sessionName: string(thread.name) || undefined };

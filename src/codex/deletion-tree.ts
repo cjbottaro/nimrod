@@ -43,7 +43,7 @@ export function codexDeletionTree(cwd: string, rootId: string, inventory: readon
     if ([...threads.values()].some(node => node.forkedFromId === rootId)) throw new Error('Codex inventory retains fork references to the missing root; local removal scope is ambiguous');
     throw new CodexMissingDeletionRoot(rootId);
   }
-  if (root.ephemeral || root.cwd !== cwd) throw new Error('Codex deletion requires an existing persisted thread in this exact project');
+  if (root.ephemeral || root.cwd !== cwd) throw new Error(`Codex deletion requires an existing persisted thread in this exact project: expected ${JSON.stringify(cwd)}, received ${JSON.stringify(root.cwd)} (thread ${rootId}, ephemeral: ${root.ephemeral})`);
   const found: CodexThread[] = [], seen = new Set<string>(), queue = [root];
   for (let index = 0; index < queue.length; index++) {
     const node = queue[index];
