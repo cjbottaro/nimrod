@@ -42,6 +42,16 @@ test('inspectable brief, separate draft, local validation, IME guards and one ex
     assert.equal(draft.value, 'Existing draft'); assert.equal(f.document.activeElement, draft);
   } finally { f.close(); }
 });
+test('native Escape/cancel uses the shared close path and sends nothing', async () => {
+  const f = fixture();
+  try {
+    f.controller.open(f.owner); await f.tick(); f.type('Do not send');
+    const event = new f.dom.window.Event('cancel', { cancelable: true });
+    f.dialog.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true); assert.equal(f.dialog.open, false); assert.equal(f.sent.length, 0);
+  } finally { f.close(); }
+});
+
 test('cancelled guidance cannot populate a newer modal; failed guidance keeps unsent input', async () => {
   const f = fixture(); let finish!: (value: string) => void;
   try {

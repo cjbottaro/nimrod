@@ -49,7 +49,7 @@ export function installCustomizeNimrodDialog(window: Window) {
     // Synchronous dispatch revalidates the owning view before input is discarded.
     // Never await an RPC, or restore/replay text after dispatch uncertainty.
     try { current.submit(text); } catch (error) { current.report(String(error)); refresh(); return; }
-    dismiss(); closeModal(dialog, 'send');
+    closeModal(dialog, 'send'); dismiss();
   };
   const onInput = () => { resizeComposer(input); refresh(); };
   input.addEventListener('input', onInput);
@@ -62,8 +62,8 @@ export function installCustomizeNimrodDialog(window: Window) {
   };
   dialog.addEventListener('keydown', onKey);
   send.addEventListener('click', () => { if (!send.disabled) submit(); });
-  cancel.addEventListener('click', () => { dismiss(); closeModal(dialog, 'cancel'); });
-  dialog.addEventListener('cancel', dismiss);
+  cancel.addEventListener('click', () => { closeModal(dialog, 'cancel'); dismiss(); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeModal(dialog, 'cancel'); dismiss(); });
   dialog.addEventListener('close', () => { if (!dialog.open) dismiss(); });
   const resized = () => { if (dialog.open) resizeComposer(input); };
   window.addEventListener('resize', resized);
@@ -85,8 +85,9 @@ export function installCustomizeNimrodDialog(window: Window) {
       });
     },
     dispose() {
-      disposed = true; dismiss();
+      disposed = true;
       if (dialog.open) closeModal(dialog, 'cancel');
+      dismiss();
       window.removeEventListener('resize', resized); dialog.remove();
     },
   };

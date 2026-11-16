@@ -6,7 +6,7 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 Source implementation adds the session-scoped action/modal, installed authoring context and canonical packaged guides/defaults/types/examples, ordinary separate-input view submission, and versioned user-turn disclosure. Authored, unrun fixtures cover exact framing/Unicode/delimiters, lazy retained/raw presentation, an unrelated project with absolute installed paths, resource mappings/missing files, modal cancel/IME/local rejection/stale guidance, four shared interaction policies, busy modes, unchanged draft/selection, echo adoption/lifetime fencing, real-shell palette/shortcut sending and an offline browser scenario.
 
-No tests, live model requests, user customization edits, app builds or app launches were performed. Native macOS/Linux focus/accessibility, packaged reference resolution and installed-harness acceptance remain pending; mocks/jsdom are not native acceptance. Mandatory post-merge compilation is recorded after execution. See [request contract](customize-nimrod.md).
+No tests, live model requests, user customization edits, app builds or app launches were performed. Native macOS/Linux focus/accessibility, packaged reference resolution and installed-harness acceptance remain pending; mocks/jsdom are not native acceptance. Mandatory post-merge `mise run check` passed on primary `main` (TypeScript with the harness-boundary gate and Rust compilation). This is compile evidence only. See [request contract](customize-nimrod.md).
 
 ## CLI customization reload
 
