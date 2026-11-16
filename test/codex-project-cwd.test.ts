@@ -6,7 +6,7 @@ import type { CodexPacket } from '../src/codex/protocol';
 
 const project = '/var/home/fixture/project';
 const alias = '/home/fixture/project';
-const thread = (cwd = project, id = 'saved') => ({ id, cwd, ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'idle' } });
+const thread = (cwd = project, id = 'saved') => ({ id, cwd, ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'idle' as const } });
 
 function fixture(savedCwd = project, runtimeCwd = alias, verified = true) {
   const sent: CodexPacket[] = [];
