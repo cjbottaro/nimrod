@@ -24,6 +24,7 @@ target/
 !.env.*.example
 /mise.local.toml
 /.mise.local.toml
+/.nimrod/
 
 # Local Git worktrees
 /.worktrees/
