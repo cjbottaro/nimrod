@@ -33,6 +33,8 @@
 
 ## Workspace customization
 
+- [Customize Nimrod](customize-nimrod.md) — ask an existing connected agent session to customize the UI from any project, with bundled authoring guidance and an explicit normal user turn.
+
 - [CLI actions](cli-actions.md) — reload customizations in an already-open project and receive completion/errors without opening or focusing windows.
 
 - [UI templates](ui-templates.md) — experimental HTML/CSS layouts, Project bar bindings and named action buttons; the bundled default uses the same API.

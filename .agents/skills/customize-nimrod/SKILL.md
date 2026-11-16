@@ -7,7 +7,7 @@ description: "Specification for the Customize Nimrod action: explicit user-reque
 
 This specification defines the action, modal, generated instruction brief and user-turn presentation for agent-first customization requests. It builds on UI templates, card plugins and the reload CLI.
 
-This is repository agent-facing guidance, **not** a runtime harness skill to install, register or inject into an existing conversation. This skill owns the workflow decisions below. The [UI customization skill](../ui-customization/SKILL.md) owns customization surfaces, template direction and default-template dogfooding. Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md) and [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md) before implementation.
+This is repository agent-facing guidance, **not** a runtime harness skill to install, register or inject into an existing conversation. This skill owns the workflow decisions below. The [UI customization skill](../ui-customization/SKILL.md) owns customization surfaces, template direction and default-template dogfooding. The [request contract](../features/references/customize-nimrod.md) owns message framing, packaged references, modal lifetime, consumer ports and fixture locations. Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md) and [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md) before implementation.
 
 ## Product intent and boundary
 
@@ -50,10 +50,10 @@ The brief must be self-contained and installation-aware. It should provide the m
   nimrod --action reload-customizations --project <originating-project-directory> --json
   ```
 
-  Generate real paths with appropriate quoting, not the placeholder above. Explain actual completion/partial-error/uncertainty semantics; do not treat successful reload as visual acceptance or automatically replay uncertain requests.
+  Generate real paths with appropriate quoting, not the placeholder above. Use the actual running executable's absolute path in place of `nimrod`, so the workflow does not depend on PATH or a separately installed launcher. Explain actual completion/partial-error/uncertainty semantics; do not treat successful reload as visual acceptance or automatically replay uncertain requests.
 - The scope of customization files versus the scope of reload: existing user files are global, while the CLI targets one already-open project window. Do not imply project-local or harness-local customization storage.
 
-Reuse canonical authoring contracts: [UI templates](../features/references/ui-templates.md), [card plugins](../features/references/card-plugins.md), and their user guides. Do not maintain a second handwritten copy of the complete API in this skill. The runtime brief must match the installed/running app's supported API, not require access to this development repository. Exact brief size, bundled reference delivery and refresh/version strategy remain open specification details; do not invent a discovery command as a prerequisite.
+Reuse canonical authoring contracts: [UI templates](../features/references/ui-templates.md), [card plugins](../features/references/card-plugins.md), and their user guides. Do not maintain a second handwritten copy of the complete API in this skill. The runtime brief must match the installed/running app's supported API, not require access to this development repository. Bundle the matching canonical guides, public card types, examples and defaults as read-only app resources. Resolve their installed absolute paths and global user directories through the owning project window; keep the brief concise and point to those resources for complete API guidance. Do not invent a discovery command or depend on a source checkout as a prerequisite.
 
 ## One user turn; presentation-only disclosure
 
@@ -69,13 +69,13 @@ Move the Status area above the Transcript.
 
 Expanding reveals the actual sent brief, not regenerated instructions from the current app version. The user's request remains outside the disclosure. Preserve exact request text and full-content access; never execute or interpret its contents as template markup. The modal preview and sent content must agree.
 
-Use a **Nimrod-owned user-turn presentation**, not the existing public tool-card plugin API, a fabricated tool call, or Pi/Copilot skill syntax. Use a small versioned, explicitly recognizable text envelope so presentation can be reconstructed after history replay/Resume without relying solely on ephemeral local metadata. This envelope is a message-content/presentation format, not a harness wire protocol. Its exact encoding/escaping remains an open specification detail. Do not casually classify arbitrary user prose or assistant examples by keywords. Unknown versions, malformed envelopes or unsupported presentations must retain literal full-text fallback rather than hiding or losing content.
+Use a **Nimrod-owned user-turn presentation**, not the existing public tool-card plugin API, a fabricated tool call, or Pi/Copilot skill syntax. Use a small versioned, explicitly recognizable text envelope so presentation can be reconstructed after history replay/Resume without relying solely on ephemeral local metadata. This envelope is a message-content/presentation format, not a harness wire protocol. Use the [versioned length-delimited framing](../features/references/customize-nimrod.md#versioned-user-message-envelope) so delimiter-like user input and Unicode round-trip without escaping or losing request text. Do not casually classify arbitrary user prose or assistant examples by keywords. Unknown versions, malformed envelopes or unsupported presentations must retain literal full-text fallback rather than hiding or losing content.
 
 Preserve retained turn/disclosure identity through optimistic echo adoption, streaming updates, hidden-session catch-up and history reconciliation. Reuse shared disclosure/Markdown mechanics and lazy rendering; do not add a transcript scan or a second scroll owner. Existing [skill disclosures](../features/references/transcript-cards.md#skill-disclosures) are a presentation precedent, not a supported invocation or envelope API to impersonate.
 
-## Open details and acceptance criteria
+## Acceptance criteria
 
-Resolve the exact envelope/framing (including delimiter-like user input), runtime brief/default-reference delivery, eligibility/error behavior and unsubmitted-modal input lifetime without changing the one-message/explicit-consent boundary.
+Unsubmitted input belongs only to the modal lifetime: preserve it through local rejection or lost eligibility, and discard it on cancellation or accepted dispatch. Fence the originating session/connection lifetime independently of the current selection. Keep the one-message/explicit-consent boundary intact.
 
 Fixture coverage must exercise:
 

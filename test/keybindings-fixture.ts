@@ -11,6 +11,7 @@ export const INTENTIONALLY_UNBOUND_ACTIONS = [
   'pin',
   'capture-performance',
   'reload-customizations',
+  'customize-nimrod',
   'select-theme',
   'mcp',
   'mode',

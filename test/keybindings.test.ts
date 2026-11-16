@@ -65,6 +65,9 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('capture-performance', {}), []);
   assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': ['primary+alt+p'] }), ['primary+alt+p']);
   assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': [] }), []);
+  assert.deepEqual(bindingsFor('customize-nimrod', {}), []);
+  assert.deepEqual(bindingsFor('customize-nimrod', { 'customize-nimrod': ['primary+shift+y'] }), ['primary+shift+y']);
+  assert.deepEqual(bindingsFor('customize-nimrod', { 'customize-nimrod': [] }), []);
   assert.deepEqual(bindingsFor('reload-customizations', {}), []);
   assert.deepEqual(bindingsFor('reload-customizations', { 'reload-customizations': ['primary+shift+u'] }), ['primary+shift+u']);
   assert.deepEqual(bindingsFor('reload-customizations', { 'reload-customizations': [] }), []);

@@ -1,0 +1,8 @@
+.customization-request-body { display:flex; flex-direction:column; gap:10px; }
+.customization-request-body > label { font-size:12px; }
+#customize-nimrod-input { box-sizing:border-box; flex:none; width:100%; min-height:64px; max-height:160px; resize:none; padding:9px 12px; border:1px solid var(--vscode-input-border); border-radius:6px; font:inherit; line-height:20px; }
+#customize-nimrod-input:focus { outline:1px solid var(--vscode-focusBorder); }
+#customize-nimrod-instructions { font-size:12px; }
+#customize-nimrod-instructions > summary { cursor:pointer; }
+#customize-nimrod-instructions > pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:10px; background:var(--modal-inset-surface); font:11px/1.5 var(--vscode-editor-font-family,monospace); }
+.customization-unrecognized { white-space:pre-wrap; overflow-wrap:anywhere; }

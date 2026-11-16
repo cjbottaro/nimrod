@@ -58,6 +58,7 @@ Without installation, use `./bin/nimrod .`. Directory launches open or focus a p
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
 - [Transcript debug logs](docs/transcript-logs.md) — opt-in full-content native conversation, history, tool and request/result traces for developing/debugging Nimrod.
 - [Settings](docs/settings.md) — global defaults, project overrides, appearance, [conversation/code fonts and sizes](docs/settings.md#typography), zoom and runtime paths.
+- [Customize Nimrod](docs/customize-nimrod.md) — ask a connected session to customize the UI, with inspectable installed-app guidance included in one normal user message; no Nimrod checkout required.
 - [UI templates](docs/ui-templates.md) — experimental local HTML/CSS workspace layouts and Project bar customization, with the bundled default using the same API.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 - [Translucency](docs/translucency.md) — whole-window background opacity and independently adjustable macOS blur; Linux blur is compositor-owned.

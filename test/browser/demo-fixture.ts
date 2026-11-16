@@ -39,7 +39,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       builder.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
-  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/typography.css', 'src/range-input.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css', 'src/utility-button.css'].map(p => readFileSync(p, 'utf8')).join('\n');
+  const css = ['src/pi/transcript.css', 'src/theme.css', 'src/typography.css', 'src/range-input.css', 'src/workspace.css', 'src/keybindings.css', 'src/modal.css', 'src/application-notices.css', 'src/window-appearance.css', 'src/acp/session.css', 'src/utility-button.css', 'src/customize-nimrod.css'].map(p => readFileSync(p, 'utf8')).join('\n');
   let html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   if (fixtureOptions?.enforceCsp) {
     const policy = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')).app.security.csp as string;
@@ -93,6 +93,7 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
     if (command === 'take_project_settings_request' || command === 'take_settings_category') return false;
     if (command.startsWith('preferences_') || command === 'project_preferences_settings' || command === 'record_command_usage') return preferences.invoke(command, args);
     if (command === 'plugin:clipboard-manager|write_text' || command === 'open_card_link' || command === 'open_code_popout') return; // Recorded presentation actions, no OS side effects.
+    if (command === 'customization_authoring_context') return { projectDirectory: process.cwd(), uiDirectory: '/fixture config/nimrod/ui', cardPluginsDirectory: '/fixture config/nimrod/card-plugins', referenceDirectory: '/fixture installed app/resources/customization', cliExecutable: '/fixture installed app/nimrod', version: '0.1.0', platform: 'linux' };
     if (command === 'read_ui_templates') return fixtureOptions?.uiTemplates ?? {};
     if (command === 'load_personal_card_plugins') return pluginOptions?.personal?.() ?? { entries: [], plugins: [], warnings: [] };
     if (command === 'read_card_plugin_module') {

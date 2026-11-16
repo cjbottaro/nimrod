@@ -44,7 +44,7 @@ action ID through `SessionAction`. The command palette, Status-area buttons and
 shortcut dispatcher consume that capability boundary; unsupported session
 actions are absent from the palette and their configured shortcuts are consumed
 without execution. Temporary readiness remains a separate concrete integration
-gate and must not be presented as support.
+gate and must not be presented as support. Nimrod-owned session actions such as [Customize Nimrod…](customize-nimrod.md) use their own shared-consumer availability rather than asking every integration to advertise an application action. `customize-nimrod` has no default shortcut and requires a connected, eligible ordinary text path.
 
 `settings.json` contains `keybindings: { [actionId]: string[] }`. No defaults are copied on startup/migration. Absence inherits defaults, `[]` intentionally unbinds, a list replaces the entire action's defaults. Multiple bindings are supported (max eight). Unknown syntactically valid IDs survive individual edits; no unknown action executes. Reset one removes its property; Reset all confirms and writes `{}` to avoid deleting comments preceding the settings property. Comments inside reset/removed overrides are naturally removed with them. Unrelated properties/comments survive.
 

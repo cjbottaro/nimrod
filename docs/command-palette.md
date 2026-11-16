@@ -10,6 +10,10 @@ Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter 
 
 Linux uses the command palette instead of a File/Edit/Window/Help menu bar. **Open project…**, **Quit Nimrod**, **Minimize window**, **Maximize / Restore window**, **Close window** and **About Nimrod** are available here, including from the welcome window. Ctrl+O opens a project and Ctrl+Q quits; both can be rebound or unbound in [Keybindings](keybindings.md). Quit shuts down the whole app; Close window affects only that window. Native title-bar controls and session-row context menus remain. macOS keeps its normal native menu bar.
 
+## Customizing Nimrod
+
+**Customize Nimrod…** asks a connected session's agent to customize the UI. Its modal keeps the Composer draft intact and includes inspectable guidance/reference paths from the installed app in one normal user message. It has no default shortcut; see [Customize Nimrod](customize-nimrod.md). Availability follows the session's normal sending rules, without automatically connecting or resuming it.
+
 ## Harness-aware commands
 
 **New session**, **New named session…** and **New temporary session** use your global/project default harness (initially Pi). The normal and temporary **with harness…** variants explicitly select a harness for one creation without changing that default; these two variants are bindable but initially unbound. **New named session…** always combines name and an inline harness list in one modal. Up/Down changes the harness while the name field keeps focus; typing preserves your selection. The effective default is selected when eligible, never the last-used harness. See [session creation](sessions.md#create-a-session). ACP creation/options actions are not exposed. Switch includes open sessions; Resume combines independent Pi/Copilot history sources. Delete uses Pi tree review or Copilot permanent deletion; unsupported history is omitted. Model/thinking/mode/context-window and Pi MCP commands reflect the selected

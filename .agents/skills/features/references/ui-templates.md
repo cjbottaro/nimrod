@@ -6,7 +6,7 @@
 
 A window mounts one declarative outer layout and Project bar before Settings/sidebar/session consumers acquire nodes. Existing sidebar/content nodes are retained at startup and explicit template reload; streaming and navigation never remount templates. The default HTML/CSS in `src/ui-templates/` uses exactly the same parsing, scoped stylesheet, binding and action paths as user files.
 
-The first version does **not** make the per-session Transcript, Status area or Composer independently placeable or replaceable. The content slot retains the complete existing conversation engine, empty-project and welcome states. Session lists, sending, configuration, commands, drafts, native ownership, focus and scroll remain with their current owners. Template button content is author-owned; execution, disabled state, shortcut hints and accessible action metadata remain Nimrod-owned.
+The first version does **not** expose independent template slots or replacement APIs for the per-session Transcript, Status area or Composer. Layout CSS can visually arrange those existing components using the [documented conversation styling hooks](../../../../docs/ui-templates.md#styling-the-existing-conversation-components); visual reordering does not change DOM/keyboard order or behavior ownership. The content slot retains the complete existing conversation engine, empty-project and welcome states. Session lists, sending, configuration, commands, drafts, native ownership, focus and scroll remain with their current owners. Template button content is author-owned; execution, disabled state, shortcut hints and accessible action metadata remain Nimrod-owned.
 
 ## Loading and recovery
 

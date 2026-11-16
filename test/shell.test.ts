@@ -14,12 +14,15 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 import { ACTIONS } from '../src/keybindings';
 import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 import { copilotHistoryKey } from '../src/copilot/session-history';
+import { parseCustomizationMessage } from '../src/customization-message';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
   uiTemplates?: import('../src/ui-templates').UiTemplateFiles;
   uiTemplatesError?: string;
+  authoringContextError?: string;
+  authoringContextGate?: Promise<void>;
   fixtureHarness?: boolean;
   fixtureRetention?: 'saved' | 'absent' | 'unknown';
   fixtureProjectActions?: boolean;
@@ -176,6 +179,11 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
+      if (command === 'customization_authoring_context') {
+        await options.authoringContextGate;
+        if (options.authoringContextError) throw new Error(options.authoringContextError);
+        return { projectDirectory: workspace, uiDirectory: '/user config/nimrod/ui', cardPluginsDirectory: '/user config/nimrod/card-plugins', referenceDirectory: '/installed Nimrod/resources/customization', cliExecutable: '/installed Nimrod/bin/nimrod', version: '0.1.0', platform: 'macos' };
+      }
       if (command === 'application_action' || command === 'cli_action_window_ready' || command === 'complete_cli_action') return;
       if (command === 'popup_session_menu') {
         await options.menuGate;
@@ -413,7 +421,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         if (options.modelFixture) channel.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'setStatus', id: 'scope', statusKey: 'pi-gui:model-scope', statusText: JSON.stringify([{ provider: 'fixture', id: 'reasoner' }]) } });
         for (const event of options.startupEvents || []) channel.onmessage({ kind: 'rpc', value: event });
         await startGate;
-        return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
+        return { cwd: String(activeConfig.cwd ?? '/project'), session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
       if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, parentSession: options.fileParents?.[String(args.path)], lastUserMessageAt: options.fileTimes?.[String(args.path)] };
       if (command === 'workspace_session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
@@ -4276,6 +4284,57 @@ test('welcome stays hidden until startup resolves and appears only without a wor
       }
     } finally { release(); f.dom.window.close(); }
   }
+});
+
+test('Customize Nimrod sends one ordinary turn from an unrelated project without consuming the Composer', async () => {
+  const f = await fixture(undefined, { windowWorkspace: "/unrelated/client's project" });
+  const choose = async () => {
+    f.openPalette();
+    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Customize Nimrod'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+  };
+  try {
+    f.openPalette(); assert.equal(f.element('palette-list').querySelector('[data-key="customize-nimrod"]'), null);
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep existing draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus(); prompt.setSelectionRange(2, 6);
+    await choose();
+    const dialog = f.element<HTMLDialogElement>('customize-nimrod'), input = f.element<HTMLTextAreaElement>('customize-nimrod-input');
+    assert.equal(dialog.open, true); assert.equal(f.element<HTMLDetailsElement>('customize-nimrod-instructions').open, false);
+    const request = '  Move the Status area to the top.\nKeep this exact request.  ';
+    input.value = request; input.dispatchEvent(new f.win.Event('input'));
+    const before = f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;
+    dialog.querySelector<HTMLButtonElement>('[value="send"]')!.click(); await f.tick(); await f.tick();
+    assert.equal(dialog.open, false); assert.equal(prompt.value, 'Keep existing draft'); assert.equal(prompt.selectionStart, 2); assert.equal(prompt.selectionEnd, 6);
+    const sent = f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt');
+    assert.equal(sent.length, 1);
+    const message = parseCustomizationMessage(String((sent[0].args.message as JsonRecord).message))!;
+    assert.equal(message.request, request); assert.match(message.instructions, /\/installed Nimrod\/resources\/customization\/docs\/ui-templates.md/);
+    assert.match(message.instructions, /\/user config\/nimrod\/ui/); assert.match(message.instructions, /client.*project/);
+    assert.ok(f.win.document.querySelector('.customization-request details'));
+    assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length, before);
+    assert.equal(f.calls.some(call => call.command === 'read_ui_templates' && call !== f.calls.find(item => item.command === 'read_ui_templates')), false, 'request submission does not automatically reload');
+    await choose(); f.element<HTMLTextAreaElement>('customize-nimrod-input').value = 'Cancel this';
+    dialog.querySelector<HTMLButtonElement>('[value="cancel"]')!.click(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt').length, 1);
+    assert.equal(prompt.value, 'Keep existing draft');
+  } finally { f.win.close(); }
+});
+
+test('Customize Nimrod retains unsent input across lost ownership and uses a configurable shortcut', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/outside/project' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    f.preferences.external('{"keybindings":{"customize-nimrod":["primary+shift+y"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'y', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    const dialog = f.element<HTMLDialogElement>('customize-nimrod'), input = f.element<HTMLTextAreaElement>('customize-nimrod-input');
+    input.value = 'Preserve unsent instructions'; input.dispatchEvent(new f.win.Event('input'));
+    const channel = f.captureChannel(); channel.onmessage({ kind: 'disconnected', message: 'Fixture connection closed' }); await f.tick();
+    assert.equal(dialog.open, true); assert.equal(input.value, 'Preserve unsent instructions');
+    const send = dialog.querySelector<HTMLButtonElement>('[value="send"]')!; assert.equal(send.disabled, true); send.click();
+    assert.equal(f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt').length, 0);
+    dialog.querySelector<HTMLButtonElement>('[value="cancel"]')!.click();
+  } finally { f.win.close(); }
 });
 
 test('custom Project bar is wired through real shell identity, actions and Settings consumers', async () => {

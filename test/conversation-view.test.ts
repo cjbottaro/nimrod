@@ -7,6 +7,7 @@ import { createPiViewProjection, piInteraction, piSessionActions } from '../src/
 import { acpInteraction, acpSessionActions } from '../src/acp/view-policy';
 import { copilotInteraction } from '../src/copilot/view-policy';
 import { codexInteraction } from '../src/codex/view-policy';
+import { customizationMessage } from '../src/customization-message';
 import { codexAsyncAnswer } from '../src/codex/async-questions';
 import type { ConversationView, ConversationViewHost, ConversationViewMessage, ConversationViewState } from '../src/conversation-view-host';
 
@@ -84,6 +85,49 @@ function fixture(interaction: ConversationViewHost['interaction'] = acpInteracti
   const view = (win as unknown as { testView: ConversationView }).testView;
   return { dom, win, sent, snapshot, receive, view, flush };
 }
+
+for (const interaction of [piInteraction, copilotInteraction(() => undefined), codexInteraction(() => undefined), acpInteraction('Unknown fixture', () => undefined)]) test(`${interaction.label} submits separate-input text through ordinary delivery without consuming the Composer`, () => {
+  let submissions = 0;
+  const f = fixture(interaction, { promptSubmitted: () => { submissions++; } });
+  try {
+    f.snapshot({ sessionUnavailable: false, messages: [] });
+    const prompt = f.win.document.querySelector<HTMLTextAreaElement>('#prompt')!;
+    prompt.value = 'Existing draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus(); prompt.setSelectionRange(2, 5);
+    const text = customizationMessage('Read the bundled installed guide.', 'Move the bar.');
+    assert.equal(f.view.validateUserText(text), undefined);
+    f.view.submitUserText(text); f.flush();
+    const sent = f.sent.filter(message => message.type === 'prompt');
+    assert.equal(sent.length, 1); assert.equal(sent[0].text, text); assert.equal(submissions, 1);
+    assert.equal(prompt.value, 'Existing draft'); assert.equal(prompt.selectionStart, 2); assert.equal(prompt.selectionEnd, 5);
+    const details = f.win.document.querySelector<HTMLDetailsElement>('.customization-request details')!;
+    assert.ok(details); details.open = true; details.dispatchEvent(new f.win.Event('toggle'));
+    f.snapshot({ sessionUnavailable: false, messages: [{ key: 'native-user', role: 'user', content: text }] });
+    assert.equal(f.win.document.querySelector('.customization-request details'), details);
+    assert.equal(details.open, true); assert.equal(f.win.document.querySelectorAll('article.user').length, 1);
+    assert.equal(prompt.value, 'Existing draft');
+    const lifetime = f.view.userTextLifetime;
+    f.receive({ type: 'sessionDisconnected' }); assert.notEqual(f.view.userTextLifetime, lifetime);
+    const disconnectedLifetime = f.view.userTextLifetime;
+    f.receive({ type: 'sessionReset' }); assert.notEqual(f.view.userTextLifetime, disconnectedLifetime);
+  } finally { f.view.dispose(); f.dom.window.close(); }
+});
+
+test('separate-input submission preserves busy policy and never turns a slash command into an ordinary send', () => {
+  const f = fixture(copilotInteraction(() => 'Copilot is busy'));
+  try {
+    f.snapshot({ busy: true, sessionUnavailable: false, messages: [] });
+    assert.match(f.view.validateUserText('Request')!, /busy/);
+    assert.throws(() => f.view.submitUserText('Request'), /busy/);
+    assert.equal(f.sent.some(message => message.type === 'prompt'), false);
+  } finally { f.view.dispose(); f.dom.window.close(); }
+  const pi = fixture(piInteraction);
+  try {
+    pi.snapshot({ busy: true, sessionUnavailable: false, messages: [] });
+    pi.view.submitUserText('Ordinary steering');
+    assert.equal(pi.sent.find(message => message.type === 'prompt')?.mode, 'steer');
+    assert.match(pi.view.validateUserText('/mcp')!, /ordinary text/);
+  } finally { pi.view.dispose(); pi.dom.window.close(); }
+});
 
 test('registered slash consumer bypasses legacy policy and ordinary Send effects, retaining its card and newer draft', async () => {
   let submissions = 0, text = '', accept = true;

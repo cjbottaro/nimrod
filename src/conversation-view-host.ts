@@ -36,6 +36,10 @@ export interface ConversationInteraction {
 }
 export interface ConversationView {
   setActive(active: boolean): void; scrollToBottom(): void; dispose(): void;
+  /** Ordinary text from a separate user-owned input; never reads/clears the Composer draft. */
+  readonly userTextLifetime: object;
+  validateUserText(text: string): string | undefined;
+  submitUserText(text: string): void;
   /** Error presentation ownership only; never used to infer transport/delivery state. */
   hasConnectionOutcome?(): boolean;
 }

@@ -31,6 +31,8 @@ Idle sends and busy Enter steering clear the editable draft immediately, indepen
 
 Image attachment behavior and its text-only queue recovery boundary are covered in [Image paste](image-paste.md). Error/uncertainty presentation follows the [error presentation policy](error-presentation.md); this reference owns delivery semantics, not a separate error surface.
 
+[Customize Nimrod](customize-nimrod.md) supplies a separate modal-owned text input through the same view validation, pending-preview, Send-effects and typed prompt dispatch helpers. It never consumes or swaps the Composer draft/attachments. The view's user-text lifetime retires on Reset/disconnection; harness interaction policies remain authoritative.
+
 ## Shared slash completion
 
 `src/pi/slash-completion.ts` owns presentation-only completion using each

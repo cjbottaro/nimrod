@@ -23,7 +23,7 @@ The five user-facing regions are the **Project bar**, **Session sidebar**, **Tra
 
 ## Initial customization scope
 
-The initial scope is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain together inside the per-session mounted view; their independent placement belongs to a separate expansion of the template contract.
+The initial scope is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain owned by the per-session mounted view. Layout CSS may visually arrange its existing components using the documented styling hooks; independent slots or replacement belong to a separate expansion of the template contract.
 
 Explicit **Reload customizations** refreshes layout/Project bar authoring and the card-plugin catalog without restarting agents; retain the mounted behavior components and reject invalid reloads before changing the current UI.
 

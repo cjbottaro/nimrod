@@ -2,6 +2,8 @@
 
 Nimrod supports experimental HTML/CSS customization of the workspace layout and Project bar. **The bundled default uses the same template API as custom files.** Themes still supply colors and fonts; [card plugins](card-plugins.md) still customize transcript content.
 
+To ask an existing agent session to make these changes for you, use [Customize Nimrod…](customize-nimrod.md); its guidance works without this source repository.
+
 This first version can reposition the Project bar and Session sidebar and change the Project bar's content. The Transcript, Status area and Composer remain together inside Nimrod's existing conversation view. It does not replace sending, history, session navigation or scroll behavior.
 
 ## Install local templates
@@ -54,6 +56,24 @@ Save as `layout.css`:
 All four slots are required exactly once and must be empty. Sidebar, resize handle and content slots must be direct children of the single `data-nimrod-sidebar-layout` container. The Project bar sits outside that container. `data-nimrod-sidebar-side` defaults to `left`; use `right` when moving the sidebar so dragging and keyboard resizing retain their correct direction. The sidebar must remain a horizontal neighbor of the content.
 
 Nimrod preserves the actual sidebar and conversation components, including selection, draft input and reading position. Do not add a competing scrolling wrapper around the conversation. Use `min-height: 0` / `min-width: 0` in flexible containers to keep their owned viewports usable.
+
+## Styling the existing conversation components
+
+Layout CSS can also visually arrange the existing conversation components. This does not create independent template slots or replace their behavior. Supported styling hooks are:
+
+| Selector | Component |
+| --- | --- |
+| `.session-view` | One mounted conversation |
+| `.session-view [data-pi-id="transcript-viewport"]` | Transcript scroll viewport |
+| `.session-view [data-pi-id="composer-area"]` | Wrapper around Status area, submission notices and Composer |
+| `.session-view [data-pi-id="activity"]` | Status area |
+| `.session-view [data-pi-id="submission-notice"]` | Submission notice container |
+| `.session-view [data-pi-id="composer"]` | Composer |
+| `.session-view > .session-notices` | Session-owned notice stack |
+
+For example, CSS can visually move the Status area above the Transcript while retaining the Composer at the bottom. Keep the original mounted components, one Transcript scroll viewport, usable `min-height: 0` sizing and visible session notices. Do not cover the Composer or turn its parent into another competing scroll container. If using `display: contents` on the interaction wrapper, preserve the Composer's own border/background treatment. Visual CSS order does not change DOM/keyboard order; inspect keyboard and accessibility behavior as well as appearance.
+
+Start a custom `layout.css` from the bundled default before adding such rules: a custom file replaces its default, rather than being an extra stylesheet on top of it. Actual independent component slots/replacement remain outside this API.
 
 ## Example: a compact Project bar
 

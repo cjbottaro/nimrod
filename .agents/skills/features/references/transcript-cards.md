@@ -31,6 +31,10 @@ Each Pi built-in selects its own metadata-matched mounted plugin; [card plugins]
 
 Codex contributes read-only async question/answer disclosures through `ConversationInteraction.userText`; they remain native user messages rather than tool calls. The shared [card presentation contract](card-plugins.md#codex-async-questionanswer-messages) owns summary reuse with Copilot, retained disclosure/raw recovery and test boundaries.
 
+## Customization request disclosures
+
+[Customize Nimrod](customize-nimrod.md#versioned-user-message-envelope) owns its explicit versioned user-message format. The shared user-text boundary recognizes it before harness-specific user-text hooks, using the same lazy retained disclosure mechanics as skill bodies without impersonating a harness skill. Unknown/malformed customization envelopes retain literal full-text fallback; assistant turns and ordinary examples are unchanged.
+
 ## Skill disclosures
 
 `src/skill-invocation.ts` owns the shared presentation-only `SkillInvocation`

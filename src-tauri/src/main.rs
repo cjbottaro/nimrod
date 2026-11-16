@@ -6,6 +6,7 @@ mod cli;
 mod cli_actions;
 mod command_usage;
 mod copilot;
+mod customization_authoring;
 mod codex;
 mod owned_process;
 mod drafts;
@@ -539,6 +540,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            customization_authoring::customization_authoring_context,
             cli_actions::cli_action_window_ready,
             cli_actions::complete_cli_action,
             drafts::drafts_load,
