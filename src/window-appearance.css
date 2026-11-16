@@ -87,7 +87,7 @@
    beneath the modal. Visibility retains underlying layout/scroll/mounted nodes. */
 :root[data-translucency=window] #settings-page,
 :root[data-translucency=window] #settings-page::backdrop { background:transparent; }
-:root[data-translucency=window] body:has(#settings-page[open]) > :is(#workspace-bar, #workspace-layout) { visibility:hidden; }
+:root[data-translucency=window] body:has(#settings-page[open]) #workspace-shell { visibility:hidden; }
 
 @media (prefers-reduced-transparency: reduce) {
   :root[data-translucency=window] {

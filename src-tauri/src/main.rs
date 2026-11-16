@@ -36,6 +36,7 @@ mod settings_window;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
 mod transcript_logs;
+mod ui_templates;
 mod webview_navigation;
 mod window_appearance;
 mod window_presentation;
@@ -564,6 +565,7 @@ fn main() {
             performance_diagnostics::write_performance_report,
             transcript_logs::append_transcript_logs,
             transcript_logs::transcript_logs_directory,
+            ui_templates::read_ui_templates,
             preferences::preferences_snapshot,
             project_preferences::scoped_preferences_snapshot,
             project_preferences::project_preferences_settings,

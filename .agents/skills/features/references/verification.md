@@ -2,6 +2,12 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## UI templates
+
+Initial declarative layout and Project bar source implementation uses the same public HTML/CSS pipeline for bundled defaults and user files. Authored, unrun fixtures cover default/custom rendering, retained nodes/focus, literal values, omitted actions, invalid input and I/O-error recovery, real shell identity/Settings consumers, side-aware resize direction and an offline browser right-sidebar/draft scenario. Native file fixtures cover optional files, size limits and escaping symlinks.
+
+No tests, browser checks, app builds or native app launch were performed for this work. Native macOS/Linux appearance, accessibility, focus and actual user-file loading acceptance remain pending. The mandatory post-merge TypeScript/Rust compile check is recorded here after execution; compilation is not behavioral acceptance. See [contract](ui-templates.md) and [user guide](../../../../docs/ui-templates.md).
+
 ## Codex host/Distrobox project cwd
 
 The user-requested provider-free metadata investigation against the existing

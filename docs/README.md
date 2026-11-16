@@ -31,6 +31,10 @@
 - [Translucency](translucency.md) — background opacity, surface selection and platform-specific blur.
 - [Syntax highlighting](syntax-highlighting.md) — fence labels and conservative user-code detection.
 
+## Workspace customization
+
+- [UI templates](ui-templates.md) — experimental HTML/CSS layouts, Project bar bindings and named action buttons; the bundled default uses the same API.
+
 ## Card customization
 
 - [Card plugins](card-plugins.md) — bundled renderers, edit previews, automatic cached personal TypeScript, compiled-JS compatibility and optional declarative tool customization.

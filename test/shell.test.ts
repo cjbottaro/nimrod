@@ -18,6 +18,8 @@ import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  uiTemplates?: import('../src/ui-templates').UiTemplateFiles;
+  uiTemplatesError?: string;
   fixtureHarness?: boolean;
   fixtureRetention?: 'saved' | 'absent' | 'unknown';
   fixtureProjectActions?: boolean;
@@ -113,7 +115,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
-      build.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
+      build.onResolve({ filter: /\.(html|css)\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
       build.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
@@ -259,6 +261,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'acknowledge_deletion' || command === 'recover_deletion_session') return;
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
+      if (command === 'read_ui_templates') { if (options.uiTemplatesError) throw new Error(options.uiTemplatesError); return options.uiTemplates ?? {}; }
       if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
       if (command === 'pi_runtime_available') return options.runtimeAvailable?.('pi') ?? true;
       if (command === 'copilot_runtime_available') return options.runtimeAvailable?.('copilot') ?? true;
@@ -4244,7 +4247,7 @@ test('named-session Escape preserves the existing composer and inline Create lau
 test('welcome stays hidden until startup resolves and appears only without a workspace', async () => {
   const initial = new JSDOM(readFileSync('index.html', 'utf8'));
   assert.equal(initial.window.document.getElementById('welcome')!.hidden, true);
-  assert.equal(initial.window.document.getElementById('mode-badge')!.textContent, '');
+  assert.equal(initial.window.document.getElementById('mode-badge'), null, 'Project bar comes from the shared template pipeline');
   initial.window.close();
   for (const windowWorkspace of [undefined, '/project']) {
     let release!: () => void;
@@ -4267,6 +4270,35 @@ test('welcome stays hidden until startup resolves and appears only without a wor
       }
     } finally { release(); f.dom.window.close(); }
   }
+});
+
+test('custom Project bar is wired through real shell identity, actions and Settings consumers', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', uiTemplates: {
+    projectBar: '<nav><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title" data-nimrod-visible="session.present"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>',
+    projectBarCss: 'nav { display:flex; gap:8px; }',
+  } });
+  try {
+    assert.equal(f.element('workspace-bar').querySelector('b')!.textContent, 'project');
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const title = f.element('workspace-bar').querySelector('span')!;
+    assert.equal(title.textContent, 'Temporary session'); assert.equal(title.hidden, false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep draft'; prompt.focus();
+    const channel = f.captureChannel(); channel.onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); await f.tick();
+    assert.equal(f.element('workspace-bar').querySelector('span'), title);
+    assert.equal(f.win.document.activeElement, prompt); assert.equal(prompt.value, 'Keep draft');
+    f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, true);
+    f.element<HTMLButtonElement>('open-settings').click(); assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.win.document.querySelector('#reload-session'), null, 'omitted buttons are not required DOM hooks');
+  } finally { f.win.close(); }
+});
+
+test('unreadable UI files report an application notice and retain the default shell', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', uiTemplatesError: 'fixture template read failure' });
+  try {
+    assert.equal(f.element('project-name').textContent, 'project');
+    assert.match(f.element('application-notices').textContent!, /fixture template read failure/);
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+  } finally { f.win.close(); }
 });
 
 test('project bar identifies the directory, abbreviates home and keeps branding on welcome', async () => {

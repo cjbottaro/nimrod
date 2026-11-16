@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { installSidebarResize, savedSidebarWidth, sidebarWidthKey } from '../src/sidebar-resize';
 
-function fixture(initial?: unknown) {
+function fixture(initial?: unknown, side: 'left' | 'right' = 'left') {
   const dom = new JSDOM('<button id="toggle"></button><div id="layout"><aside></aside><div id="handle" tabindex="0"></div></div><textarea></textarea><dialog></dialog>', { pretendToBeVisual: true });
   const win = dom.window, layout = win.document.getElementById('layout')!, sidebar = win.document.querySelector('aside')!;
   const handle = win.document.getElementById('handle')!, toggle = win.document.getElementById('toggle')!, prompt = win.document.querySelector('textarea')!;
@@ -15,7 +15,7 @@ function fixture(initial?: unknown) {
   win.matchMedia = ((query: string) => ({ matches: win.innerWidth <= (query.includes('600') ? 600 : 760) })) as typeof win.matchMedia;
   const resize = installSidebarResize(win as unknown as Window, { layout, sidebar, handle, toggle }, {
     read: () => stored, save: width => { stored = width; saved.push(width); },
-  });
+  }, { side: () => side });
   const pointer = (type: string, x: number, id = 1, button = 0) => {
     const event = new win.MouseEvent(type, { clientX: x, button, bubbles: true, cancelable: true });
     Object.defineProperties(event, { pointerId: { value: id }, isPrimary: { value: true } });
@@ -52,6 +52,20 @@ test('pointer drag accounts for zoom, saves once on release, and retains compose
     assert.deepEqual(f.saved, [400]); assert.equal(f.prompt.value, 'Unsent draft');
     assert.equal(f.win.document.body.classList.contains('resizing-sidebar'), false);
     f.pointer('lostpointercapture', 500); assert.deepEqual(f.saved, [400]);
+  } finally { f.close(); }
+});
+
+test('right-side pointer and arrow resizing invert direction without changing bounds or focus', () => {
+  const f = fixture(300, 'right');
+  try {
+    f.prompt.value = 'Draft'; f.prompt.focus();
+    f.pointer('pointerdown', 750); f.pointer('pointermove', 625);
+    assert.equal(f.width(), 400); assert.equal(f.win.document.activeElement, f.prompt);
+    f.pointer('pointerup', 625); assert.deepEqual(f.saved, [400]);
+    f.key('ArrowRight'); assert.equal(f.width(), 390);
+    f.key('ArrowLeft', { shiftKey: true }); assert.equal(f.width(), 440);
+    f.key('Home'); assert.equal(f.width(), 180); f.key('End'); assert.equal(f.width(), 520);
+    assert.equal(f.prompt.value, 'Draft');
   } finally { f.close(); }
 });
 

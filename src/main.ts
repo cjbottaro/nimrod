@@ -1,3 +1,4 @@
+import { installUiTemplates, type UiTemplateFiles } from './ui-templates';
 import { creationChoices, creationDefault, supportsCreation, type SessionCreationKind } from './session-creation';
 import { createBundledHarnessRegistry, bundledHarnesses } from './bundled-harnesses';
 import type { HarnessProject, HarnessSession, SessionRequest, HarnessAction as SessionAction } from './harness-contract';
@@ -65,6 +66,11 @@ const required = <T extends HTMLElement>(id: string) => document.getElementById(
 let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined;
 async function main(): Promise<void> {
 const notices = applicationNotices = installApplicationNotices(window);
+let templateFiles: UiTemplateFiles = {};
+try { templateFiles = await invoke<UiTemplateFiles>('read_ui_templates') ?? {}; }
+catch (error) { notices.report({ id: 'ui-template-files', operation: 'Read UI templates', message: `${String(error)}. Using bundled defaults.` }); }
+const uiTemplates = installUiTemplates(document, templateFiles, message => notices.report({ id: 'ui-templates', operation: 'Load UI templates', message }));
+const projectActions = uiTemplates.actions;
 let noticeSequence = 0;
 let projectErrorText = '';
 // Transitional producer channel: legacy writers no longer own a visible node.
@@ -79,7 +85,7 @@ const preferences = await installNativePreferences(message => {
   required('preferences-error').hidden = true;
   if (message) notices.report({ id: 'preferences', operation: 'Read settings', message });
   else notices.resolve('preferences');
-  const button = required('open-settings');
+  const button = projectActions.settings;
   button.classList.toggle('error', !!message);
   if (message) {
     button.title = 'Settings file error — open Settings for details';
@@ -112,7 +118,7 @@ const dialogs = new Dialogs();
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
   canCover: other => other.id === 'command-palette' && palette.isDeleting,
 });
-const settingsSurface = installSettingsSurface(preferences, notices, false, bundledHarnesses);
+const settingsSurface = installSettingsSurface(preferences, notices, false, bundledHarnesses, projectActions.settings);
 const { settings, themes, zoom, runtime, notificationError, notificationProgress, capturePerformance } = settingsSurface;
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
@@ -133,7 +139,8 @@ const sessionContextMenu = installSessionContextMenu();
 const tabs = navigation.open();
 const presentation = new SessionPresenter<Tab>({
   sessions: () => tabs, conversation,
-  identity: required('project-session'), name: required('project-session-name'), badge: required('mode-badge'),
+  identityChanged: identity => uiTemplates.update({ 'session.present': identity.present, 'session.title': identity.title,
+    'session.badge': identity.badge, 'session.badgeTitle': identity.badgeTitle, 'session.harness': identity.harness }),
   emptyFocus: () => required(`sidebar-${sidebarView}`),
   switched: syncPopouts, controlsChanged: reloadControl,
 });
@@ -189,11 +196,11 @@ function makeDrafts(values: Record<string, unknown> = {}): SessionDrafts {
 }
 const sidebarResize = installSidebarResize(window, {
   layout: required('workspace-layout'), sidebar: required('session-sidebar'),
-  handle: required('sidebar-resizer'), toggle: required('toggle-sidebar'),
+  handle: required('sidebar-resizer'), toggle: projectActions.sidebar,
 }, {
   read: () => workspace ? stored(sidebarWidthKey(workspace)) : undefined,
   save: width => { if (workspace) save(sidebarWidthKey(workspace), width); },
-});
+}, { side: uiTemplates.sidebarSide });
 let drafts = makeDrafts();
 function lastSession() { return harnesses.get(harnesses.primaryId).saved.last(); }
 const previewResponse = notificationPreview(window);
@@ -331,7 +338,7 @@ window.addEventListener('unload', () => {
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
-  pluginLoading.dispose();
+  pluginLoading.dispose(); uiTemplates.dispose();
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.integration.interactions.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
@@ -358,7 +365,7 @@ function controls(): void {
   required('recover-draft').hidden = !creationChoices(harnesses.projects, 'saved').length || !recoverableDrafts().length;
   required('session-sidebar').hidden = !workspace || !sidebarVisible;
   sidebarResize.refresh();
-  required('toggle-sidebar').setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
+  projectActions.sidebar.setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
   renderSidebar(); reloadControl();
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
@@ -483,10 +490,10 @@ function deletable(tab: Tab | undefined): boolean {
 }
 function reloadControl(): void {
   const active = presentation.current;
-  const button = required<HTMLButtonElement>('reload-session');
+  const button = projectActions.reload;
   button.hidden = !!active && !active.project.availability.available();
   button.disabled = !ready || !active || !reloadable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.reloading;
-  const remove = required<HTMLButtonElement>('delete-session');
+  const remove = projectActions.delete;
   remove.hidden = !!active && !active.project.availability.available();
   remove.disabled = !deletable(active);
   const operation = tabDeletion(active);
@@ -550,9 +557,7 @@ async function enterWorkspace(path: string): Promise<void> {
   try { drafts = makeDrafts(await nativeDrafts.load()); }
   catch (failure) { persistenceError(failure); throw failure; }
   const { name, parent } = projectPathParts(path);
-  required('project-name').textContent = name;
-  required('workspace-label').textContent = abbreviateHome(parent, homeDirectory);
-  required('project-identity').title = path;
+  uiTemplates.update({ 'project.name': name, 'project.parent': abbreviateHome(parent, homeDirectory), 'project.path': path });
   save(settingsKey, { cwd: path });
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
@@ -705,7 +710,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
       { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
     ] : []),
-    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
+    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => projectActions.sidebar.click() },
     { id: 'settings', label: 'Global Settings…', detail: 'Defaults for all projects, notifications and keybindings', run: () => invoke('open_global_settings') },
     ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global defaults for this project', run: () => settings.open() }] : []),
     { id: 'keybindings', label: 'Edit keybindings…', detail: 'Customize shortcuts for Nimrod commands', run: openKeybindings },
@@ -1304,9 +1309,9 @@ required('recover-draft').addEventListener('click', () => {
     const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', options[index].key);
   });
 });
-required('reload-session').addEventListener('click', () => { if (presentation.current) void reloadSession(presentation.current); });
-required('delete-session').addEventListener('click', () => { if (presentation.current) void runSessionRowAction(presentation.current, 'delete'); });
-required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
+projectActions.reload.addEventListener('click', () => { if (presentation.current) void reloadSession(presentation.current); });
+projectActions.delete.addEventListener('click', () => { if (presentation.current) void runSessionRowAction(presentation.current, 'delete'); });
+projectActions.sidebar.addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
 for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
 required('sidebar-views').addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || event.repeat) return;
@@ -1329,7 +1334,7 @@ function shortcutHint(id: ActionId): string {
   return bindingsFor(id, preferences.keybindings()).map(binding => shortcutLabel(binding, isMac(window))).join(' / ');
 }
 function refreshShortcutHints(): void {
-  const settingsButton = required('open-settings');
+  const settingsButton = projectActions.settings;
   if (!settingsButton.classList.contains('error')) {
     const label = preferences.projectPath ? 'Project settings' : 'Global Settings';
     settingsButton.title = [label, shortcutHint(preferences.projectPath ? 'project-settings' : 'settings')].filter(Boolean).join(' · ');
@@ -1338,7 +1343,7 @@ function refreshShortcutHints(): void {
   settingsButton.setAttribute('aria-haspopup', preferences.projectPath ? 'dialog' : 'false');
   if (preferences.projectPath) settingsButton.setAttribute('aria-controls', 'settings-page');
   else settingsButton.removeAttribute('aria-controls');
-  required('toggle-sidebar').title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
+  projectActions.sidebar.title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
   required('zoom-level').title = ['App zoom', shortcutHint('zoom-in'), shortcutHint('zoom-out'), shortcutHint('zoom-reset')].filter(Boolean).join(' · ');
   const zoomHint = required('zoom-shortcut-hint');
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
@@ -1401,7 +1406,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'select-theme': return pickTheme();
       case 'palette': palette.open(); return;
       case 'close': return presentation.current ? runSessionRowAction(presentation.current, 'close') : undefined;
-      case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
+      case 'sidebar': projectActions.sidebar.click(); return;
       case 'previous': cycleTab(-1); return;
       case 'next': cycleTab(1); return;
       case 'settings': return invoke('open_global_settings');

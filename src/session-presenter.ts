@@ -17,9 +17,7 @@ export interface PresentedSession {
 interface SessionPresenterOptions<T> {
   sessions(): readonly T[];
   conversation: HTMLElement;
-  identity: HTMLElement;
-  name: HTMLElement;
-  badge: HTMLElement;
+  identityChanged(identity: { present: boolean; title: string; badge: string; badgeTitle: string; harness: string }): void;
   emptyFocus(): HTMLElement;
   switched(): void;
   controlsChanged(): void;
@@ -88,14 +86,10 @@ export class SessionPresenter<T extends PresentedSession> {
   }
 
   private refreshIdentity(): void {
-    const { identity, name, badge } = this.options;
     const session = this.#current, title = session?.title || '';
-    identity.hidden = !session;
-    if (name.textContent !== title) name.textContent = title;
-    if (identity.title !== title) identity.title = title;
     const projection = session?.integration.presentation.snapshot();
-    badge.textContent = projection?.badge ?? '';
-    badge.title = projection?.badgeTitle ?? '';
+    this.options.identityChanged({ present: !!session, title, badge: projection?.badge ?? '',
+      badgeTitle: projection?.badgeTitle ?? '', harness: projection?.harnessLabel ?? '' });
     this.options.controlsChanged();
   }
 }

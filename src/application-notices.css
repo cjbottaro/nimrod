@@ -1,6 +1,11 @@
 :root { --application-notice-height:0px; }
 body.application-notice-shell { grid-template-rows:48px var(--application-notice-height) minmax(0,1fr); }
 #application-notice-slot { height:var(--application-notice-height); min-height:0; }
+/* Templated shells reserve the same notice space inside their owned layout,
+   rather than adding header/content rows to the document body. */
+body.application-notice-shell:has(> #workspace-shell) { grid-template-rows:minmax(0,1fr); }
+body:has(> #workspace-shell) > #application-notice-slot { display:none; }
+#workspace-shell #workspace-layout { margin-top:var(--application-notice-height); }
 #application-notices, .session-notices { box-sizing:border-box; max-height:min(25dvh,180px); display:flex; flex-direction:column; gap:8px; overflow:hidden; color:var(--vscode-foreground); font:12px var(--vscode-font-family, sans-serif); }
 #application-notices { position:fixed; inset:48px 0 auto; z-index:100; width:100%; padding:6px 20px; background:var(--vscode-editorWidget-background); border-bottom:1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 20%, transparent); }
 .session-view:has(> .session-notices:not([hidden])) { grid-template-rows:auto minmax(0,1fr) auto; }

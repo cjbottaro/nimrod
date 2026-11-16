@@ -27,7 +27,8 @@
   --vscode-errorForeground:#ff9d9d; --vscode-editorWarning-foreground:#e8bc79;
   --vscode-testing-iconPassed:#77d8bd; --vscode-testing-iconFailed:#ff9d9d;
 }
-body { grid-template-rows:48px minmax(0,1fr); font-size:14px; }
+body { grid-template-rows:minmax(0,1fr); font-size:14px; }
+#workspace-shell { min-width:0; min-height:0; overflow:hidden; }
 [hidden] { display:none !important; }
 body::before { display:none; }
 button, input, textarea, select { font:inherit; }
@@ -49,19 +50,7 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 @media (forced-colors:active) {
   #settings-page select { -webkit-appearance:auto; appearance:auto; background-image:none; }
 }
-#workspace-bar { display:flex; align-items:center; gap:16px; padding:0 18px; border-bottom:1px solid var(--vscode-panel-border); min-width:0; }
 .wordmark { font-size:17px; font-weight:750; letter-spacing:-.5px; } .spark { color:var(--nimrod-brand-accent, #e8bc79); margin-left:5px; }
-#project-identity { display:flex; align-items:center; gap:8px; flex:1; min-width:0; overflow:hidden; }
-#project-name { flex:0 0 auto; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; font-weight:750; }
-#workspace-label { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vscode-descriptionForeground); font-size:12px; }
-#workspace-label:empty { display:none; }
-#project-session { display:flex; align-items:center; gap:8px; flex:0 1 auto; min-width:0; max-width:50%; overflow:hidden; font-size:12px; font-weight:400; color:var(--vscode-foreground); }
-#project-session-separator { flex:none; color:var(--vscode-descriptionForeground); }
-#project-session-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#mode-badge { margin-left:auto; flex:none; color:var(--vscode-descriptionForeground); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
-#open-settings, #reload-session, #delete-session { flex:none; display:grid; place-items:center; width:30px; height:30px; padding:4px; color:var(--vscode-descriptionForeground); background:transparent; }
-#delete-session:not(:disabled):hover { color:var(--vscode-errorForeground); background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); }
-#open-settings:hover, #reload-session:not(:disabled):hover { background:var(--nimrod-toolbar-hover-background, var(--vscode-toolbar-hoverBackground)); color:var(--vscode-foreground); }
 #settings-page { box-sizing:border-box; position:fixed; inset:0; width:100%; height:100vh; height:100dvh; max-width:none; max-height:none; margin:0; padding:0; border:0; color:var(--vscode-foreground); background:var(--vscode-editor-background); }
 #settings-page[open] { display:flex; flex-direction:column; }
 #settings-page::backdrop { background:var(--vscode-editor-background); }
@@ -166,11 +155,6 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #theme-notice-text { overflow-wrap:anywhere; line-height:1.5; }
 #theme-notice-dismiss { flex:none; padding:0 5px; color:var(--vscode-foreground); background:transparent; }
 ::selection { background:var(--vscode-selection-background, var(--vscode-list-focusBackground)); color:var(--vscode-foreground); }
-@media (max-width:640px) {
-  #workspace-bar { gap:6px; padding:0 8px; }
-  #mode-badge { display:none; }
-  #project-name { font-size:14px; }
-}
 #zoom-level { display:block; width:140px; max-width:100%; }
 .appearance-duration { display:flex; align-items:center; gap:16px; width:400px; max-width:100%; }
 .appearance-duration input[type=range] { flex:1; min-width:0; padding:0; }

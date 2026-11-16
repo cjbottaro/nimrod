@@ -51,10 +51,13 @@ Rapid local development: merge task branches into main and build only when reque
 
 ## Feature index
 
+For workspace layout or Project bar customization, load the [UI customization skill](../ui-customization/SKILL.md). It owns the declarative-template direction and default-template dogfooding requirements.
+
 References own specifications, acceptance criteria, code maps, state/lifecycle, invariants and tests. Labels below route work; they do not duplicate specifications.
 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
+| Declarative workspace layout and Project bar templates, public bindings/actions and bundled defaults | [UI templates](references/ui-templates.md) | [UI templates](../../../docs/ui-templates.md) |
 | Codex app-server, interface mappings, protocol evidence, limitations and policy questions | [Codex integration skill](../codex-integration/SKILL.md) | [Codex](../../../docs/codex.md) |
 | Codex shared-daemon transport, CLI interoperability, client detach/reload and multi-client replay | [Codex daemon](../codex-integration/references/daemon.md) | [Codex lifecycle](../../../docs/codex.md#history-drafts-and-close) |
 | Codex experimental protocol, structured questions, unsupported-interaction diagnostics and log capture | [Codex questions](../codex-integration/references/questions.md) | [Codex questions](../../../docs/codex.md#structured-questions-and-experimental-protocol) |

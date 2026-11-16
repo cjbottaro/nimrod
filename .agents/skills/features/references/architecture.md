@@ -13,6 +13,7 @@ Pi is primary; curated integrations are bespoke-first: Pi native RPC and the pin
 | Layer | Responsibility | Canonical specification |
 | --- | --- | --- |
 | Project shell (`src/main.ts`) | Mounted session views and effect coordination | [Projects/sessions](projects-and-sessions.md) |
+| Declarative workspace shell / Project bar | Shared default/custom layout slots, live presentation bindings and existing action components | [UI templates](ui-templates.md), [customization direction](../../ui-customization/SKILL.md) |
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
 | Session lists/history | Shared semantic list/status projection and project-bound discovery, separate from connection owners | [Session history](session-history.md) |
 | Session deletion | Registered target-bound operations through one shared UI/effects coordinator; native Pi tree transactions, capability-gated Copilot single-session deletion and guarded Codex spawned-tree deletion | [Session deletion](session-deletion.md) |

@@ -10,7 +10,9 @@ function fixture() {
   const identity = document.querySelector<HTMLElement>('#identity')!, name = document.querySelector<HTMLElement>('#name')!, badge = document.querySelector<HTMLElement>('#badge')!;
   const sessions: PresentedSession[] = [], events: string[] = [];
   let switches = 0, controls = 0;
-  const presenter = new SessionPresenter({ sessions: () => sessions, conversation, identity, name, badge,
+  const presenter = new SessionPresenter({ sessions: () => sessions, conversation,
+    identityChanged: value => { identity.hidden = !value.present; name.textContent = value.title; identity.title = value.title;
+      badge.textContent = value.badge; badge.title = value.badgeTitle; },
     emptyFocus: () => document.querySelector<HTMLElement>('#empty')!,
     switched: () => { switches++; }, controlsChanged: () => { controls++; },
   });
