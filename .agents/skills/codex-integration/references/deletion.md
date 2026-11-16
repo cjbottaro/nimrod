@@ -62,6 +62,13 @@ The earlier Darwin owned-process teardown investigation is historical.
 
 ## Inventory and policy boundaries
 
+Saved-project comparisons remain literal, including host/Distrobox spellings.
+Runtime alias verification cannot broaden a root/descendant's deletion scope.
+The [project/runtime cwd contract](daemon.md#saved-project-identity-versus-runtime-cwd)
+owns discovery's unfiltered metadata policy and pre-Resume membership check;
+this adapter continues to inventory unfiltered saved cwd and reports expected
+and received paths on mismatches.
+
 - Deletion inventories **all ten reviewed sources**, all providers, both non-archived and archived partitions, exhausting pagination. It does not filter by cwd before computing ancestry, which would hide cross-project descendants. This is a metadata scan through supported APIs, not private-directory parsing.
 - `src/codex/deletion-tree.ts` validates stable nullable parent/fork fields, complete parent chains, duplicates/conflicts, persisted root, exact project, cycles, cross-project descendants and ambiguous forks. Local/native planners both fail closed when scope cannot be established.
 - **Cross-project trees are refused**, as are affected owners belonging to another window. Supporting those would require distributed review/lock/draft reconciliation like Pi's native transaction; it is not implied by sharing the renderer.

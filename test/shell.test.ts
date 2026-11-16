@@ -315,6 +315,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         else if (request.method === 'thread/list') send({ id: request.id, result: { data: (request.params as JsonRecord).archived === true ? [] : options.codexHistory || [], nextCursor: null } });
         else if (request.method === 'thread/read') {
           if (options.codexSavedThread) send({ id: request.id, result: { thread: options.codexSavedThread } });
+          else if (options.codexConversation && !options.codexReadError) send({ id: request.id, result: { thread: {
+            id: (request.params as JsonRecord).threadId, cwd: workspace, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'notLoaded' },
+          } } });
           else send({ id: request.id, error: { code: options.codexReadError ? -32000 : -32600, message: options.codexReadError ?? `thread not loaded: ${(request.params as JsonRecord).threadId}` } });
         }
         else if (request.method === 'thread/delete') send({ id: request.id, result: {} });

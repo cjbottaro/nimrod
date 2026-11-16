@@ -110,3 +110,22 @@ async fn replies_require_a_pending_request_on_the_exact_client_connection() {
     assert!(matches!(server.next().await.unwrap().unwrap(), Message::Text(_)));
     assert!(write(&mut client, &owner, &reply).await.unwrap().is_some(), "replies are single-use");
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn resume_cannot_cross_the_socket_before_exact_project_metadata() {
+    let (client, server) = UnixStream::pair().unwrap();
+    let (client, server) = tokio::join!(
+        client_async_with_config("ws://localhost/", client, None),
+        tokio_tungstenite::accept_async(server)
+    );
+    let mut client = client.unwrap().0;
+    let mut server = server.unwrap();
+    let owner = owner(false);
+    let resume = serde_json::json!({"id":2,"method":"thread/resume","params":{"threadId":"thread","cwd":"/fixture"}});
+    assert!(write(&mut client, &owner, &resume).await.unwrap().unwrap().contains("metadata read first"));
+    observe_record(&owner, &serde_json::json!({"id":1,"result":{"thread":{"id":"thread","cwd":"/fixture","ephemeral":false}}})).await.unwrap();
+    assert_eq!(write(&mut client, &owner, &resume).await.unwrap(), None);
+    let Message::Text(text) = server.next().await.unwrap().unwrap() else { panic!("expected Resume") };
+    assert_eq!(serde_json::from_str::<Value>(&text).unwrap(), resume);
+}

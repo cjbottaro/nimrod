@@ -118,6 +118,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Codex history keeps host/Distrobox project paths separate without trusting the daemon's alias-normalizing cwd filter, preventing sessions from appearing in a project that cannot resume or delete them. Resume validates exact saved-project membership before attaching and accepts only native-verified equivalent runtime paths; deletion remains exact-project scoped. Path errors now include expected/reported directories. Existing drafts/layouts are not migrated or purged; native acceptance is pending.
+
 - Empty composer prompt fields no longer expose a horizontal scrollbar on Linux; wrapped text and vertical scrolling remain unchanged.
 
 - Codex model and thinking-level changes now update the live thread instead of trying to resume saved history, avoiding “no rollout found” in new sessions before the first message. Changes require native settings confirmation; no prompt, replacement session or reconnect is used. Installed-runtime acceptance remains pending.

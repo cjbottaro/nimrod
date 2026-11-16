@@ -30,6 +30,51 @@ This is support for the managed local server, not a promise that a desktop app's
 - `SessionReload.run()` retires pending local controls, replaces the client/controller, and resumes/rehydrates the same thread. The server runtime and active work may continue, including work initiated by another client. Preserve membership/drafts, fence retired callbacks and never replay any prompt, answer or configuration request. Pi/Copilot retain owned-runtime replacement through the same unchanged interface signatures.
 - Composer Stop remains explicit native `turn/interrupt` for the exact active turn; it affects that shared thread's work. Identity, cwd, persisted encodings, prompt/client-ID adoption, dirty streaming, reader/focus behavior and optimistic Send policy are unchanged.
 
+## Saved project identity versus runtime cwd
+
+Project windows, layout and drafts remain keyed by their exact canonical path in
+Nimrod's own environment. `/home/...` inside Distrobox and `/var/home/...` on the
+host are deliberately separate projects; there is no alias-based migration,
+combined history or per-container Codex home.
+
+Codex 0.169.0 can normalize a cwd-filtered `thread/list` and rewrite returned row
+cwd differently from unfiltered metadata/exact reads. Ordinary discovery now
+omits that server filter, retains source/archive bounds and pagination, and
+partitions returned saved metadata by literal cwd locally. Empty filtered pages
+retain their cursor. Native catalogs permit only reviewed unfiltered interactive
+history or complete deletion-inventory source/archive sets; a cwd-filtered list
+cannot populate their deletion evidence. [Protocol evidence](protocol-evidence.md#distrobox-cwd-filter-disagreement-01690)
+records the observed discrepancy; verification status belongs in the shared map.
+
+Before every existing-thread Resume, the conversation client performs one
+metadata-only `thread/read` and requires exact saved ID/cwd/non-ephemeral state.
+The native writer also requires that token's exact-project metadata evidence
+before sending Resume. This read does not publish conversation readiness, bind
+drafts, subscribe through Resume, prompt or prove durable history merely from a
+loaded runtime. A wrong project, missing metadata or malformed result fails
+without replacement or retry.
+
+Only after that exact membership check may Resume's nested thread cwd differ
+from project identity. Native code verifies differing runtime cwd fields against
+the project by filesystem canonicalization in Nimrod's environment; relative,
+missing and unrelated paths fail with expected/received diagnostics. A Codex-only
+IPC envelope (`codex_output.rs`) carries those verified paths alongside the raw
+record, never as invented Codex fields. The transport publishes per-record,
+per-token verification synchronously before ordered client application; no
+async response reordering, growing alias cache or shared Pi/Copilot packet change.
+The client defaults to strict equality without that native evidence. Settings
+confirmation and bound reports use the same runtime-only check. New-session
+thread identity still requires literal cwd: Nimrod never silently assigns a
+thread saved under another project to this one.
+
+Deletion continues to use literal unfiltered saved cwd for the root and every
+spawned descendant, never runtime equivalence. Neither verified runtime aliases
+nor a saved row in another project's layout authorize cross-project deletion.
+Existing mismatched layout entries/drafts remain intact and diagnosable rather
+than being migrated or purged. The shared daemon still owns its startup
+execution environment; this fix does not isolate a host daemon from Distrobox or
+promise that Codex preserves every requested new-thread cwd.
+
 ## Deletion and uncertain mutations
 
 [Codex deletion](deletion.md) retains exact reviewed tree/project/lineage validation, local write fences and confirmed-only reconciliation. Its stopping phase now detaches affected Nimrod clients; it is not proof that a shared thread or external subscriber stopped. The explicitly reviewed native `thread/delete` owns teardown/removal of that tree, including shared activity. The daemon is never stopped to delete a tree.

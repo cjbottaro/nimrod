@@ -12,6 +12,32 @@ codex app-server generate-ts --out <disposable-directory>
 
 No `--experimental` flag was used. The generator's help itself calls generation experimental; generated presence is not proof that every described feature is enabled, production-stable or available on older CLIs. Only schema generation and help/version inspection were performed—no app-server connection, authentication change, thread open/list/load, prompt or user-data operation. Generated output was inspection material, not a new dependency or a vendored full protocol tree. `src/codex/protocol.ts` is explicitly a hand-maintained consumer subset, with runtime validation of identity/lifecycle/page shapes. Validate incoming item-specific fields in the future projector rather than trusting TypeScript casts.
 
+## Distrobox cwd-filter disagreement (0.169.0)
+
+During the user-requested Linux/Distrobox investigation, the supported daemon
+lifecycle command returned `alreadyRunning`, with CLI/managed app-server both
+0.169.0. A separate disposable WebSocket client performed initialize/initialized,
+non-archived interactive listings for `/home/cjbottaro/Projects/nimrod` and
+`/var/home/cjbottaro/Projects/nimrod`, an unfiltered all-source metadata listing,
+and one exact `thread/read {includeTurns:false}`. Both filtered requests returned
+the same five IDs with `/home/...` cwd. The unfiltered inventory and exact read
+reported those IDs under `/var/home/...`. Thus successful filtered discovery was
+not reliable evidence for the later exact saved-project guards. No thread was
+started, resumed, prompted, renamed, configured, interrupted or deleted; the
+client detached without stopping/restarting the daemon. This was a targeted
+metadata probe, not native Nimrod acceptance or a guarantee about other Codex
+versions. Existing user error reports identified the native Resume project guard
+and exact deletion-tree project guard; raw Resume response paths remain unprobed.
+
+Matching official 0.169.0 sources distinguish stored metadata from effective
+runtime config: [`thread_processor.rs`](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/app-server/src/request_processors/thread_processor.rs)
+constructs `Thread` from stored cwd and `ThreadResumeResponse.cwd` from runtime
+configuration; [`thread_lifecycle.rs`](https://github.com/openai/codex/blob/rust-v0.169.0/codex-rs/app-server/src/request_processors/thread_lifecycle.rs)
+uses the running thread's config snapshot for warm Resume. This does not prove
+an already-running thread accepts a different cwd override. The implemented
+[project/runtime contract](daemon.md#saved-project-identity-versus-runtime-cwd)
+preserves literal saved membership and separately verifies runtime paths.
+
 ## Shapes that informed implementation
 
 | Generated file(s) | Observed shape / consequence |
@@ -23,7 +49,7 @@ No `--experimental` flag was used. The generator's help itself calls generation 
 | `v2/TurnStartParams.ts`, `UserInput.ts`, `ThreadItem.ts` | `clientUserMessageId` correlates to `userMessage.clientId`; text input uses snake-case `text_elements`. Prompt acknowledgement is a turn snapshot, while subsequent events carry native item updates. |
 | `v2/TurnSteerParams.ts`, `TurnSteerResponse.ts` | `expectedTurnId` is required; response carries `turnId`. Do not treat steering as a queued follow-up or fall back to a new turn on precondition failure. |
 | `v2/TurnInterruptParams.ts`, `TurnInterruptResponse.ts` | Interrupt takes `threadId` and `turnId`, returns an empty object. Terminal turn status is separately authoritative. |
-| `v2/ThreadListParams.ts`, `ThreadListResponse.ts` | Exact cwd filter, provider/source filters, nullable next cursor. Default source scope is interactive. Empty modelProviders includes all providers. Result rows still require local project/subagent checks. |
+| `v2/ThreadListParams.ts`, `ThreadListResponse.ts` | Cwd/provider/source filters, nullable next cursor. The later [0.169.0 cwd probe](#distrobox-cwd-filter-disagreement-01690) disproves assuming literal project partitioning from the cwd filter. Nimrod uses unfiltered saved metadata plus local exact cwd/subagent checks. Default source scope is interactive; empty modelProviders includes all providers. |
 | `v2/ThreadTurnsListParams.ts`, `ThreadTurnsListResponse.ts`, `TurnItemsView.ts` | Explicit sort direction and items-view contract (`notLoaded`, `summary`, `full`). Default is summary; requesting full still does not replace checking the returned view. |
 | `v2/ThreadItemsListParams.ts`, `ThreadItemsListResponse.ts`, `ThreadItemEntry.ts` | Separate item pagination; entries include their owning `turnId`, native item and timing. Opaque cursors must be retained across filtered/empty pages. |
 | `ServerRequest.ts`, `v2/CommandExecutionRequestApprovalParams.ts` | Modern command/file approval requests are bidirectional. A command's `approvalId` can distinguish multiple callbacks for one item; transport request ID remains the actual reply key. Command kind/cwd/network-policy details must remain available to approval presentation. |

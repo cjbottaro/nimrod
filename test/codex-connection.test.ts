@@ -51,6 +51,9 @@ function fixture(options: { savedId?: string; initialName?: string; renameGate?:
         }
         let result: unknown;
         if (packet.method === 'initialize') result = { userAgent: 'fixture/0.164.0' };
+        else if (packet.method === 'thread/read') result = { thread: {
+          id: options.savedId ?? 'thread', cwd: project, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'notLoaded' },
+        } };
         else if (packet.method === 'thread/start' || packet.method === 'thread/resume') result = {
           cwd: project, thread: { id: packet.method === 'thread/start' ? options.freshId ?? 'thread' : options.savedId ?? 'thread', cwd: project, ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture-model', reasoningEffort: 'low',
         };

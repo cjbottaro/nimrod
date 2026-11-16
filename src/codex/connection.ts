@@ -77,7 +77,9 @@ export function createCodexConnection(readOwner: () => SessionLifecycleOwner, ba
       }
       host.effects.failure({ kind: 'connection', ...failure, resumable: !!lifecycle.identity });
     };
-    const session = new CodexSession({ write: packet => host.transport.write(token, packet) }, {
+    const session = new CodexSession({ write: packet => host.transport.write(token, packet),
+      runtimeCwdMatches: (actual, project) => host.transport.runtimeCwdMatches?.(token, actual, project) === true,
+    }, {
       transcriptLog: host.ui.transcriptLog,
       publish: message => { if (valid()) host.ui.publish(message); },
       identified: id => {

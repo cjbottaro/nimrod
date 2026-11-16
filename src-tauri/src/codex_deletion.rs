@@ -53,7 +53,7 @@ impl Gate {
             }
         } else {
             if method == Some("thread/delete") { return Err("Only an owned Codex catalog can delete a reviewed tree".into()); }
-            if matches!(method, Some("thread/name/set" | "thread/compact/start" | "thread/read" | "mcpServerStatus/list" | "thread/backgroundTerminals/list")) && (bound.is_none() || value["params"]["threadId"].as_str() != bound) {
+            if (matches!(method, Some("thread/name/set" | "thread/compact/start" | "mcpServerStatus/list" | "thread/backgroundTerminals/list")) || method == Some("thread/read") && bound.is_some()) && (bound.is_none() || value["params"]["threadId"].as_str() != bound) {
                 return Err("Command requires this writer's bound Codex thread".into());
             }
             if matches!(method, Some("skills/list" | "hooks/list")) && (bound.is_none() || bound.is_some_and(|id| self.blocks(id))) {
@@ -82,7 +82,7 @@ fn validate_scope(metadata: &HashMap<String, CatalogThread>, cwd: &PathBuf, root
         let id = queue[index]; index += 1;
         if !seen.insert(id) { return Err("Codex native deletion lineage is cyclic".into()); }
         let node = &metadata[id];
-        if &node.cwd != cwd || node.ephemeral { return Err("Codex native deletion scope contains a cross-project/ephemeral thread".into()); }
+        if &node.cwd != cwd || node.ephemeral { return Err(format!("Codex native deletion scope is cross-project/ephemeral: expected {}, received {} (thread {id})", cwd.display(), node.cwd.display())); }
         if let Some(descendants) = children.get(id) { queue.extend(descendants.iter().copied()); }
         if queue.len() > 10_000 { return Err("Codex native deletion tree exceeds 10,000 threads".into()); }
     }
@@ -278,6 +278,21 @@ mod tests {
         metadata.get_mut("child").unwrap().cwd = cwd.clone();
         metadata.insert("fork".into(), CatalogThread { cwd: cwd.clone(), parent: None, fork: Some("root".into()), ephemeral: false });
         assert!(validate_scope(&metadata, &cwd, "root", &ids).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn filesystem_aliases_never_merge_native_saved_deletion_projects() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = std::fs::canonicalize(directory.path()).unwrap();
+        let alias = directory.path().join("alias");
+        std::os::unix::fs::symlink(&project, &alias).unwrap();
+        let metadata = HashMap::from([("root".into(), CatalogThread {
+            cwd: alias.clone(), parent: None, fork: None, ephemeral: false,
+        })]);
+        let ids = HashSet::from(["root".into()]);
+        assert_eq!(std::fs::canonicalize(&alias).unwrap(), project);
+        assert!(validate_scope(&metadata, &alias, "root", &ids).is_ok());
+        assert!(validate_scope(&metadata, &project, "root", &ids).is_err());
     }
     #[test]
     fn detached_catalog_with_unconfirmed_delete_cannot_authorize_another_mutation() {
