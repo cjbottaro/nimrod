@@ -2260,7 +2260,7 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
   } finally { f.win.close(); }
 });
 
-test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi reload', async () => {
+test('personal compilation does not gate shell/session boot and Reload customizations is bindable without Pi reload', async () => {
   let release!: (value: import('../src/pi/card-plugins/catalog').PersonalBundles) => void;
   const gate = new Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>(resolve => { release = resolve; });
   const f = await fixture(undefined, { windowWorkspace: '/project', personalGate: gate });
@@ -2271,13 +2271,13 @@ test('personal compilation does not gate shell/session boot and Reload card plug
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     release({ entries: [], plugins: [], warnings: [] }); await f.tick(); await f.tick();
     assert.match(f.element('card-plugin-status').textContent || '', /0 personal/); assert.equal(prompt.value, 'keep draft'); assert.equal(f.win.document.activeElement, prompt);
-    f.preferences.external('{"keybindings":{"reload-card-plugins":["primary+alt+l"]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload-customizations":["primary+alt+l"]}}'); await f.tick();
     const before = f.calls.filter(call => call.command === 'load_personal_card_plugins').length;
     const starts = f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
     assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length, starts); assert.equal(prompt.value, 'keep draft');
-    f.preferences.external('{"keybindings":{"reload-card-plugins":[]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload-customizations":[]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
   } finally { f.win.close(); }
@@ -4292,7 +4292,7 @@ test('custom Project bar is wired through real shell identity, actions and Setti
   } finally { f.win.close(); }
 });
 
-test('Reload UI templates palette and rebound shortcut preserve the active session and button wiring', async () => {
+test('Reload customizations refreshes both subsystems and preserves session/button wiring even with invalid UI files', async () => {
   const options: ShellOptions = { windowWorkspace: '/project' };
   const f = await fixture(undefined, options);
   try {
@@ -4300,14 +4300,15 @@ test('Reload UI templates palette and rebound shortcut preserve the active sessi
     const prompt = f.element<HTMLTextAreaElement>('prompt'), content = f.element('workspace-content');
     prompt.value = 'Do not send'; prompt.focus(); prompt.setSelectionRange(1, 4);
     const before = f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    const cardsBefore = f.calls.filter(call => call.command === 'load_personal_card_plugins').length;
     options.uiTemplates = { projectBar: '<nav><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>' };
     f.openPalette();
-    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Reload UI templates'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Reload customizations'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
     query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.element('workspace-content'), content); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Do not send');
     assert.equal(f.element('workspace-bar').querySelector('span')!.textContent, 'Temporary session');
     f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, true);
-    f.preferences.external('{"keybindings":{"reload-ui-templates":["primary+shift+u"]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload-customizations":["primary+shift+u"]}}'); await f.tick();
     options.uiTemplates = {};
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.element('project-name').textContent, 'project');
@@ -4318,6 +4319,7 @@ test('Reload UI templates palette and rebound shortcut preserve the active sessi
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
     assert.equal(f.element('project-name').textContent, 'project'); assert.equal(f.element('prompt'), prompt);
     assert.match(f.element('application-notices').textContent!, /current UI was kept/);
+    assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, cardsBefore + 3, 'a template error does not skip card plugin refresh');
     assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, before);
     assert.equal(prompt.value, 'Do not send');
   } finally { f.win.close(); }

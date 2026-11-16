@@ -28,7 +28,7 @@
 
 ## Installation and verification boundaries
 
-Install a regular copy of the validated TS source in the resolved personal `card-plugins` directory; do not symlink it (entry symlinks are deliberately unsupported). Never overwrite an existing user-authored plugin silently. No manifest/trust JSON changes or app build/launch are required. User-triggered Reload card plugins affects new cards only.
+Install a regular copy of the validated TS source in the resolved personal `card-plugins` directory; do not symlink it (entry symlinks are deliberately unsupported). Never overwrite an existing user-authored plugin silently. No manifest/trust JSON changes or app build/launch are required. User-triggered Reload customizations refreshes the card catalog for new cards only, alongside its separate UI-template reload.
 
 Run `mise run test` and offline `npm run test:browser` for presentation/scroll changes. Native macOS reload/live rendering and the long-code empty-region fix now have user confirmation below. Keyboard/trackpad edge cases, actual clipboard/browser/editor/pop-out handoff and other platforms remain acceptance gaps; fixtures do not establish those. Keep current evidence here, not claims of live web-access/provider acceptance.
 

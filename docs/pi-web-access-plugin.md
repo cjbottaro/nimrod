@@ -12,7 +12,7 @@ Copy [`plugins/pi-web-access.ts`](../plugins/pi-web-access.ts) to:
 
 Use the directory beside your resolved Nimrod settings when an absolute XDG config root is configured. No manifest, dependency installation, app rebuild or per-file enable/trust setting is needed. The file uses only the existing browser plugin API; its type-only SDK import is erased.
 
-Run **Reload card plugins** in Nimrod's command palette, or reopen the window. Newly mounted tool cards use the plugin; cards you're already inspecting retain their existing renderer. Installation in the personal directory trusts the code, as described in [Card plugins](card-plugins.md#personal-typescript-plugins).
+Run **Reload customizations** in Nimrod's command palette, or reopen the window. Newly mounted tool cards use the plugin; cards you're already inspecting retain their existing renderer. Installation in the personal directory trusts the code, as described in [Card plugins](card-plugins.md#personal-typescript-plugins).
 
 ID: `nimrod-plugins.pi-web-access`. Default matching covers `web_search`, `fetch_content`, `get_search_content` and `source_check`, including normal namespace prefixes. `web_enable` stays generic. If your Pi extension renames its tools, adjust the plugin's `TOOLS` and label mapping; it does not read Pi's configuration or credentials.
 

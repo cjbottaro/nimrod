@@ -135,7 +135,7 @@ function prepareLayout(document: Document, html: string) {
 /** Mounted session/behavior nodes stay owned and stable across explicit template reloads. */
 export function installUiTemplates(document: Document, files: UiTemplateFiles = {}, report: (message: string) => void = () => {}) {
   const choose = <T>(name: string, custom: () => T, fallback: () => T): T => {
-    try { return custom(); } catch (error) { report(`${name}: ${String(error)}. Using the bundled default. Fix the files and run Reload UI templates.`); return fallback(); }
+    try { return custom(); } catch (error) { report(`${name}: ${String(error)}. Using the bundled default. Fix the files and run Reload customizations.`); return fallback(); }
   };
   const layout = choose('Layout template', () => ({ ...prepareLayout(document, files.layout ?? defaultLayout), css: scopedCss(document, files.layoutCss ?? defaultLayoutCss, '#workspace-shell') }),
     () => ({ ...prepareLayout(document, defaultLayout), css: scopedCss(document, defaultLayoutCss, '#workspace-shell') }));

@@ -28,7 +28,7 @@ test('session shortcut defaults open Switch, Resume and New named directly witho
     const unbound = new Set<string>(INTENTIONALLY_UNBOUND_ACTIONS.map(id => ACTIONS.find(action => action.id === id)!.label));
     const labels = await commands.locator('.palette-item-label').allTextContents();
     expect(labels.filter(label => !unbound.has(label)).length).toBe(await commands.locator('kbd').count());
-    await expect(commands.filter({ hasText: 'Reload card plugins' }).locator('kbd')).toHaveCount(0);
+    await expect(commands.filter({ hasText: 'Reload customizations' }).locator('kbd')).toHaveCount(0);
     await expect(commands.filter({ hasText: 'Capture performance report' }).locator('kbd')).toHaveCount(0);
     await expect(page.locator('#palette-list')).not.toContainText('New offline demo');
     await expect(page.locator('#palette-list')).not.toContainText('Open session file');

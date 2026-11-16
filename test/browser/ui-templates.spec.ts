@@ -17,7 +17,7 @@ test('explicit template reload keeps the session view, draft and action wiring i
       projectBarCss: '.reloaded-bar { display:flex; gap:8px; align-items:center; }',
     };
     await page.keyboard.press('ControlOrMeta+Shift+P');
-    await page.locator('#palette-input').fill('Reload UI templates');
+    await page.locator('#palette-input').fill('Reload customizations');
     await page.locator('#palette-input').press('Enter');
     await expect(page.locator('.reloaded-bar b')).toHaveText(path.basename(process.cwd()));
     await expect(prompt).toHaveValue('Unsent reload draft');

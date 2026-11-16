@@ -25,7 +25,7 @@ The five user-facing regions are the **Project bar**, **Session sidebar**, **Tra
 
 The first slice is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain together inside Nimrod's existing per-session mounted view. Independent placement of those three requires a later explicit contract; do not imply it is already available.
 
-Explicit **Reload UI templates** refreshes layout/Project bar authoring without restarting agents; retain the mounted behavior components and reject invalid reloads before changing the current UI.
+Explicit **Reload customizations** refreshes layout/Project bar authoring and the card-plugin catalog without restarting agents; retain the mounted behavior components and reject invalid reloads before changing the current UI.
 
 The Project bar supports live presentation bindings and named action buttons. Core controls own action semantics, accessibility/availability metadata and shortcut hints; templates own content and arrangement. An omitted action is still available through its existing palette/shortcut route.
 

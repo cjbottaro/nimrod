@@ -2,9 +2,7 @@
 
 **Capture performance report** saves local timing data for a slowdown, after enabling Settings → Diagnostics. It has no default shortcut; the saved path appears in Diagnostics. See [Performance reports](performance-diagnostics.md).
 
-**Reload UI templates** rereads the current window's layout and Project bar files without restarting agents or reloading the webview. It has no default shortcut; see [UI templates](ui-templates.md).
-
-**Reload card plugins** rescans personal TypeScript sources and refreshes the catalog for new cards, using cached bundles when unchanged. It does not restart Pi, send prompts or rebuild inspected cards. It has no default shortcut; assign one in [Keybindings](keybindings.md). See [Card plugins](card-plugins.md#startup-reload-and-caching).
+**Reload customizations** rereads the current window's [layout and Project bar templates](ui-templates.md) and refreshes [card plugins](card-plugins.md#startup-reload-and-caching), using cached bundles when unchanged. It does not restart agents, reload the webview, send prompts or rebuild inspected cards. A template error keeps the current UI without skipping the card refresh; each subsystem reports its own errors. It has no default shortcut; assign one in [Keybindings](keybindings.md).
 
 Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable; actions such as **Select theme…**, **Select mode…** and **Select context window…** have no default shortcut.
 
