@@ -17,13 +17,15 @@ The five user-facing regions are the **Project bar**, **Session sidebar**, **Tra
 - Layout templates place Nimrod-owned components. Region templates bind a documented presentation model and invoke named existing actions. Never expose shell objects, harness controllers, arbitrary expressions, IPC, JavaScript execution or direct state mutation.
 - Update text, attributes and availability in place. Do not recreate regions on streaming, configuration or selection updates. Preserve mounted nodes, focus/IME, drafts, disclosures, independent scroll intent and hidden-session catch-up.
 - Capabilities and availability remain authoritative. Templates cannot enable unsupported actions, invent metrics, answer permissions or change sending semantics. Follow the [optimistic interaction policy](../features/references/architecture.md#optimistic-interaction-policy).
-- Validate before moving live components. Missing/duplicate slots, invalid bindings and malformed templates fall back to the bundled template through the same pipeline; report application-owned errors through the existing notice strip. Never leave users without recovery via Settings/command palette.
+- Validate before moving live components. Missing/duplicate slots, invalid bindings and malformed templates fall back to the bundled template through the same pipeline at startup; explicit reload failures retain the current UI. Report application-owned errors through the existing notice strip. Never leave users without recovery via Settings/command palette.
 - CSS is user-authored presentation code, not a security sandbox. Scope authored selectors to the owned surface, do not allow external stylesheet/resource loading, and keep Settings, dialogs, notices and native windows outside the custom shell.
 - Local user configuration only initially: do not automatically load UI code from project repositories.
 
 ## Initial implementation boundary
 
 The first slice is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain together inside Nimrod's existing per-session mounted view. Independent placement of those three requires a later explicit contract; do not imply it is already available.
+
+Explicit **Reload UI templates** refreshes layout/Project bar authoring without restarting agents; retain the mounted behavior components and reject invalid reloads before changing the current UI.
 
 The Project bar supports live presentation bindings and named action buttons. Core controls own action semantics, accessibility/availability metadata and shortcut hints; templates own content and arrangement. An omitted action is still available through its existing palette/shortcut route.
 

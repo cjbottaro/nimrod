@@ -4,7 +4,7 @@
 
 ## Ownership and scope
 
-A window mounts one declarative outer layout and Project bar before Settings/sidebar/session consumers acquire nodes. Existing sidebar/content nodes move once during startup; streaming and navigation never remount templates. The default HTML/CSS in `src/ui-templates/` uses exactly the same parsing, scoped stylesheet, binding and action paths as user files.
+A window mounts one declarative outer layout and Project bar before Settings/sidebar/session consumers acquire nodes. Existing sidebar/content nodes are retained at startup and explicit template reload; streaming and navigation never remount templates. The default HTML/CSS in `src/ui-templates/` uses exactly the same parsing, scoped stylesheet, binding and action paths as user files.
 
 The first version does **not** make the per-session Transcript, Status area or Composer independently placeable or replaceable. The content slot retains the complete existing conversation engine, empty-project and welcome states. Session lists, sending, configuration, commands, drafts, native ownership, focus and scroll remain with their current owners. Template button content is author-owned; execution, disabled state, shortcut hints and accessible action metadata remain Nimrod-owned.
 
@@ -12,7 +12,13 @@ The first version does **not** make the per-session Transcript, Status area or C
 
 `read_ui_templates` reads four optional fixed UTF-8 files from `ui/` beside global `settings.json`: `layout.html`, `layout.css`, `project-bar.html`, `project-bar.css`. No project discovery, arbitrary read path or scripts. Welcome/project windows only; Global Settings/reference windows never load user templates. Native loading runs on a blocking worker, bounds each file at 256 KiB and rejects non-files and file symlinks escaping the canonical UI directory. Missing files use corresponding defaults. An I/O error falls back to all defaults and reports an application notice.
 
-Frontend validates each surface's HTML and CSS together before moving any owned component. Invalid layout or Project bar input falls back to that surface's bundled pair through the identical pipeline, with an application notice. CSS parser-ignored declarations follow browser behavior; this is not a full CSS lint/parser diagnostic service. Templates are read once per window: edit files and reopen the affected window explicitly. No live remount/reload, automatic session Resume or draft replay. Existing configured users without these files retain the default presentation.
+Frontend validates each surface's HTML and CSS together before moving any owned component. Invalid layout or Project bar input falls back to that surface's bundled pair through the identical pipeline, with an application notice. CSS parser-ignored declarations follow browser behavior; this is not a full CSS lint/parser diagnostic service. Templates are read on startup and by explicit **Reload UI templates** (`reload-ui-templates`, application context/project-scope shortcut handling, no default binding). No watcher, automatic session Resume or draft replay. Existing configured users without these files retain the default presentation.
+
+### Explicit reload
+
+The palette and configurable shortcut share `reloadUiTemplates` in the shell. Concurrent invocations coalesce one native read, late unload results are ignored, and all HTML/CSS is prepared before live mutation. Unlike cold startup, invalid reload input retains the entire current UI and reports one stable application notice. Successful reload resolves template-load/reload notices without a success toast.
+
+The runtime retains the resize-owner container, Project bar host, action button objects/listeners and actual sidebar/content/session nodes. It replaces only author-owned wrappers, button contents and bindings, copies permitted presentation attributes, preserves action availability/accessibility/error metadata and immediately publishes cached live values. Managed sidebar width survives, and resize observation is refreshed against the new geometry. Use state-preserving DOM moves when supported, otherwise restore the currently focused retained element, text selection and scroll offsets explicitly. If a focused author-owned node disappears, focus falls back to the mounted prompt or an available mounted action. No harness or draft lifecycle methods run. Active IME composition and open dialogs reject the commit; the user can explicitly retry. No delayed automatic remount.
 
 ## Layout API (experimental v1)
 
@@ -34,7 +40,7 @@ HTML is an allowlist of structural/text elements, buttons and inline SVG primiti
 
 ## Code and fixtures
 
-- `src/ui-templates.ts`: public values, validator, scoped CSS, action components, retained binding updates and startup mount.
+- `src/ui-templates.ts`: public values, validator, scoped CSS, action components, retained binding updates, startup mount and explicit live reload.
 - `src/ui-templates/{layout,project-bar}.{html,css}`: dogfooded defaults; no privileged render path.
 - `src/main.ts`: native load, notice routing, project/session projections and existing action wiring.
 - `src/session-presenter.ts`: presentation identity callback instead of fixed header DOM ownership.

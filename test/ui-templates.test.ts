@@ -74,6 +74,60 @@ test('a genuinely different custom layout/bar uses the same API and can omit act
   } finally { f.close(); }
 });
 
+test('explicit reload retains mounted content, resize owner, actions, values, draft, selection and scroll', async () => {
+  const f = await fixture();
+  try {
+    const group = f.document.getElementById('workspace-layout')!, settings = f.ui.actions.settings;
+    const prompt = f.document.createElement('textarea'); f.content!.append(prompt);
+    prompt.value = 'Retained draft'; prompt.focus(); prompt.setSelectionRange(2, 7, 'backward');
+    f.sidebar!.scrollTop = 42; group.style.setProperty('--session-sidebar-width', '320px');
+    f.ui.update({ 'project.name': 'Retained project', 'session.title': 'Retained session', 'session.present': true });
+    let clicks = 0; settings.addEventListener('click', () => clicks++);
+    settings.title = 'Current shortcut hint'; settings.classList.add('error');
+    for (let count = 0; count < 3; count++) {
+      f.ui.reload({ layout: rightLayout, layoutCss: '.custom-layout { display:grid; height:100%; }', projectBar: customBar });
+      assert.equal(f.document.getElementById('workspace-layout'), group);
+      assert.equal(f.document.getElementById('workspace-content'), f.content);
+      assert.equal(f.document.getElementById('session-sidebar'), f.sidebar);
+      assert.equal(f.ui.sidebarSide(), 'right');
+      assert.equal(f.ui.actions.settings, settings); assert.equal(settings.isConnected, true);
+      assert.equal(settings.title, 'Current shortcut hint'); assert.equal(settings.classList.contains('error'), true);
+      assert.equal(f.document.querySelector('nav strong')!.textContent, 'Retained project');
+      assert.equal(prompt.value, 'Retained draft'); assert.equal(f.document.activeElement, prompt);
+      assert.deepEqual([prompt.selectionStart, prompt.selectionEnd, prompt.selectionDirection], [2, 7, 'backward']);
+      assert.equal(f.sidebar!.scrollTop, 42); assert.equal(group.style.getPropertyValue('--session-sidebar-width'), '320px');
+      assert.equal(f.document.querySelectorAll('#workspace-layout').length, 1);
+      assert.equal(f.document.querySelectorAll('.custom-layout').length, 1);
+    }
+    settings.click(); assert.equal(clicks, 1);
+    f.ui.reload({});
+    assert.equal(f.ui.sidebarSide(), 'left'); assert.equal(f.ui.actions.settings, settings);
+    assert.equal(f.document.getElementById('project-name')!.textContent, 'Retained project');
+    assert.equal(f.document.getElementById('project-session-name')!.textContent, 'Retained session');
+    assert.equal(f.document.querySelectorAll('.custom-layout').length, 0);
+    assert.equal(f.document.querySelectorAll('style[data-nimrod-ui-templates]').length, 1);
+  } finally { f.close(); }
+});
+
+test('invalid reload, active composition and open dialog leave the current UI untouched', async () => {
+  const f = await fixture();
+  try {
+    const root = f.document.getElementById('workspace-shell')!.firstElementChild;
+    const css = f.document.querySelector('style[data-nimrod-ui-templates]')!.textContent;
+    assert.throws(() => f.ui.reload({ layout: '<div></div>' }), /requires/);
+    assert.throws(() => f.ui.reload({ projectBar: '<script>bad()</script>' }), /Unsupported/);
+    assert.throws(() => f.ui.reload({ layoutCss: '@import "bad.css";' }), /external/);
+    f.document.dispatchEvent(new f.dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+    assert.throws(() => f.ui.reload({}), /composing/);
+    f.document.dispatchEvent(new f.dom.window.CompositionEvent('compositionend', { bubbles: true }));
+    const dialog = f.document.querySelector('dialog')!; dialog.setAttribute('open', '');
+    assert.throws(() => f.ui.reload({}), /dialog/); dialog.removeAttribute('open');
+    assert.equal(f.document.getElementById('workspace-shell')!.firstElementChild, root);
+    assert.equal(f.document.querySelector('style[data-nimrod-ui-templates]')!.textContent, css);
+    f.ui.reload({}); assert.equal(f.document.getElementById('workspace-content'), f.content);
+  } finally { f.close(); }
+});
+
 for (const [label, files] of Object.entries<UiTemplateFiles>({
   missingSlot: { layout: '<div></div>' },
   duplicateSlot: { layout: rightLayout.replace('name="content"', 'name="session-sidebar"') },

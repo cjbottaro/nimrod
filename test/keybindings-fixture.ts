@@ -11,6 +11,7 @@ export const INTENTIONALLY_UNBOUND_ACTIONS = [
   'pin',
   'capture-performance',
   'reload-card-plugins',
+  'reload-ui-templates',
   'select-theme',
   'mcp',
   'mode',

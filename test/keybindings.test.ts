@@ -65,6 +65,9 @@ test('defaults distinguish creation, named creation, open-session switching and 
   assert.deepEqual(bindingsFor('capture-performance', {}), []);
   assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': ['primary+alt+p'] }), ['primary+alt+p']);
   assert.deepEqual(bindingsFor('capture-performance', { 'capture-performance': [] }), []);
+  assert.deepEqual(bindingsFor('reload-ui-templates', {}), []);
+  assert.deepEqual(bindingsFor('reload-ui-templates', { 'reload-ui-templates': ['primary+shift+u'] }), ['primary+shift+u']);
+  assert.deepEqual(bindingsFor('reload-ui-templates', { 'reload-ui-templates': [] }), []);
   assert.deepEqual(bindingsFor('reload-card-plugins', {}), []);
   assert.deepEqual(bindingsFor('reload-card-plugins', { 'reload-card-plugins': ['primary+alt+l'] }), ['primary+alt+l']);
   assert.deepEqual(bindingsFor('reload-card-plugins', { 'reload-card-plugins': [] }), []);

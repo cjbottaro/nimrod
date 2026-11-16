@@ -18,9 +18,11 @@ ui/
 
 Missing files use their bundled defaults. Start from the [bundled templates](../src/ui-templates/) to customize the existing appearance, or use the examples below. These are global user files, never automatically loaded from a project repository.
 
-**Reopen the affected window after editing.** There is no live template reload or in-app editor yet. Closing a project follows normal session shutdown rules; editing templates does not itself restart agents. Invalid supported markup/bindings/rules fall back to the affected default surface and report an application notice. Unreadable files use all defaults. Browser-ignored CSS declarations may simply have no effect.
+After editing, run **Reload UI templates** from the command palette. It rereads all four files for the current welcome/project window without restarting agents or reloading the webview. It has no default shortcut; assign one in [Keybindings](keybindings.md). Other open windows are unchanged. There is no file watcher or in-app editor yet.
 
-To recover from visually broken CSS, rename/remove the custom files and reopen the window. Global Settings and the command palette remain Nimrod-owned, outside template styling. Templates cannot execute JavaScript.
+The reload retains mounted sessions, drafts, selection, reading positions and existing action wiring, while replacing the layout wrappers and Project bar presentation. Live values are immediately applied to the new bindings. Invalid templates or unreadable files leave the current UI intact and report an application notice. Finish any active IME composition or close an open dialog before retrying. Browser-ignored CSS declarations may simply have no effect.
+
+At window startup, invalid supported markup/bindings/rules fall back to the affected default surface; unreadable files use all defaults. To recover from visually broken CSS, rename/remove the custom files and run **Reload UI templates**, or reopen the window. Global Settings and the command palette remain Nimrod-owned, outside template styling. Templates cannot execute JavaScript.
 
 ## Example: Session sidebar on the right
 

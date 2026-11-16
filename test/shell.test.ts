@@ -4292,6 +4292,37 @@ test('custom Project bar is wired through real shell identity, actions and Setti
   } finally { f.win.close(); }
 });
 
+test('Reload UI templates palette and rebound shortcut preserve the active session and button wiring', async () => {
+  const options: ShellOptions = { windowWorkspace: '/project' };
+  const f = await fixture(undefined, options);
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'), content = f.element('workspace-content');
+    prompt.value = 'Do not send'; prompt.focus(); prompt.setSelectionRange(1, 4);
+    const before = f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    options.uiTemplates = { projectBar: '<nav><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>' };
+    f.openPalette();
+    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Reload UI templates'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('workspace-content'), content); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Do not send');
+    assert.equal(f.element('workspace-bar').querySelector('span')!.textContent, 'Temporary session');
+    f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, true);
+    f.preferences.external('{"keybindings":{"reload-ui-templates":["primary+shift+u"]}}'); await f.tick();
+    options.uiTemplates = {};
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('project-name').textContent, 'project');
+    assert.equal(f.element('project-session-name').textContent, 'Temporary session');
+    f.element<HTMLButtonElement>('open-settings').click(); assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    f.back(); await f.tick();
+    options.uiTemplates = { layout: '<div>Invalid</div>' };
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('project-name').textContent, 'project'); assert.equal(f.element('prompt'), prompt);
+    assert.match(f.element('application-notices').textContent!, /current UI was kept/);
+    assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, before);
+    assert.equal(prompt.value, 'Do not send');
+  } finally { f.win.close(); }
+});
+
 test('unreadable UI files report an application notice and retain the default shell', async () => {
   const f = await fixture(undefined, { windowWorkspace: '/project', uiTemplatesError: 'fixture template read failure' });
   try {

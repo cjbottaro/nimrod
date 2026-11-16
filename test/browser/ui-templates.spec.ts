@@ -2,6 +2,33 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { demoFixture, visible } from './demo-fixture';
 
+test('explicit template reload keeps the session view, draft and action wiring in an existing window', async ({ page }) => {
+  const options: { uiTemplates?: import('../../src/ui-templates').UiTemplateFiles } = {};
+  const f = await demoFixture(page, {}, [], undefined, undefined, options);
+  try {
+    await page.locator('#sidebar-new').click();
+    const prompt = page.locator(visible('prompt'));
+    await prompt.fill('Unsent reload draft');
+    await prompt.evaluate(input => { (window as unknown as { retainedPrompt: Element }).retainedPrompt = input; });
+    const harnessCalls = () => f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    const before = harnessCalls();
+    options.uiTemplates = {
+      projectBar: '<nav class="reloaded-bar"><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>',
+      projectBarCss: '.reloaded-bar { display:flex; gap:8px; align-items:center; }',
+    };
+    await page.keyboard.press('ControlOrMeta+Shift+P');
+    await page.locator('#palette-input').fill('Reload UI templates');
+    await page.locator('#palette-input').press('Enter');
+    await expect(page.locator('.reloaded-bar b')).toHaveText(path.basename(process.cwd()));
+    await expect(prompt).toHaveValue('Unsent reload draft');
+    expect(await prompt.evaluate(input => input === (window as unknown as { retainedPrompt: Element }).retainedPrompt)).toBe(true);
+    expect(harnessCalls()).toBe(before);
+    await page.locator('#open-settings').click(); await expect(page.locator('#settings-page')).toBeVisible();
+    await page.locator('#settings-back').click(); await expect(prompt).toHaveValue('Unsent reload draft');
+    expect(f.errors).toEqual([]);
+  } finally { await f.close(); }
+});
+
 test('custom templates put the sidebar on the right, preserve owned drafts and resize in the correct direction', async ({ page }) => {
   const f = await demoFixture(page, {}, [], undefined, undefined, { uiTemplates: {
     layout: '<div class="custom-layout"><nimrod-slot name="project-bar"></nimrod-slot><div data-nimrod-sidebar-layout data-nimrod-sidebar-side="right"><nimrod-slot name="content"></nimrod-slot><nimrod-slot name="sidebar-resizer"></nimrod-slot><nimrod-slot name="session-sidebar"></nimrod-slot></div></div>',

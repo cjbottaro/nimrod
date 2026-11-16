@@ -127,6 +127,23 @@ const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let unloading = false;
+let templateReload: Promise<void> | undefined;
+function reloadUiTemplates(): Promise<void> {
+  if (!ready || unloading) return Promise.resolve();
+  if (templateReload) return templateReload;
+  templateReload = (async () => {
+    try {
+      const files = await invoke<UiTemplateFiles>('read_ui_templates');
+      if (unloading) return;
+      uiTemplates.reload(files ?? {});
+      sidebarResize.reload(); refreshShortcutHints(); controls();
+      notices.resolve('ui-template-files'); notices.resolve('ui-templates'); notices.resolve('ui-template-reload');
+    } catch (error) {
+      if (!unloading) notices.report({ id: 'ui-template-reload', operation: 'Reload UI templates', message: `${String(error)}. The current UI was kept.` });
+    }
+  })().finally(() => { templateReload = undefined; });
+  return templateReload;
+}
 let workspace: string | undefined;
 let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
@@ -687,6 +704,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...applicationCommands(window, runApplication),
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
     { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save recent timing data and copy its path; enable in global Settings → Diagnostics first.', run: () => capturePerformance(true) },
+    { id: 'reload-ui-templates', label: 'Reload UI templates', detail: 'Reread layout and Project bar files without restarting agents', run: reloadUiTemplates },
     { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
@@ -1373,6 +1391,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       if (tabDeletion(presentation.current)?.available()) contributed.add('delete');
     }
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
+    if (id === 'reload-ui-templates') return ready;
     if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
     const creation = creationActions().find(action => action.id === id);
@@ -1402,6 +1421,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'pin': return presentation.current ? runSessionRowAction(presentation.current, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
+      case 'reload-ui-templates': return reloadUiTemplates();
       case 'reload-card-plugins': return reloadCardPlugins(true);
       case 'select-theme': return pickTheme();
       case 'palette': palette.open(); return;

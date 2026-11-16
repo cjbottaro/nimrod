@@ -132,10 +132,10 @@ function prepareLayout(document: Document, html: string) {
   return { fragment, slots, group };
 }
 
-/** Mount once before session/Settings listeners acquire nodes. No runtime remount or observer. */
+/** Mounted session/behavior nodes stay owned and stable across explicit template reloads. */
 export function installUiTemplates(document: Document, files: UiTemplateFiles = {}, report: (message: string) => void = () => {}) {
   const choose = <T>(name: string, custom: () => T, fallback: () => T): T => {
-    try { return custom(); } catch (error) { report(`${name}: ${String(error)}. Using the bundled default. Fix the files and reopen the window.`); return fallback(); }
+    try { return custom(); } catch (error) { report(`${name}: ${String(error)}. Using the bundled default. Fix the files and run Reload UI templates.`); return fallback(); }
   };
   const layout = choose('Layout template', () => ({ ...prepareLayout(document, files.layout ?? defaultLayout), css: scopedCss(document, files.layoutCss ?? defaultLayoutCss, '#workspace-shell') }),
     () => ({ ...prepareLayout(document, defaultLayout), css: scopedCss(document, defaultLayoutCss, '#workspace-shell') }));
@@ -162,6 +162,71 @@ export function installUiTemplates(document: Document, files: UiTemplateFiles = 
     }
   };
   update({});
+  let composing = false, disposed = false;
+  const compositionStart = () => { composing = true; }, compositionEnd = () => { composing = false; };
+  document.addEventListener('compositionstart', compositionStart, true);
+  document.addEventListener('compositionend', compositionEnd, true);
   return { actions: bar.actions, update, sidebarSide: () => layout.group.dataset.nimrodSidebarSide === 'right' ? 'right' as const : 'left' as const,
-    dispose() { style.remove(); } };
+    reload(next: UiTemplateFiles): void {
+      if (disposed) return;
+      if (composing) throw new Error('Finish composing text, then reload UI templates again.');
+      if (document.querySelector('dialog[open], #dialog.open')) throw new Error('Close the open dialog, then reload UI templates again.');
+      // Unlike cold start, a failed reload retains the complete last usable UI.
+      const nextLayout = prepareLayout(document, next.layout ?? defaultLayout);
+      const nextBar = prepareProjectBar(document, next.projectBar ?? defaultProjectBar);
+      const css = `${scopedCss(document, next.layoutCss ?? defaultLayoutCss, '#workspace-shell')}\n${scopedCss(document, next.projectBarCss ?? defaultProjectBarCss, '#workspace-bar')}`;
+      const focused = document.activeElement as HTMLElement | null;
+      const input = focused && (focused.tagName === 'TEXTAREA' || focused.tagName === 'INPUT') ? focused as HTMLInputElement | HTMLTextAreaElement : undefined;
+      const selection = input ? { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection } : undefined;
+      const scroll = [...host.querySelectorAll<HTMLElement>('*')].filter(node => node.scrollTop || node.scrollLeft || node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth).map(node => ({ node, top: node.scrollTop, left: node.scrollLeft }));
+      // moveBefore preserves connected DOM state on supporting webviews. Older
+      // webviews use the same nodes with explicit focus/selection/scroll recovery.
+      const move = (parent: Element, node: Node, before: Node | null = null) => {
+        const movable = parent as Element & { moveBefore?: (node: Node, before: Node | null) => void };
+        if (movable.moveBefore && parent.isConnected && node.isConnected) movable.moveBefore(node, before);
+        else parent.insertBefore(node, before);
+      };
+      const copyAttributes = (target: Element, source: Element, preserve: (name: string) => boolean) => {
+        for (const attribute of [...target.attributes]) if (!preserve(attribute.name)) target.removeAttribute(attribute.name);
+        for (const attribute of source.attributes) if (!preserve(attribute.name)) target.setAttribute(attribute.name, attribute.value);
+      };
+      for (const name of Object.keys(bar.actions) as ProjectBarAction[]) {
+        const current = bar.actions[name], replacement = nextBar.actions[name];
+        const error = current.classList.contains('error');
+        copyAttributes(current, replacement, name => ['id', 'type', 'title', 'disabled', 'hidden'].includes(name) || name.startsWith('aria-'));
+        if (error) current.classList.add('error');
+        current.replaceChildren(...replacement.childNodes);
+        for (const binding of nextBar.bindings) if (binding.element === replacement) binding.element = current;
+        if (replacement.parentNode) replacement.replaceWith(current);
+        else current.remove();
+      }
+      projectBar.replaceChildren(nextBar.fragment);
+      bar.bindings = nextBar.bindings;
+      // Attach new wrappers before relocating owned nodes. Keep the actual resize
+      // container: the existing observer, width and handlers refer to that node.
+      host.append(nextLayout.fragment);
+      const desiredChildren = [...nextLayout.group.childNodes].map(node => {
+        const entry = [...nextLayout.slots].find(([, slot]) => slot === node);
+        return entry ? ({ 'session-sidebar': sidebar, 'sidebar-resizer': resizer, content } as Record<string, HTMLElement>)[entry[0]] : node;
+      });
+      copyAttributes(layout.group, nextLayout.group, name => name === 'id' || name === 'style');
+      move(nextLayout.group.parentElement!, layout.group, nextLayout.group);
+      nextLayout.group.remove();
+      for (const child of desiredChildren) move(layout.group, child);
+      for (const child of [...layout.group.childNodes]) if (!desiredChildren.includes(child as ChildNode)) child.remove();
+      const projectSlot = nextLayout.slots.get('project-bar')!;
+      move(projectSlot.parentElement!, projectBar, projectSlot); projectSlot.remove();
+      // Only new outer wrappers remain; owned content was moved, never rebuilt.
+      for (const child of [...host.childNodes]) if (!child.contains(layout.group) && !child.contains(projectBar) && child !== layout.group && child !== projectBar) child.remove();
+      style.textContent = css;
+      update({});
+      if (focused && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+      else if (focused && !focused.isConnected) {
+        const fallback = host.querySelector<HTMLElement>('.session-view:not([hidden]) [data-pi-id="prompt"]') ?? Object.values(bar.actions).find(button => button.isConnected && !button.hidden && !button.disabled);
+        fallback?.focus({ preventScroll: true });
+      }
+      if (input?.isConnected && selection?.start !== null && selection?.start !== undefined) input.setSelectionRange(selection.start, selection.end, selection.direction ?? undefined);
+      for (const { node, top, left } of scroll) { node.scrollTop = top; node.scrollLeft = left; }
+    },
+    dispose() { disposed = true; style.remove(); document.removeEventListener('compositionstart', compositionStart, true); document.removeEventListener('compositionend', compositionEnd, true); } };
 }
