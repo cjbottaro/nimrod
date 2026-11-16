@@ -2,18 +2,26 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-function run(args) {
-  const result = spawnSync('npm', args, { stdio: 'inherit' });
+function run(command, args) {
+  const result = spawnSync(command, args, { stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// Distrobox sets CONTAINER_ID to its name on entry; do not delegate recursively.
+const buildDistrobox = process.env.NIMROD_BUILD_DISTROBOX?.trim();
+if (process.platform === 'linux' && buildDistrobox && process.env.CONTAINER_ID !== buildDistrobox) {
+  console.log(`Building inside Distrobox ${buildDistrobox}`);
+  run('distrobox', ['enter', '--name', buildDistrobox, '--', 'mise', 'run', 'build']);
+  process.exit(0);
+}
+
 if (process.platform === 'darwin') {
-  run(['run', 'tauri', 'build', '--', '--bundles', 'app']);
-  run(['run', 'verify:bundle']);
+  run('npm', ['run', 'tauri', 'build', '--', '--bundles', 'app']);
+  run('npm', ['run', 'verify:bundle']);
 } else if (process.platform === 'linux') {
   // The local launcher uses an executable and adjacent resources, not an installer.
-  run(['run', 'tauri', 'build', '--', '--no-bundle']);
+  run('npm', ['run', 'tauri', 'build', '--', '--no-bundle']);
   const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
   const output = path.resolve(process.env.CARGO_TARGET_DIR || 'src-tauri/target', 'release');
   for (const [source, destination] of Object.entries(config.bundle.resources)) {

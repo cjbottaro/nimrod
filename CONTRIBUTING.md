@@ -93,15 +93,27 @@ The standalone [macOS blur probe](tools/blur-probe/README.md) isolates AppKit ve
 
 ## App builds
 
-On an Atomic Linux host such as Bazzite, build inside your development distrobox rather than installing development libraries on the host. For the current `devbox` container:
+Linux builds run natively by default. On an Atomic Linux host such as Bazzite,
+you can opt into building inside a development Distrobox instead of installing
+development libraries on the host. Set your container name in `mise.local.toml`
+(already gitignored):
 
-```sh
-distrobox enter devbox
-cd ~/Projects/nimrod
-mise trust
-mise run setup
-mise run build
+```toml
+[env]
+NIMROD_BUILD_DISTROBOX = "devbox"
 ```
+
+Then `mise run build` on Linux delegates to
+`distrobox enter --name <your-container> -- mise run build`, retaining the current
+checkout/worktree directory. If already inside that container, it builds directly.
+Unset or empty means native builds; macOS ignores this option. You can also set
+the variable in your shell or direnv instead of using a local mise file. Nested
+worktrees under this checkout's `.worktrees/` inherit the local mise configuration;
+worktrees outside that hierarchy need their own configuration or shell variable.
+
+Create/provision your chosen container separately, then enter it and run
+`mise trust` and `mise run setup` from the primary checkout. Delegation does not
+create a container, install dependencies, or change setup/dev/check/test behavior.
 
 A fresh Fedora container needs `gcc gcc-c++ make pkgconf-pkg-config webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel fontconfig-devel freetype-devel` installed with `sudo dnf install`. Install dependencies and run npm/Cargo in the same container. The executable depends on that environment’s native libraries; building it there does not establish that it can run directly on the host.
 

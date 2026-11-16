@@ -28,6 +28,16 @@ Explicitly requested builds use checkout-local targets and publish verified whol
   developer instructions.
 
 - `scripts/build-app.mjs`: selects macOS app packaging/signature verification or a Linux native `--no-bundle` build, then stages the configured resource mappings and native esbuild helper beside the Linux executable. Linux local builds produce no installer.
+  On Linux only, a nonempty, trimmed `NIMROD_BUILD_DISTROBOX` opts into delegation
+  through `distrobox enter --name <name> -- mise run build` unless `CONTAINER_ID`
+  already equals that name. Distrobox preserves the invoking directory and sets
+  `CONTAINER_ID`, preventing recursion while retaining checkout-local outputs.
+  Commands use argument arrays without shell interpolation; delegated failures
+  stop the script without falling back to a host build. Unset/empty retains native
+  behavior; macOS ignores the setting. Personal `mise.local.toml` files remain
+  gitignored; setup/dev/check/test do not delegate. Developer configuration lives
+  in [App builds](../../../../CONTRIBUTING.md#app-builds), and offline command-stub
+  fixtures live in `test/build-app.test.ts`.
 - `mise.toml`: pins `aqua:mozilla/sccache` at 0.18.0 alongside Rust/Node;
   project-scoped `RUSTC_WRAPPER=sccache`, `CARGO_INCREMENTAL=0` apply to dev,
   check, test, build and `mise exec` Cargo commands.
