@@ -13,15 +13,19 @@ Copilot SDK. Generic ACP is a separate capability-driven fallback, not the
 mandatory internal protocol. Built-in creation uses the shared [session-creation actions](session-creation.md), selecting Copilot explicitly or through the global/project default. No universal controller,
 duplicated transcript/composer/navigation engine, or SDK-to-ACP/Pi event adapter.
 
-The exact npm dependency is `@github/copilot-sdk@1.0.28`. Its released
-`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.105**.
+The exact npm dependency is `@github/copilot-sdk@1.0.34`. Its released
+`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.112**.
 The earlier installed-CLI observations below used SDK 1.0.22 / CLI 1.0.98;
 they do not establish native acceptance of the upgraded pair. Its engine range is
 `^20.19.0 || >=22.12.0` (Node 21 is unsupported); mise pins Node 25.9.0.
-The released SDK speaks protocol 3, minimum 3; this is **not ACP protocol 1**.
+The released SDK still speaks protocol 3, minimum 3; this is **not ACP protocol 1**.
+Updating from 1.0.28 does not enable protocol 4. A CLI reporting protocol 4 is
+rejected by the upstream handshake; use a protocol-3 CLI (the declared pair is
+1.0.112) until an SDK release explicitly supports protocol 4. Never bypass that
+handshake or patch the SDK's protocol constant.
 
-Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.28),
-[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.28.tgz).
+Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.34),
+[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.34.tgz).
 Inspect that release's `dist/types.d.ts`, `client.js`, `session.js`,
 `generated/rpc.d.ts` and `generated/session-events.d.ts` when changing this
 boundary; repository main documentation can describe unreleased interfaces.
@@ -74,10 +78,12 @@ installed-runtime/native acceptance remains pending.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
   `src-tauri/resources/copilot/`. It excludes every optional SDK CLI runtime
-  package. User installation/authentication of CLI 1.0.105 and a supported Node
+  package. User installation/authentication of CLI 1.0.112 and a supported Node
   remain prerequisites. SDK upgrades require deliberate source/API review.
 - SDK imports `koffi` eagerly even for stdio; ship it and its matching
-  `@koromix/koffi-<platform>-<arch>` native dependency, plus zod/vscode-jsonrpc.
+  `@koromix/koffi-<platform>-<arch>` native dependency, plus
+  zod/vscode-jsonrpc/lossless-json. SDK 1.0.34 adds lossless-json for its JSON
+  codecs; staging must include it even though Nimrod uses ordinary history reads.
   Native files are signed during requested macOS staging.
   Staging requires a native same-platform/architecture build and rejects an
   incompatible target rather than shipping the host native package. The bundle verifier

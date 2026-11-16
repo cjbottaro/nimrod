@@ -25,8 +25,8 @@ Installed-font discovery uses `font-kit` (Core Text on macOS; Fontconfig/FreeTyp
 
 ### Copilot SDK runtime
 
-Built-in Copilot pins `@github/copilot-sdk@1.0.28`, whose released metadata names
-CLI 1.0.105. Install/authenticate that CLI separately and set
+Built-in Copilot pins `@github/copilot-sdk@1.0.34`, whose released metadata names
+CLI 1.0.112. Install/authenticate that CLI separately and set
 `runtime.copilotPath` if discovery fails. Node must satisfy
 `^20.19.0 || >=22.12.0`; mise's 25.9.0 does. Users never install the SDK.
 The bridge explicitly passes the resolved CLI path to

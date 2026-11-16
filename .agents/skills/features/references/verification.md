@@ -351,7 +351,7 @@ See the [skill disclosure contract](transcript-cards.md#skill-disclosures).
 
 **Configurable modal motion:** Subtle remains duration-based; CRT/Hologram now use an independent CSS-pixel scan-speed preference with geometry-derived timing. A ResizeObserver retargets from current pixel edges on filter/size changes; revisions prevent retired segments canceling successors. Existing native default/controlled close, inert snapshots, early-microtask capture, focus, None/reduced motion and lifetime handling remain. Pure geometry, controller/config/native and offline browser fixtures for size-dependent time, constant velocity, grow/shrink continuity, asymmetric CRT edges, contextual slider units and live filtering are authored **unrun**. The user previously confirmed actual-app Subtle dismissal and slider fill; this does not validate the new speed/retarget implementation. Native macOS/Linux pixel speed, live-resize smoothness, CSS/native zoom, keyboard/focus and accessibility acceptance remain pending. No build/app launch was performed. See [Modal motion](modal-layout.md#modal-motion).
 
-**Built-in Copilot SDK lacks broad installed-CLI/native acceptance.** SDK 1.0.28 package/source declares CLI 1.0.105 and protocol 3 compatibility; that is source evidence only. Earlier installed-runtime observations below used SDK 1.0.22 / CLI 1.0.98 and have not been repeated for the upgraded pair. SDK browser scenarios and real CLI/history/decisions/tools, owned process-group shutdown, signed packaging and macOS/Linux acceptance remain gaps. Windows SDK launch is unavailable. Earlier ACP/Pi results do not establish SDK acceptance; logging evidence is scoped in [Transcript logging](#transcript-logging).
+**Built-in Copilot SDK lacks broad installed-CLI/native acceptance.** SDK 1.0.34 package/source declares CLI 1.0.112 and protocol 3 compatibility; that is source evidence only. Earlier installed-runtime observations below used SDK 1.0.22 / CLI 1.0.98 and have not been repeated for the upgraded pair. SDK browser scenarios and real CLI/history/decisions/tools, owned process-group shutdown, signed packaging and macOS/Linux acceptance remain gaps. Windows SDK launch is unavailable. Earlier ACP/Pi results do not establish SDK acceptance; logging evidence is scoped in [Transcript logging](#transcript-logging).
 
 [Copilot command discovery/invocation](copilot-commands.md) additionally has
 unrun metadata/argument, production-bridge, modal/cancellation and shell-output
@@ -407,15 +407,26 @@ and confirmed writes. Offline command/bridge/inline-completion fixtures are
 authored unrun; native picker, persistence and restart/default acceptance remain
 pending.
 
-The `/config` failure follow-up inspected released SDK 1.0.28 source: public
+The earlier `/config` failure follow-up inspected released SDK 1.0.28 source: public
 `client.rpc.user.settings` exposes `get/set`, while `validate` is internal.
 The adapter now uses only public writes with authoritative readback. Unit and
 production-bridge fixtures no longer invent a public validator; new coverage
 includes model/provider writes, write rejection, mismatched readback and failed
-confirmation without retry. These fixtures are authored **unrun**. The SDK pin,
-lockfile and staging guard now target 1.0.28 / CLI 1.0.105. Installed-runtime
+confirmation without retry. These fixtures are authored **unrun**. That follow-up
+pinned 1.0.28 / CLI 1.0.105, superseded by the SDK update below. Installed-runtime
 command re-audit, native acceptance and packaging remain pending; no app build,
 launch, real settings write or provider request was performed.
+
+The protocol-mismatch follow-up updates the exact dependency, lockfile and
+staging guard to SDK 1.0.34 / declared CLI 1.0.112, including the new lossless-json
+runtime dependency. Released source review confirms the SDK's minimum/maximum
+protocol are still 3/3; it does **not** solve the user's protocol-4 Resume failure.
+The locally installed `copilot --version` reports 1.0.113-0; no session connection
+was attempted. Explicit executable stdio, callback registration, ordinary history
+reads and Resume's recovery/continuation flags retain their supported APIs.
+Protocol-4 acceptance requires upstream SDK support or a protocol-3 CLI. No tests,
+app build/launch, live session access or model requests were performed for this
+update; packaging and installed-runtime acceptance remain pending.
 
 - TypeScript/jsdom shell tests use mocked native IPC.
 - Rust fixture tests use actual pipes, owned subprocesses and generated disposable session files; deletion tests unlink only those fixtures.

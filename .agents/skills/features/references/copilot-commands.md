@@ -3,7 +3,7 @@
 **Status: source implemented; authored offline fixtures unrun.** No app launches
 or model requests were performed for the argument-picker follow-up. A sanitized
 user-observed installed-CLI trace supplies the bare `/model` result evidence
-described below; the released `@github/copilot-sdk@1.0.28`
+described below; the released `@github/copilot-sdk@1.0.34`
 declarations/implementation remain the API evidence, not repository-main
 documentation or native acceptance.
 
@@ -62,7 +62,7 @@ Auto tier and default permission mode use typed harness pickers; remaining
 values are free-form and conservatively decoded. Writes use public
 `user.settings.set`, surface runtime rejection without retry, and require
 an authoritative `user.settings.get` readback before reporting success.
-SDK 1.0.28 exposes only `get/set` on public `client.rpc.user.settings`;
+SDK 1.0.34 exposes only `get/set` on public `client.rpc.user.settings`;
 `validate` belongs to the internal RPC surface and must not be called here.
 Known typed values also advertise second-stage literal completions through
 `input.valueChoices`; free-form settings retain only `[value]`.
