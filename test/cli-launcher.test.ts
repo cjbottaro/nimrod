@@ -62,6 +62,23 @@ test('Bash launcher resolves current directory and passes exact launch arguments
   } finally { f.close(); }
 });
 
+test('CLI actions execute the control client synchronously on macOS and Linux, preserving arguments', { skip: !posix }, () => {
+  const f = fixture();
+  try {
+    const args = ['--json', '--action', 'reload-customizations', '--project', f.workspace];
+    const mac = f.run(args);
+    assert.equal(mac.status, 0, mac.stderr);
+    assert.deepEqual(mac.stdout.split('\u0000').filter(Boolean), [join(f.app, 'Contents/MacOS/nimrod'), ...args]);
+    assert.doesNotMatch(mac.stdout, /\/usr\/bin\/open|nohup/);
+    const linuxApp = join(f.root, 'linux nimrod'); writeFileSync(linuxApp, 'intercepted fixture executable', { mode: 0o755 });
+    const linux = f.run(args, f.launcher, { FIXTURE_OS: 'Linux', NIMROD_APP: linuxApp });
+    assert.equal(linux.status, 0, linux.stderr);
+    assert.deepEqual(linux.stdout.split('\u0000').filter(Boolean), [linuxApp, ...args]);
+    const defaultProject = f.run(['--action', 'reload-customizations']);
+    assert.deepEqual(defaultProject.stdout.split('\u0000').filter(Boolean), [join(f.app, 'Contents/MacOS/nimrod'), '--action', 'reload-customizations']);
+  } finally { f.close(); }
+});
+
 test('Bash launcher canonicalizes aliases and supports directories beginning with a dash', { skip: !posix }, () => {
   const f = fixture();
   try {

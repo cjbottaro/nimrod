@@ -18,7 +18,7 @@ ui/
 
 Missing files use their bundled defaults. Start from the [bundled templates](../src/ui-templates/) to customize the existing appearance, or use the examples below. These are global user files, never automatically loaded from a project repository.
 
-After editing, run **Reload customizations** from the command palette. It rereads all four files for the current welcome/project window and refreshes card plugins without restarting agents or reloading the webview. It has no default shortcut; assign one in [Keybindings](keybindings.md). Other open windows are unchanged. There is no file watcher or in-app editor yet.
+After editing, run **Reload customizations** from the command palette. It rereads all four files for the current welcome/project window and refreshes card plugins without restarting agents or reloading the webview. It has no default shortcut; assign one in [Keybindings](keybindings.md). Other open windows are unchanged. You can also invoke it with `nimrod --action reload-customizations --project /path/to/project --json`; see [CLI actions](cli-actions.md) for targeting and completion results. There is no file watcher or in-app editor yet.
 
 The reload retains mounted sessions, drafts, selection, reading positions and existing action wiring, while replacing the layout wrappers and Project bar presentation. Live values are immediately applied to the new bindings. Invalid templates or unreadable files leave the current UI intact and report an application notice. Finish any active IME composition or close an open dialog before retrying. Browser-ignored CSS declarations may simply have no effect.
 

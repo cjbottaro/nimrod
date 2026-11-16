@@ -33,6 +33,8 @@
 
 ## Workspace customization
 
+- [CLI actions](cli-actions.md) — reload customizations in an already-open project and receive completion/errors without opening or focusing windows.
+
 - [UI templates](ui-templates.md) — experimental HTML/CSS layouts, Project bar bindings and named action buttons; the bundled default uses the same API.
 
 ## Card customization

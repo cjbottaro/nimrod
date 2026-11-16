@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- `nimrod --action reload-customizations [--project DIRECTORY] [--json]` reloads templates and card plugins in an already-open project window and waits for actual per-subsystem completion/errors. It never opens/focuses windows or restarts agents; missing targets fail, partial failures are explicit, and uncertain delivery never retries. Implemented for macOS/Linux; native installed-runtime acceptance remains pending.
+
 - Experimental local HTML/CSS workspace layouts and Project bar templates, loaded from `ui/` beside global settings. Reposition the Session sidebar (including right-side resizing), bind live project/session values and arrange existing action buttons without replacing Nimrod's conversation engine. Bundled defaults use the same template API; invalid templates fall back with an application notice. **Reload customizations** in the command palette (bindable, no default shortcut) reloads both templates and card plugins for the current window without restarting agents, preserving mounted sessions, drafts, live bindings, controls and inspected cards. Invalid template reloads retain the current UI without skipping the card refresh. It replaces the separate reload actions; native acceptance remains pending.
 
 - Linux developers can set `NIMROD_BUILD_DISTROBOX` in a gitignored `mise.local.toml` to have `mise run build` automatically use their chosen Distrobox. Builds already inside that container run directly; native Linux and macOS defaults are unchanged.

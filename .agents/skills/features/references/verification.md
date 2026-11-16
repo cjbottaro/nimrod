@@ -2,6 +2,12 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## CLI customization reload
+
+Source implementation adds an allowlisted pre-runtime CLI client, separate per-user request/reply socket, existing-project/readiness routing, window-bound results and cleanup, and actual template/card outcomes from the shared reload. Authored, unrun fixtures cover exact argument forwarding on macOS/Linux, parser rejection/canonicalization, private endpoint ownership, bounded/lost replies, exact/ambiguous targets, wrong-window and expired completion, partial diagnostics, loader result identity and real-shell coalesced receipts without harness traffic.
+
+No tests, live endpoint probes, app builds or app launches were performed. macOS/Linux CLI-to-window and installed-artifact acceptance remain pending; Windows transport is unsupported. Mandatory post-merge compilation is recorded after execution. See [contract](cli-actions.md) and [user guide](../../../../docs/cli-actions.md).
+
 ## UI templates
 
 Initial declarative layout and Project bar source implementation uses the same public HTML/CSS pipeline for bundled defaults and user files. Authored, unrun fixtures cover default/custom rendering, retained nodes/focus, literal values, omitted actions, invalid input and I/O-error recovery, real shell identity/Settings consumers, side-aware resize direction and an offline browser right-sidebar/draft scenario. Native file fixtures cover optional files, size limits and escaping symlinks. Follow-up reload fixtures cover retained layout/content/action identity, repeated reloads, selection/focus/scroll, cached bindings, invalid-input rollback and IME/dialog guards; shell coverage exercises palette/rebound-shortcut routes without harness traffic. These additions remain unrun. Consolidated Reload customizations fixtures cover registry/default/override/unbinding and shell/browser updates; shell assertions verify both subsystems refresh and invalid UI input does not suppress the card rescan. These follow-up fixtures are also unrun.

@@ -1,4 +1,4 @@
-//! Terminal requests open/focus workspaces only. They never launch or resume Pi.
+//! Terminal routing and a separate, narrow action-client argument path. Never starts sessions.
 use std::{
     collections::VecDeque,
     ffi::OsString,
@@ -8,18 +8,26 @@ use std::{
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
-pub const HELP: &str = "Usage: nimrod [DIRECTORY]\n       nimrod -- DIRECTORY\n\nOpen or focus a project. No session is started.\nThe terminal launcher defaults DIRECTORY to the current directory.\n";
+pub const HELP: &str = "Usage: nimrod [DIRECTORY]\n       nimrod -- DIRECTORY\n       nimrod --action reload-customizations [--project DIRECTORY] [--json]\n\nOpen or focus a project. No session is started.\nThe terminal launcher defaults DIRECTORY to the current directory.\nActions target an already-open project (default: current directory), wait for completion,\nand never launch the app, open/focus a window or resume a session.\n";
 
 #[derive(Debug, PartialEq)]
 pub enum Request {
     Focus,
     Workspace(PathBuf),
+    Action(crate::cli_actions::ActionRequest, bool),
     Help,
     Error(String),
 }
 
 pub fn parse(args: impl IntoIterator<Item = OsString>, cwd: &Path) -> Result<Request, String> {
     let args: Vec<_> = args.into_iter().collect();
+    if args.first().is_none_or(|arg| arg != "--")
+        && args
+            .iter()
+            .any(|arg| arg == "--action" || arg == "--project" || arg == "--json")
+    {
+        return parse_action(&args, cwd);
+    }
     let path = match args.as_slice() {
         [] => return Ok(Request::Focus),
         [arg] if arg == "--help" || arg == "-h" => return Ok(Request::Help),
@@ -41,6 +49,57 @@ pub fn parse(args: impl IntoIterator<Item = OsString>, cwd: &Path) -> Result<Req
         return Err(format!("Project is not a directory: {}", path.display()));
     }
     Ok(Request::Workspace(path))
+}
+
+fn parse_action(args: &[OsString], cwd: &Path) -> Result<Request, String> {
+    let mut action = None;
+    let mut project = None;
+    let mut json = false;
+    let mut args = args.iter();
+    while let Some(flag) = args.next() {
+        match flag.to_str() {
+            Some("--action") if action.is_none() => {
+                let value = args.next().ok_or("--action requires a name")?;
+                if value != "reload-customizations" {
+                    return Err(
+                        "Unsupported action; only reload-customizations is available".into(),
+                    );
+                }
+                action = Some(crate::cli_actions::Action::ReloadCustomizations);
+            }
+            Some("--project") if project.is_none() => {
+                project = Some(PathBuf::from(
+                    args.next().ok_or("--project requires a directory")?,
+                ))
+            }
+            Some("--json") if !json => json = true,
+            _ => return Err("Invalid or repeated action argument. Use nimrod --help.".into()),
+        }
+    }
+    let action = action.ok_or("--project and --json require --action")?;
+    let project = project.unwrap_or_else(|| cwd.to_path_buf());
+    if project.as_os_str().is_empty() {
+        return Err("--project requires a nonempty directory".into());
+    }
+    let project = if project.is_absolute() {
+        project
+    } else {
+        cwd.join(project)
+    };
+    let project = project
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve project {}: {error}", project.display()))?;
+    if !project.is_dir() {
+        return Err("Project is not a directory".into());
+    }
+    Ok(Request::Action(
+        crate::cli_actions::ActionRequest {
+            version: 1,
+            action,
+            project,
+        },
+        json,
+    ))
 }
 
 #[derive(Default)]
@@ -70,6 +129,10 @@ impl Queue {
 pub struct CliRequests(Mutex<Queue>);
 impl CliRequests {
     pub fn enqueue(&self, app: &tauri::AppHandle, request: Request) {
+        if matches!(request, Request::Action(..)) {
+            eprintln!("CLI actions require the request/reply endpoint, not launch forwarding");
+            return;
+        }
         let start = {
             let mut queue = self.0.lock().unwrap();
             queue.requests.push_back(request);
@@ -105,6 +168,9 @@ impl CliRequests {
                     }
                     Request::Focus => crate::window_presentation::focus_existing(&app),
                     Request::Help => Ok(()),
+                    Request::Action(..) => {
+                        unreachable!("Action requests never enter the launch queue")
+                    }
                     Request::Error(error) => Err(error),
                 };
                 if let Err(error) = result {
@@ -172,6 +238,67 @@ mod tests {
         ] {
             assert!(request(args, &cwd).is_err());
         }
+    }
+    #[test]
+    fn action_arguments_are_explicit_bounded_and_do_not_become_launch_requests() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = temp.path().canonicalize().unwrap();
+        std::fs::create_dir(cwd.join("project with spaces")).unwrap();
+        assert_eq!(
+            request(&["--action", "reload-customizations"], &cwd).unwrap(),
+            Request::Action(
+                crate::cli_actions::ActionRequest {
+                    version: 1,
+                    action: crate::cli_actions::Action::ReloadCustomizations,
+                    project: cwd.clone()
+                },
+                false
+            )
+        );
+        assert_eq!(
+            request(
+                &[
+                    "--json",
+                    "--project",
+                    "project with spaces",
+                    "--action",
+                    "reload-customizations"
+                ],
+                &cwd
+            )
+            .unwrap(),
+            Request::Action(
+                crate::cli_actions::ActionRequest {
+                    version: 1,
+                    action: crate::cli_actions::Action::ReloadCustomizations,
+                    project: cwd.join("project with spaces")
+                },
+                true
+            )
+        );
+        for args in [
+            vec!["--action"],
+            vec!["--action", "delete"],
+            vec!["--json"],
+            vec!["--project", "."],
+            vec!["--action", "reload-customizations", "--project", ""],
+            vec!["--action", "reload-customizations", "--json", "--json"],
+            vec![
+                "--action",
+                "reload-customizations",
+                "--action",
+                "reload-customizations",
+            ],
+            vec!["--action", "reload-customizations", "--project", "missing"],
+            vec!["--action", "reload-customizations", "."],
+        ] {
+            assert!(request(&args, &cwd).is_err(), "{args:?}");
+        }
+        std::fs::create_dir(cwd.join("--action")).unwrap();
+        assert_eq!(
+            request(&["--", "--action"], &cwd).unwrap(),
+            Request::Workspace(cwd.join("--action"))
+        );
     }
     #[cfg(unix)]
     #[test]

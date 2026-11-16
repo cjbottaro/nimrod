@@ -167,6 +167,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   let projectPicker: ((target?: string) => void) | undefined;
+  let cliAction: ((requestId: string, target?: string) => void) | undefined;
   let linkError: ((message: string, target?: string) => void) | undefined;
   let nativeBlurFailure: ((payload: { request: string; message: string }, target?: string) => void) | undefined;
   let projectPickerPending = options.projectPickerPending || false;
@@ -175,7 +176,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
-      if (command === 'application_action') return;
+      if (command === 'application_action' || command === 'cli_action_window_ready' || command === 'complete_cli_action') return;
       if (command === 'popup_session_menu') {
         await options.menuGate;
         if (options.menuError) throw new Error(options.menuError);
@@ -202,6 +203,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
             if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
           };
         }
+        if (args.event === 'nimrod-cli-action') cliAction = (requestId, target) => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          if (!target || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload: { requestId } });
+        };
         if (args.event === 'nimrod-session-menu') sessionMenuEvent = (request, action) => callbacks.get(Number(args.handler))?.({ payload: { request, action } });
         if (args.event === 'nimrod-open-project') projectPicker = target => {
           const listenerTarget = args.target as { kind: string; label?: string };
@@ -474,6 +479,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     sessions, acpSessions, sdkSessions, codexSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
+    cliAction: (requestId: string, target?: string) => cliAction?.(requestId, target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
     nativeBlurFailure: (payload: { request: string; message: string }, target?: string) => nativeBlurFailure?.(payload, target),
     notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
@@ -4322,6 +4328,35 @@ test('Reload customizations refreshes both subsystems and preserves session/butt
     assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, cardsBefore + 3, 'a template error does not skip card plugin refresh');
     assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, before);
     assert.equal(prompt.value, 'Do not send');
+  } finally { f.win.close(); }
+});
+
+test('window-scoped CLI reload returns actual coalesced results and partial errors without harness traffic', async () => {
+  const options: ShellOptions = { windowWorkspace: '/project', windowLabel: 'project-fixture' };
+  const f = await fixture(undefined, options);
+  try {
+    assert.ok(f.calls.some(call => call.command === 'cli_action_window_ready'));
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent CLI draft'; prompt.focus();
+    const harnessBefore = f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    const readsBefore = f.calls.filter(call => call.command === 'read_ui_templates').length;
+    f.cliAction('wrong', 'another-window'); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'complete_cli_action').length, 0);
+    f.cliAction('first', 'project-fixture'); f.cliAction('second', 'project-fixture'); await f.tick(); await f.tick();
+    const replies = f.calls.filter(call => call.command === 'complete_cli_action');
+    assert.deepEqual(replies.map(call => call.args.requestId), ['first', 'second']);
+    const result = replies[0].args.result as import('../src/customization-reload').CustomizationReloadResult;
+    assert.equal(result.uiTemplates.applied, true); assert.equal(result.cardPlugins.report?.personalLoaded, 0); assert.equal(result.cardPlugins.error, undefined);
+    assert.equal(f.calls.filter(call => call.command === 'read_ui_templates').length, readsBefore + 1);
+    options.uiTemplatesError = 'fixture template read error';
+    options.personalGate = Promise.resolve({ entries: [], plugins: [], warnings: ['fixture plugin compile error'] });
+    f.cliAction('partial', 'project-fixture'); await f.tick(); await f.tick();
+    const partial = f.calls.filter(call => call.command === 'complete_cli_action').at(-1)!.args.result as import('../src/customization-reload').CustomizationReloadResult;
+    assert.equal(partial.uiTemplates.applied, false); assert.match(partial.uiTemplates.error!, /template read error/);
+    assert.match(partial.cardPlugins.error!, /plugin compile error/);
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Unsent CLI draft');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, harnessBefore);
   } finally { f.win.close(); }
 });
 

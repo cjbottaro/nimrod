@@ -63,9 +63,11 @@ test('background loader coalesces same-signature work, forces source reload and 
     loading() {}, complete() { completed++; },
   });
   const first = loading.reload(); assert.equal(loading.reload(true), first); assert.equal(scans, 1);
-  finish(bundle()); await first; await loading.reload(); assert.equal(scans, 1); assert.equal(completed, 1);
+  finish(bundle()); const result = await first;
+  assert.equal(result.report?.personalLoaded, 1); assert.equal(result.error, undefined);
+  assert.deepEqual(await loading.reload(), result); assert.equal(scans, 1); assert.equal(completed, 1);
   const next = loading.reload(true); assert.equal(scans, 2);
   config = readPluginSettings({ 'cards.autoLoad': false }); await loading.reload(); assert.equal(completed, 2);
-  finish(bundle()); await next; assert.equal(completed, 2);
-  loading.dispose(); await loading.reload(true); assert.equal(scans, 2);
+  finish(bundle()); assert.match((await next).error!, /superseded/); assert.equal(completed, 2);
+  loading.dispose(); assert.match((await loading.reload(true)).error!, /disposed/); assert.equal(scans, 2);
 });

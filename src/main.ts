@@ -1,3 +1,4 @@
+import type { CustomizationReloadResult, CliCustomizationRequest } from './customization-reload';
 import { installUiTemplates, type UiTemplateFiles } from './ui-templates';
 import { creationChoices, creationDefault, supportsCreation, type SessionCreationKind } from './session-creation';
 import { createBundledHarnessRegistry, bundledHarnesses } from './bundled-harnesses';
@@ -109,7 +110,7 @@ const pluginLoading = installCardPluginLoading(cardPlugins, {
     if (errors) notices.report({ id: `card-plugins:${++noticeSequence}`, cause: 'card-plugins', operation: 'Load card plugins', message: errors }); else notices.store.resolveCause('card-plugins');
   },
 });
-function reloadCardPlugins(force = false): Promise<void> { return pluginLoading.reload(force); }
+function reloadCardPlugins(force = false) { return pluginLoading.reload(force); }
 // Compiler/module loading must not gate project/session boot or input restoration.
 void reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
@@ -127,24 +128,26 @@ const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let unloading = false;
-let customizationReload: Promise<void> | undefined;
-function reloadCustomizations(): Promise<void> {
-  if (!ready || unloading) return Promise.resolve();
+let customizationReload: Promise<CustomizationReloadResult> | undefined;
+function reloadCustomizations(): Promise<CustomizationReloadResult> {
+  if (!ready || unloading) return Promise.resolve({ uiTemplates: { applied: false, error: 'Window is not ready' }, cardPlugins: { error: 'Window is not ready' } });
   if (customizationReload) return customizationReload;
   // Each subsystem owns its errors: invalid UI files must not skip the card rescan.
   customizationReload = Promise.all([reloadUiTemplates(), reloadCardPlugins(true)])
-    .then(() => {}).finally(() => { customizationReload = undefined; });
+    .then(([uiTemplates, cardPlugins]) => ({ uiTemplates, cardPlugins })).finally(() => { customizationReload = undefined; });
   return customizationReload;
 }
-async function reloadUiTemplates(): Promise<void> {
+async function reloadUiTemplates(): Promise<CustomizationReloadResult['uiTemplates']> {
   try {
     const files = await invoke<UiTemplateFiles>('read_ui_templates');
-    if (unloading) return;
+    if (unloading) return { applied: false, error: 'Window closed during reload' };
     uiTemplates.reload(files ?? {});
     sidebarResize.reload(); refreshShortcutHints(); controls();
     notices.resolve('ui-template-files'); notices.resolve('ui-templates'); notices.resolve('ui-template-reload');
+    return { applied: true };
   } catch (error) {
     if (!unloading) notices.report({ id: 'ui-template-reload', operation: 'Reload customizations', message: `UI templates: ${String(error)}. The current UI was kept.` });
+    return { applied: false, error: String(error) };
   }
 }
 let workspace: string | undefined;
@@ -362,7 +365,7 @@ window.addEventListener('unload', () => {
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.integration.interactions.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
-  unlistenProjectPicker(); palette.dispose();
+  unlistenProjectPicker(); unlistenCliAction(); palette.dispose();
 }, { once: true });
 
 function recoverableDrafts(): { key: string; label: string }[] {
@@ -604,6 +607,7 @@ async function enterWorkspace(path: string): Promise<void> {
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
+  if (!unloading) await invoke('cli_action_window_ready').catch(error => notices.report({ id: 'cli-actions', operation: 'Enable CLI actions', message: String(error) }));
 }
 async function ensureWorkspace(): Promise<boolean> { return !!workspace || await openWorkspace(cwd.value.trim()); }
 function openSessionPicker(): PalettePage {
@@ -707,7 +711,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...applicationCommands(window, runApplication),
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
     { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save recent timing data and copy its path; enable in global Settings → Diagnostics first.', run: () => capturePerformance(true) },
-    { id: 'reload-customizations', label: 'Reload customizations', detail: 'Reload layout, Project bar and card plugins without restarting agents', keywords: actionDefinition('reload-customizations').keywords, run: reloadCustomizations },
+    { id: 'reload-customizations', label: 'Reload customizations', detail: 'Reload layout, Project bar and card plugins without restarting agents', keywords: actionDefinition('reload-customizations').keywords, run: async () => { await reloadCustomizations(); } },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
@@ -1378,6 +1382,10 @@ async function takeProjectSettingsRequest() {
   const requested = await invoke<boolean>('take_project_settings_request');
   if (requested && workspace) settings.open();
 }
+const unlistenCliAction = await listen<CliCustomizationRequest>('nimrod-cli-action', event => {
+  void reloadCustomizations().then(result => invoke('complete_cli_action', { requestId: event.payload.requestId, result }))
+    .catch(error => console.error('CLI customization result could not be delivered:', error));
+}, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const unlistenProjectSettings = await listen('nimrod-project-settings', () => { if (ready) void takeProjectSettingsRequest().catch(persistenceError); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const keybindingDispatch = installKeybindingDispatch(window, {
   read: () => preferences.keybindings(),
@@ -1423,7 +1431,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'pin': return presentation.current ? runSessionRowAction(presentation.current, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
-      case 'reload-customizations': return reloadCustomizations();
+      case 'reload-customizations': return reloadCustomizations().then(() => {});
       case 'select-theme': return pickTheme();
       case 'palette': palette.open(); return;
       case 'close': return presentation.current ? runSessionRowAction(presentation.current, 'close') : undefined;

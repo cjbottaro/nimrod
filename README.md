@@ -34,9 +34,10 @@ Starting Pi uses the project's normal Pi trust policy. Sending a prompt is real 
 mise run install-cli       # creates ~/.local/bin/nimrod; does not edit your shell
 nimrod .
 nimrod ~/Projects/another-project
+nimrod --action reload-customizations --project /path/to/open/project --json
 ```
 
-Without installation, use `./bin/nimrod .`. The launcher opens or focuses a project window; it never starts or resumes a session. It supports macOS and Linux. See [Projects and terminal launches](docs/projects.md).
+Without installation, use `./bin/nimrod .`. Directory launches open or focus a project window; they never start or resume a session. [CLI actions](docs/cli-actions.md) can reload customizations in an already-open project and wait for the result, without opening/focusing a window. It supports macOS and Linux. See [Projects and terminal launches](docs/projects.md).
 
 ## Features
 
