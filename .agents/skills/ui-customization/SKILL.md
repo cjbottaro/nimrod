@@ -29,6 +29,8 @@ Explicit **Reload customizations** refreshes layout/Project bar authoring and th
 
 The Project bar supports live presentation bindings and named action buttons. Core controls own action semantics, accessibility/availability metadata and shortcut hints; templates own content and arrangement. An omitted action is still available through its existing palette/shortcut route.
 
+The planned [Customize Nimrod… workflow](../customize-nimrod/SKILL.md) is owned separately; template/CLI support does not imply that session action is implemented.
+
 The canonical implemented contract, loading paths, code map and limitations live in [UI templates](../features/references/ui-templates.md). User-facing authoring examples belong in [UI templates guide](../../../docs/ui-templates.md). Verification evidence belongs in [verification](../features/references/verification.md), not here.
 
 ## Staged expansion, not current support

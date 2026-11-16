@@ -57,6 +57,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
+| Planned Customize Nimrod… action, explicit ordinary user-turn request and instruction disclosure | [Customize Nimrod skill](../customize-nimrod/SKILL.md) | Planned — not implemented |
 | Synchronous CLI customization reload, existing-project targeting and structured completion | [CLI actions](references/cli-actions.md) | [CLI actions](../../../docs/cli-actions.md) |
 | Declarative workspace layout and Project bar templates, public bindings/actions and bundled defaults | [UI templates](references/ui-templates.md) | [UI templates](../../../docs/ui-templates.md) |
 | Codex app-server, interface mappings, protocol evidence, limitations and policy questions | [Codex integration skill](../codex-integration/SKILL.md) | [Codex](../../../docs/codex.md) |
