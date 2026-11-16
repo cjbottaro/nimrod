@@ -21,19 +21,19 @@ The five user-facing regions are the **Project bar**, **Session sidebar**, **Tra
 - CSS is user-authored presentation code, not a security sandbox. Scope authored selectors to the owned surface, do not allow external stylesheet/resource loading, and keep Settings, dialogs, notices and native windows outside the custom shell.
 - Local user configuration only initially: do not automatically load UI code from project repositories.
 
-## Initial implementation boundary
+## Initial customization scope
 
-The first slice is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain together inside Nimrod's existing per-session mounted view. Independent placement of those three requires a later explicit contract; do not imply it is already available.
+The initial scope is workspace layout and Project bar templates. The layout places the Project bar, Session sidebar, resize handle and conversation-content container. Transcript, Status area and Composer remain together inside the per-session mounted view; their independent placement belongs to a separate expansion of the template contract.
 
 Explicit **Reload customizations** refreshes layout/Project bar authoring and the card-plugin catalog without restarting agents; retain the mounted behavior components and reject invalid reloads before changing the current UI.
 
 The Project bar supports live presentation bindings and named action buttons. Core controls own action semantics, accessibility/availability metadata and shortcut hints; templates own content and arrangement. An omitted action is still available through its existing palette/shortcut route.
 
-The planned [Customize Nimrod… workflow](../customize-nimrod/SKILL.md) is owned separately; template/CLI support does not imply that session action is implemented.
+The [Customize Nimrod… specification](../customize-nimrod/SKILL.md) owns the user-initiated session workflow separately.
 
-The canonical implemented contract, loading paths, code map and limitations live in [UI templates](../features/references/ui-templates.md). User-facing authoring examples belong in [UI templates guide](../../../docs/ui-templates.md). Verification evidence belongs in [verification](../features/references/verification.md), not here.
+The detailed template contract, loading paths, code map and limitations live in [UI templates](../features/references/ui-templates.md). User-facing authoring examples belong in [UI templates guide](../../../docs/ui-templates.md). Verification evidence belongs in [verification](../features/references/verification.md), not here.
 
-## Staged expansion, not current support
+## Expansion direction
 
 1. Layout and Project bar: prove composition, reactive values, named actions and default dogfooding.
 2. Session sidebar header/row templates: keyed identity with Nimrod-owned list selection, order, attention, menus and resize behavior.

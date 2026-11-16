@@ -1,13 +1,13 @@
 ---
 name: customize-nimrod
-description: "Design and implementation contract for the proposed Customize Nimrod action: explicit user-request modal, ordinary user-message submission, installation-aware customization instructions and collapsed transcript presentation across harnesses. Load when designing, implementing or reviewing agent-first customization requests."
+description: "Specification for the Customize Nimrod action: explicit user-request modal, ordinary user-message submission, installation-aware customization instructions and collapsed transcript presentation across harnesses. Load when specifying, implementing or reviewing agent-first customization requests."
 ---
 
 # Customize Nimrod — agent-first customization requests
 
-**Status: accepted design direction; not implemented.** The action, modal, generated instruction brief and recognizable user-turn presentation described here are planned. Existing UI templates, card plugins and the reload CLI are prerequisites, not evidence that this workflow exists.
+This specification defines the action, modal, generated instruction brief and user-turn presentation for agent-first customization requests. It builds on UI templates, card plugins and the reload CLI.
 
-This is repository agent-facing guidance for building the feature, **not** a runtime harness skill to install, register or inject into an existing conversation. This skill owns the workflow decisions below. The [UI customization skill](../ui-customization/SKILL.md) owns customization surfaces, template direction and default-template dogfooding. Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md) and [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md) before implementation.
+This is repository agent-facing guidance, **not** a runtime harness skill to install, register or inject into an existing conversation. This skill owns the workflow decisions below. The [UI customization skill](../ui-customization/SKILL.md) owns customization surfaces, template direction and default-template dogfooding. Read the [features skill](../features/SKILL.md), [architecture](../features/references/architecture.md) and [UI vocabulary](../nimrod-ui-vocabulary/SKILL.md) before implementation.
 
 ## Product intent and boundary
 
@@ -15,7 +15,7 @@ A user should be able to ask an existing Nimrod session to customize Nimrod, reg
 
 **Nimrod helps the user submit an informed request; it does not become a harness.** Do not silently inject system/developer context, create a hidden turn, install a harness skill, register a special agent/tool, switch models/harnesses, spawn another session or build a privileged execution path. No backend whitelist: the request is ordinary text, not a Pi-specific skill invocation or a new universal harness protocol. The agent's actual tool access and permissions still determine what it can accomplish.
 
-## Accepted interaction
+## Interaction
 
 1. Offer **Customize Nimrod…** through the normal command-palette/bindable-action infrastructure for an eligible connected session. No default shortcut has been agreed.
 2. Open an ordinary shared modal asking **“How would you like to customize Nimrod?”** with multiline user input.
@@ -53,7 +53,7 @@ The brief must be self-contained and installation-aware. It should provide the m
   Generate real paths with appropriate quoting, not the placeholder above. Explain actual completion/partial-error/uncertainty semantics; do not treat successful reload as visual acceptance or automatically replay uncertain requests.
 - The scope of customization files versus the scope of reload: existing user files are global, while the CLI targets one already-open project window. Do not imply project-local or harness-local customization storage.
 
-Reuse canonical authoring contracts: [UI templates](../features/references/ui-templates.md), [card plugins](../features/references/card-plugins.md), and their user guides. Do not maintain a second handwritten copy of the complete API in this skill. The runtime brief must match the installed/running app's supported API, not require access to this development repository. Exact brief size, bundled reference delivery and refresh/version strategy still need implementation design; do not invent a discovery command as a prerequisite.
+Reuse canonical authoring contracts: [UI templates](../features/references/ui-templates.md), [card plugins](../features/references/card-plugins.md), and their user guides. Do not maintain a second handwritten copy of the complete API in this skill. The runtime brief must match the installed/running app's supported API, not require access to this development repository. Exact brief size, bundled reference delivery and refresh/version strategy remain open specification details; do not invent a discovery command as a prerequisite.
 
 ## One user turn; presentation-only disclosure
 
@@ -69,15 +69,15 @@ Move the Status area above the Transcript.
 
 Expanding reveals the actual sent brief, not regenerated instructions from the current app version. The user's request remains outside the disclosure. Preserve exact request text and full-content access; never execute or interpret its contents as template markup. The modal preview and sent content must agree.
 
-Use a **Nimrod-owned user-turn presentation**, not the existing public tool-card plugin API, a fabricated tool call, or Pi/Copilot skill syntax. A small versioned, explicitly recognizable text envelope is the accepted direction so presentation can be reconstructed after history replay/Resume without relying solely on ephemeral local metadata. This envelope is a message-content/presentation format, not a harness wire protocol. Its exact encoding/escaping is not yet fixed; define it before implementation. Do not casually classify arbitrary user prose or assistant examples by keywords. Unknown versions, malformed envelopes or unsupported presentations must retain literal full-text fallback rather than hiding or losing content.
+Use a **Nimrod-owned user-turn presentation**, not the existing public tool-card plugin API, a fabricated tool call, or Pi/Copilot skill syntax. Use a small versioned, explicitly recognizable text envelope so presentation can be reconstructed after history replay/Resume without relying solely on ephemeral local metadata. This envelope is a message-content/presentation format, not a harness wire protocol. Its exact encoding/escaping remains an open specification detail. Do not casually classify arbitrary user prose or assistant examples by keywords. Unknown versions, malformed envelopes or unsupported presentations must retain literal full-text fallback rather than hiding or losing content.
 
 Preserve retained turn/disclosure identity through optimistic echo adoption, streaming updates, hidden-session catch-up and history reconciliation. Reuse shared disclosure/Markdown mechanics and lazy rendering; do not add a transcript scan or a second scroll owner. Existing [skill disclosures](../features/references/transcript-cards.md#skill-disclosures) are a presentation precedent, not a supported invocation or envelope API to impersonate.
 
-## Implementation planning and evidence
+## Open details and acceptance criteria
 
-Before coding, resolve the exact envelope/framing (including delimiter-like user input), runtime brief/default-reference delivery, eligibility/error behavior and unsubmitted-modal input lifetime. These details are not license to change the accepted one-message/explicit-consent boundary.
+Resolve the exact envelope/framing (including delimiter-like user input), runtime brief/default-reference delivery, eligibility/error behavior and unsubmitted-modal input lifetime without changing the one-message/explicit-consent boundary.
 
-Future fixture coverage should exercise:
+Fixture coverage must exercise:
 
 - Eligible/ineligible and busy sessions through real consumer paths, without harness-specific shell branches or automatic connection.
 - Cancel/no-send, inspectable brief, exact single-turn payload, originating-session lifetime revalidation and unchanged existing Composer state.
@@ -85,4 +85,4 @@ Future fixture coverage should exercise:
 - Disclosure/raw fallback for history/Resume, unknown versions and malformed/user-supplied delimiter text; stable nodes, focus and reading intent.
 - Installed-app-compatible paths/guidance and correctly quoted explicit reload target, including spaces in paths; normal permission/tool handling.
 
-Do not send real model requests or run live customization work as an implementation test without explicit authorization. Follow repository worktree and validation rules; only the mandatory post-merge compile check is automatic. Keep implemented contracts/evidence/user guidance separate. Add a user guide/changelog entry when behavior is implemented, not as a claim that this design-only skill ships the feature.
+Do not send real model requests or run live customization work as an implementation test without explicit authorization. Follow repository worktree and validation rules; only the mandatory post-merge compile check is automatic. Keep specifications, verification evidence and user guidance in their canonical owners. Follow the repository's documentation/changelog policy for user-visible behavior changes.
