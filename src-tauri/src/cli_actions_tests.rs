@@ -48,6 +48,18 @@ async fn completion_is_bound_to_request_and_window_and_close_retires_waiters() {
 }
 
 #[test]
+fn close_fences_late_readiness_without_affecting_other_windows() {
+    let host = CliActions::default();
+    host.mark_ready("project-a").unwrap();
+    host.forget_window("project-a");
+    assert!(host.mark_ready("project-a").is_err());
+    host.mark_ready("project-b").unwrap();
+    assert_eq!(host.ready.lock().unwrap().get("project-b"), Some(&true));
+    host.shutdown();
+    assert!(host.mark_ready("project-c").is_err());
+}
+
+#[test]
 fn targets_exactly_one_project_without_falling_back_to_another_window() {
     let mut directories = HashMap::from([
         ("project-a".into(), PathBuf::from("/fixture/a")),

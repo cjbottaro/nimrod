@@ -6,7 +6,7 @@ This is the current evidence/acceptance map, not a chronological test log. Featu
 
 Source implementation adds an allowlisted pre-runtime CLI client, separate per-user request/reply socket, existing-project/readiness routing, window-bound results and cleanup, and actual template/card outcomes from the shared reload. Authored, unrun fixtures cover exact argument forwarding on macOS/Linux, parser rejection/canonicalization, private endpoint ownership, bounded/lost replies, exact/ambiguous targets, wrong-window and expired completion, partial diagnostics, loader result identity and real-shell coalesced receipts without harness traffic.
 
-No tests, live endpoint probes, app builds or app launches were performed. macOS/Linux CLI-to-window and installed-artifact acceptance remain pending; Windows transport is unsupported. Mandatory post-merge compilation is recorded after execution. See [contract](cli-actions.md) and [user guide](../../../../docs/cli-actions.md).
+No tests, live endpoint probes, app builds or app launches were performed. macOS/Linux CLI-to-window and installed-artifact acceptance remain pending; Windows transport is unsupported. Mandatory post-merge `mise run check` passed on primary `main` (TypeScript with the harness-boundary gate and Rust compilation). A follow-up native-close readiness fence has an authored, unrun regression fixture; compilation is not native/behavioral acceptance. See [contract](cli-actions.md) and [user guide](../../../../docs/cli-actions.md).
 
 ## UI templates
 

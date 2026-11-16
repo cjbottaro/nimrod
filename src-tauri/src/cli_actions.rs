@@ -1,7 +1,7 @@
 //! Narrow request/reply CLI control. Separate from fire-and-forget launch forwarding.
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     path::PathBuf,
     sync::{
         Mutex,
@@ -111,13 +111,22 @@ struct Pending {
 }
 #[derive(Default)]
 pub struct CliActions {
-    ready: Mutex<HashSet<String>>,
+    // A false entry fences late readiness registration after native Close.
+    ready: Mutex<HashMap<String, bool>>,
     pending: Mutex<HashMap<String, Pending>>,
     stopping: AtomicBool,
     #[cfg(unix)]
     endpoint: Mutex<Option<unix::EndpointOwner>>,
 }
 impl CliActions {
+    fn mark_ready(&self, label: &str) -> Result<(), String> {
+        let mut ready = self.ready.lock().unwrap();
+        if self.stopping.load(Ordering::SeqCst) || ready.get(label) == Some(&false) {
+            return Err("Project window is closing or Nimrod is shutting down".into());
+        }
+        ready.insert(label.into(), true);
+        Ok(())
+    }
     fn complete(
         &self,
         window: &str,
@@ -139,7 +148,7 @@ impl CliActions {
             .map_err(|_| "CLI caller is no longer waiting".into())
     }
     pub fn forget_window(&self, label: &str) {
-        self.ready.lock().unwrap().remove(label);
+        self.ready.lock().unwrap().insert(label.into(), false);
         self.pending
             .lock()
             .unwrap()
@@ -172,8 +181,7 @@ pub fn cli_action_window_ready(
     {
         return Err("CLI actions require a project window".into());
     }
-    host.ready.lock().unwrap().insert(window.label().into());
-    Ok(())
+    host.mark_ready(window.label())
 }
 #[tauri::command]
 pub fn complete_cli_action(
@@ -239,7 +247,7 @@ async fn dispatch(app: &tauri::AppHandle, request: ActionRequest) -> ActionRespo
     let (sender, receiver) = oneshot::channel();
     {
         let ready = host.ready.lock().unwrap();
-        if host.stopping.load(Ordering::SeqCst) || !ready.contains(&label) {
+        if host.stopping.load(Ordering::SeqCst) || ready.get(&label) != Some(&true) {
             return failure(
                 Outcome::NotDispatched,
                 "Project window is not ready for CLI actions".into(),
