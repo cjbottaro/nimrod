@@ -55,7 +55,6 @@ use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
     },
 };
