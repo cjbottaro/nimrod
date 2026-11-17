@@ -25,13 +25,15 @@ import { renderOperationCard } from './operation-card';
 import { clipboardImages, imageContent, validImageContent, validateAttachments } from './image-attachments';
 import { validateImageSelection, validateMessageImages } from './session-message-input';
 import { renderParallelToolCard } from "./pi/tool-progress";
+import { customizationUserText } from './customization-message';
 
-import type { ConversationViewHost, ConversationView, ConversationViewState as State, RenderMessage as DisplayMessage, RenderBlock as ContentBlock, ConversationViewMessage } from './conversation-view-host';
+import type { PreparedSubmission, ConversationViewHost, ConversationView, ConversationViewState as State, RenderMessage as DisplayMessage, RenderBlock as ContentBlock, ConversationViewMessage } from './conversation-view-host';
 export type { ConversationView, ConversationViewHost, ConversationViewMessage } from './conversation-view-host';
 
 export function mountConversationView(host: ConversationViewHost, root: HTMLElement | Document = document): ConversationView {
   let active = true;
   let disposed = false;
+  let userTextLifetime: object = {};
   const listeners = new AbortController();
   const markdown = createSafeMarkdownRenderer(window);
   const messages = required("messages");
@@ -368,7 +370,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
 
   function renderUserText(text: unknown, key: string, previous?: HTMLElement): HTMLElement {
     const renderUserMarkdown = (value: string) => renderMarkdown(value, true);
-    return host.interaction.userText?.(document, safeText(text), key, expanded, renderUserMarkdown, previous) ?? renderMarkdown(text, true);
+    return customizationUserText(document, safeText(text), key, expanded, renderUserMarkdown, previous)
+      ?? host.interaction.userText?.(document, safeText(text), key, expanded, renderUserMarkdown, previous) ?? renderMarkdown(text, true);
   }
 
   function renderBlock(block: ContentBlock, messageKey: string, index: number, role?: string, previous?: HTMLElement): HTMLElement | undefined {
@@ -918,6 +921,45 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       || before.statusArea?.metricsTitle !== after.statusArea?.metricsTitle;
   }
 
+  function previewSubmission(id: string, text: string, mode: SubmissionMode): void {
+    steeringTranscript.begin(id, text, 'sending', undefined, mode);
+    queueRender(pendingState || displayedState);
+  }
+  function submissionEffects(navigate: boolean): void {
+    if (!navigate) return;
+    host.promptSubmitted?.();
+    const follow = host.sendAutoFollow?.() ?? DEFAULT_SEND_AUTO_FOLLOW;
+    if (follow === 'always' || (follow === 'whenIdle' && !(pendingState || displayedState).busy)) transcriptScroll.scrollToBottom();
+  }
+  function dispatchPrompt(message: Parameters<typeof host.messageInput.submit>[0]): void {
+    const failed = (error: unknown) => {
+      if (disposed) return;
+      const owned = steeringTranscript.receipt(message.id, 'unknown', String(error));
+      queueRender(pendingState || displayedState);
+      if (!owned) host.reportNotice?.({ id: `send:${message.id}`, operation: 'Message delivery unknown', message: String(error) });
+    };
+    try { void host.messageInput.submit(message).catch(failed); } catch (error) { failed(error); }
+  }
+  function prepareUserText(text: string): { error: string } | { mode: SubmissionMode; submission: Extract<PreparedSubmission, { kind: 'request' }> } {
+    const state = pendingState || displayedState;
+    if (disposed || !active || deletionLocked || preparing || state.sessionUnavailable || state.inputLocked) return { error: 'This session cannot accept a message right now.' } as const;
+    if (!text.trim()) return { error: 'A message is required.' } as const;
+    const mode = host.interaction.keyboardMode({ key: 'Enter', shiftKey: false, altKey: false, isComposing: false, keyCode: 13 }, state.busy === true);
+    if (!mode) return { error: 'This session cannot accept an ordinary message right now.' } as const;
+    const submission = host.interaction.prepare(text, state);
+    if (submission.kind === 'reject') return { error: submission.error } as const;
+    if (submission.kind !== 'request' || submission.message.type !== 'prompt') return { error: 'This action requires an ordinary text message, not a harness command.' } as const;
+    return { mode, submission };
+  }
+  function submitUserText(text: string): void {
+    const prepared = prepareUserText(text);
+    if ('error' in prepared) throw new Error(prepared.error);
+    const id = `submission-${Date.now()}-${++nextSubmissionId}`;
+    if (prepared.submission.preview) previewSubmission(id, text, prepared.mode);
+    submissionEffects(prepared.submission.navigate);
+    dispatchPrompt({ id, text, mode: prepared.mode });
+  }
+
   function submit(mode: SubmissionMode = "normal"): void {
     if (deletionLocked || preparing) return;
     const text = composer.draft.trim();
@@ -954,16 +996,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     })) : undefined;
     // Slash commands may be controls or expand into different content.
     if (!imagesReady && submission.preview) {
-      steeringTranscript.begin(id, submittedText, 'sending', undefined, mode);
-      queueRender(pendingState || displayedState);
+      previewSubmission(id, submittedText, mode);
     }
     updateComposer(clearDraft(composer));
     // Local interaction effects belong to Send, never to a late RPC result.
-    if (submission.navigate) {
-      host.promptSubmitted?.();
-      const follow = host.sendAutoFollow?.() ?? DEFAULT_SEND_AUTO_FOLLOW;
-      if (follow === 'always' || (follow === 'whenIdle' && !(pendingState || displayedState).busy)) transcriptScroll.scrollToBottom();
-    }
+    submissionEffects(submission.navigate);
     if (imagesReady) {
       preparing++; renderComposer();
       void (async () => {
@@ -974,11 +1011,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
           if (deletionLocked || state.inputLocked || state.sessionUnavailable) throw new Error('Session became unavailable while preparing images. Nothing was sent.');
           validateMessageImages(images, host.messageInput.capabilities());
           steeringTranscript.begin(id, submittedText, 'sending', images, mode); queueRender(state);
-          void host.messageInput.submit({ id, text: submittedText, mode, images });
+          dispatchPrompt({ id, text: submittedText, mode, images });
         } catch (error) { if (!disposed && generation === composerGeneration) updateComposer({ ...composer, lastError: String(error) }); }
         finally { if (!disposed && generation === composerGeneration) { preparing--; renderComposer(); } }
       })();
-    } else if (submission.message.type === 'prompt') void host.messageInput.submit({ id, text: submittedText, mode });
+    } else if (submission.message.type === 'prompt') dispatchPrompt({ id, text: submittedText, mode });
     else host.postMessage({ id, text: submittedText, mode, ...submission.message });
   }
 
@@ -1103,6 +1140,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   host.onMessage((data: ConversationViewMessage) => {
     if (disposed) return;
     if (data.type === "sessionReset") {
+      userTextLifetime = {};
       cancelPresentationFrames();
       pendingRows.clear(); pendingFull = true; receivedRevision = undefined; lastCommands = undefined; activityState = undefined;
       suspendedOutputPositions = undefined;
@@ -1127,6 +1165,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       queueRender(displayedState);
     }
     if (data.type === "sessionDisconnected") {
+      userTextLifetime = {};
       steeringTranscript.disconnect();
       composerGeneration++; preparing = 0; renderComposer();
       queueRender(pendingState || displayedState);
@@ -1202,6 +1241,9 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   post("ready");
   return {
     dispose,
+    get userTextLifetime() { return userTextLifetime; },
+    validateUserText: text => { const prepared = prepareUserText(text); return 'error' in prepared ? prepared.error : undefined; },
+    submitUserText,
     scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
     hasConnectionOutcome: () => steeringTranscript.hasConnectionOutcome || configurationTranscript.hasConnectionOutcome,
     setActive(value) {

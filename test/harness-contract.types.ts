@@ -8,6 +8,9 @@ type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[k
 const sessionPortsAreRequired: OptionalKeys<HarnessSession> extends never ? true : false = true;
 const projectPortsAreRequired: OptionalKeys<HarnessProject> extends never ? true : false = true;
 const registrationPortsAreRequired: OptionalKeys<HarnessRegistration> extends never ? true : false = true;
+// Startup/navigation connection policy is application-owned for every future harness.
+const noAdapterSelectionPolicy: 'selection' extends keyof HarnessSession ? never : true = true;
+void noAdapterSelectionPolicy;
 const completeRegistration: HarnessRegistration = fixtureHarness;
 void [sessionPortsAreRequired, projectPortsAreRequired, registrationPortsAreRequired, completeRegistration];
 

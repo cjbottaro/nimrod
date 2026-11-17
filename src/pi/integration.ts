@@ -21,7 +21,7 @@ import { defineHarness } from '../harness-registry';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { commandInteraction } from '../command-interaction';
-import { configurationActions, noProjectActions, ordinarySelection, savedClose, temporaryClose } from '../harness-defaults';
+import { configurationActions, noProjectActions, savedClose, temporaryClose } from '../harness-defaults';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 import { ownedProcessStop } from '../session-lifecycle';
@@ -243,7 +243,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       const last = project.store.read(lastKey) as { path?: string } | null;
       if (last?.path && last.path === owner.file?.path) project.store.save(lastKey, null);
     } },
-    close: request.mode === 'temporary' ? temporaryClose : savedClose, selection: ordinarySelection,
+    close: request.mode === 'temporary' ? temporaryClose : savedClose,
     interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };
 }

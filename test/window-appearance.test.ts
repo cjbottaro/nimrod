@@ -6,6 +6,7 @@ import { DEFAULT_WINDOW_APPEARANCE, modalDepthBlurRadius, readWindowAppearance, 
 import { installWindowAppearance } from '../src/window-appearance-controller';
 import { primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from '../src/button-surfaces';
 import { applyTheme } from '../src/themes/theme';
+import { textSelectionSurface } from '../src/text-selection';
 
 const mac: AppearanceCapabilities = { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
 const linux: AppearanceCapabilities = { platform: 'linux', transparency: true, frost: false, reducedTransparency: false };
@@ -113,6 +114,41 @@ test('primary buttons retain the shared theme density policy across Nimrod and T
         assert.equal(f.root.dataset.translucency, opacity === 100 ? 'off' : 'window');
       }
     }
+  } finally { f.close(); }
+});
+
+test('text selection follows palette preview/reset without touching drafts, focus or row colors', async () => {
+  const f = fixture(mac);
+  try {
+    await f.controller.ready;
+    const prompt = f.root.querySelector('textarea')!;
+    prompt.focus(); prompt.setSelectionRange(1, 4);
+    const palette = (selection: string) => applyTheme(f.root, {
+      id: 'selection-preview', name: 'Selection', mode: 'dark', syntax: {}, colors: {
+        'editor.background': '#1a1b26', 'input.background': '#13141c',
+        'editor.selectionBackground': selection, 'list.focusBackground': '#222222',
+      },
+    });
+    palette('#292e42');
+    const property = '--nimrod-input-text-selection-background';
+    const first = f.root.style.getPropertyValue(property);
+    assert.equal(first, textSelectionSurface('#13141c', '#292e42', '#f8f8f2').background);
+    assert.equal(f.root.style.getPropertyValue('--vscode-list-focusBackground'), '#222222');
+    for (const opacity of [0, 25, 65, 99, 100]) {
+      f.external({ opacity });
+      assert.equal(f.root.style.getPropertyValue(property), first);
+    }
+    palette('#77d8bd');
+    assert.notEqual(f.root.style.getPropertyValue(property), first);
+    palette('#292e42');
+    assert.equal(f.root.style.getPropertyValue(property), first);
+    f.setTheme(null);
+    assert.match(f.root.style.getPropertyValue(property), /^#[a-f\d]{6}fe$/);
+    assert.equal(f.root.querySelector('textarea'), prompt);
+    assert.equal(prompt.value, 'draft');
+    assert.equal(f.dom.window.document.activeElement, prompt);
+    assert.deepEqual([prompt.selectionStart, prompt.selectionEnd], [1, 4]);
+    assert.equal(f.saves.length, 0);
   } finally { f.close(); }
 });
 

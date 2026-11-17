@@ -10,6 +10,8 @@ Related: [architecture](single-instance.md),
 
 macOS cold launches elect one owner before UI and publish forwarding synchronously. Secondary connected failures never retry or create duplicate UI; directory routing never starts Pi. Linux/Windows retain their separate backend.
 
+[CLI actions](cli-actions.md) use a separate request/reply endpoint and pre-runtime client path. They do not change this launch-forwarding protocol, election or normal directory-launch completion semantics.
+
 ## Code map
 
 - `bin/nimrod`: canonical Bash directory launcher; source installs resolve the checkout, while packaged/Homebrew symlinks resolve the owning `.app/Contents/Resources/bin/nimrod` resource (NIMROD_APP still takes priority). See [release distribution](releases.md). macOS `open -n -a … --args --workspace …`, Linux executable launch. Returns on OS acceptance, not routing/focus completion.

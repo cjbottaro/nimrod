@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
-# Terminal launcher only. The app owns workspace routing and single-instance IPC.
+# Directory launcher and synchronous action client. The app owns routing and IPC.
 set -euo pipefail
 
 usage() {
-  printf '%s\n' 'Usage: nimrod [DIRECTORY]' '       nimrod -- DIRECTORY' '' \
+  printf '%s\n' 'Usage: nimrod [DIRECTORY]' '       nimrod -- DIRECTORY' \
+    '       nimrod --action reload-customizations [--project DIRECTORY] [--json]' '' \
     'Open or focus a project. Defaults to the current directory.' \
-    'No session is started or resumed.' '' \
+    'No session is started or resumed.' \
+    'Actions target an already-open project, wait for completion and never open/focus a window.' \
+    'The action project defaults to the current directory.' '' \
     'NIMROD_APP overrides the .app location on macOS, or executable on Linux.'
 }
 fail() { printf 'nimrod: %s\n' "$*" >&2; exit 1; }
 
 if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then usage; exit 0; fi
-if [[ ${1-} == -- ]]; then
-  shift
-elif [[ ${1-} == -* ]]; then
-  fail 'Unknown option. Use nimrod --help.'
+action_mode=false
+for arg in "$@"; do
+  [[ $arg != -- ]] || break
+  if [[ $arg == --action ]]; then action_mode=true; break; fi
+done
+if [[ $action_mode == false ]]; then
+  if [[ ${1-} == -- ]]; then
+    shift
+  elif [[ ${1-} == -* ]]; then
+    fail 'Unknown option. Use nimrod --help.'
+  fi
+  [[ $# -le 1 ]] || fail 'Expected one project directory. Use nimrod --help.'
+  requested=${1-.}
+  [[ -n $requested && -d $requested ]] || fail "Not a project directory: $requested"
+  workspace=$(CDPATH= cd -P -- "$requested" && pwd -P) || fail "Cannot open project: $requested"
 fi
-[[ $# -le 1 ]] || fail 'Expected one project directory. Use nimrod --help.'
-requested=${1-.}
-[[ -n $requested && -d $requested ]] || fail "Not a project directory: $requested"
-workspace=$(CDPATH= cd -P -- "$requested" && pwd -P) || fail "Cannot open project: $requested"
 
 # Resolve an installed symlink to its checkout or packaged resource, including relative links.
 source_path=${BASH_SOURCE[0]}
@@ -42,12 +52,21 @@ case $(uname -s) in
     app=$(CDPATH= cd -P -- "$app" && pwd -P)
     # --args alone is ignored for an already-running app. The transient second
     # launch forwards through Nimrod's pre-runtime instance gate, then exits.
-    exec /usr/bin/open -n -a "$app" --args --workspace "$workspace"
+    if [[ $action_mode == true ]]; then
+      # Direct executable invocation returns the action result, without Launch Services/UI.
+      exec "$app/Contents/MacOS/nimrod" "$@"
+    else
+      exec /usr/bin/open -n -a "$app" --args --workspace "$workspace"
+    fi
     ;;
   Linux)
     app=${NIMROD_APP:-$repo/src-tauri/target/release/nimrod}
     [[ -f $app && -x $app ]] || fail "Executable not found at $app. Build Nimrod or set NIMROD_APP."
-    nohup "$app" --workspace "$workspace" </dev/null >/dev/null 2>&1 &
+    if [[ $action_mode == true ]]; then
+      exec "$app" "$@"
+    else
+      nohup "$app" --workspace "$workspace" </dev/null >/dev/null 2>&1 &
+    fi
     ;;
   *) fail 'This launcher currently supports macOS and Linux.' ;;
 esac

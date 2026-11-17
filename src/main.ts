@@ -1,3 +1,8 @@
+import { installCustomizeNimrodDialog } from './customize-nimrod-dialog';
+import { customizationBrief, type CustomizationAuthoringContext } from './customization-brief';
+import { CUSTOMIZATION_PREFIX } from './customization-message';
+import type { CustomizationReloadResult, CliCustomizationRequest } from './customization-reload';
+import { installUiTemplates, type UiTemplateFiles } from './ui-templates';
 import { creationChoices, creationDefault, supportsCreation, type SessionCreationKind } from './session-creation';
 import { createBundledHarnessRegistry, bundledHarnesses } from './bundled-harnesses';
 import type { HarnessProject, HarnessSession, SessionRequest, HarnessAction as SessionAction } from './harness-contract';
@@ -60,11 +65,17 @@ import './keybindings.css';
 import './modal.css';
 import './application-notices.css';
 import './utility-button.css';
+import './customize-nimrod.css';
 
 const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 let applicationNotices: ReturnType<typeof installApplicationNotices> | undefined;
 async function main(): Promise<void> {
 const notices = applicationNotices = installApplicationNotices(window);
+let templateFiles: UiTemplateFiles = {};
+try { templateFiles = await invoke<UiTemplateFiles>('read_ui_templates') ?? {}; }
+catch (error) { notices.report({ id: 'ui-template-files', operation: 'Read UI templates', message: `${String(error)}. Using bundled defaults.` }); }
+const uiTemplates = installUiTemplates(document, templateFiles, message => notices.report({ id: 'ui-templates', operation: 'Load UI templates', message }));
+const projectActions = uiTemplates.actions;
 let noticeSequence = 0;
 let projectErrorText = '';
 // Transitional producer channel: legacy writers no longer own a visible node.
@@ -79,7 +90,7 @@ const preferences = await installNativePreferences(message => {
   required('preferences-error').hidden = true;
   if (message) notices.report({ id: 'preferences', operation: 'Read settings', message });
   else notices.resolve('preferences');
-  const button = required('open-settings');
+  const button = projectActions.settings;
   button.classList.toggle('error', !!message);
   if (message) {
     button.title = 'Settings file error — open Settings for details';
@@ -103,16 +114,17 @@ const pluginLoading = installCardPluginLoading(cardPlugins, {
     if (errors) notices.report({ id: `card-plugins:${++noticeSequence}`, cause: 'card-plugins', operation: 'Load card plugins', message: errors }); else notices.store.resolveCause('card-plugins');
   },
 });
-function reloadCardPlugins(force = false): Promise<void> { return pluginLoading.reload(force); }
+function reloadCardPlugins(force = false) { return pluginLoading.reload(force); }
 // Compiler/module loading must not gate project/session boot or input restoration.
 void reloadCardPlugins();
 const welcome = required('welcome'), conversation = required('conversation');
 const error = projectErrors, cwd = required<HTMLInputElement>('cwd');
 const dialogs = new Dialogs();
+const customizationDialog = installCustomizeNimrodDialog(window);
 const deletionReview = installDeletionReview(required<HTMLDialogElement>('deletion-review'), {
   canCover: other => other.id === 'command-palette' && palette.isDeleting,
 });
-const settingsSurface = installSettingsSurface(preferences, notices, false, bundledHarnesses);
+const settingsSurface = installSettingsSurface(preferences, notices, false, bundledHarnesses, projectActions.settings);
 const { settings, themes, zoom, runtime, notificationError, notificationProgress, capturePerformance } = settingsSurface;
 const settingsKey = 'nimrod.poc.launch';
 const recentKey = 'nimrod.workspaces.v1';
@@ -121,6 +133,28 @@ const attachmentStore = new AttachmentStore();
 const temporaryImages = new Map<string, Blob>();
 let ready = false;
 let unloading = false;
+let customizationReload: Promise<CustomizationReloadResult> | undefined;
+function reloadCustomizations(): Promise<CustomizationReloadResult> {
+  if (!ready || unloading) return Promise.resolve({ uiTemplates: { applied: false, error: 'Window is not ready' }, cardPlugins: { error: 'Window is not ready' } });
+  if (customizationReload) return customizationReload;
+  // Each subsystem owns its errors: invalid UI files must not skip the card rescan.
+  customizationReload = Promise.all([reloadUiTemplates(), reloadCardPlugins(true)])
+    .then(([uiTemplates, cardPlugins]) => ({ uiTemplates, cardPlugins })).finally(() => { customizationReload = undefined; });
+  return customizationReload;
+}
+async function reloadUiTemplates(): Promise<CustomizationReloadResult['uiTemplates']> {
+  try {
+    const files = await invoke<UiTemplateFiles>('read_ui_templates');
+    if (unloading) return { applied: false, error: 'Window closed during reload' };
+    uiTemplates.reload(files ?? {});
+    sidebarResize.reload(); refreshShortcutHints(); controls();
+    notices.resolve('ui-template-files'); notices.resolve('ui-templates'); notices.resolve('ui-template-reload');
+    return { applied: true };
+  } catch (error) {
+    if (!unloading) notices.report({ id: 'ui-template-reload', operation: 'Reload customizations', message: `UI templates: ${String(error)}. The current UI was kept.` });
+    return { applied: false, error: String(error) };
+  }
+}
 let workspace: string | undefined;
 let homeDirectory: string | undefined;
 let opening: Promise<boolean> | undefined;
@@ -133,7 +167,8 @@ const sessionContextMenu = installSessionContextMenu();
 const tabs = navigation.open();
 const presentation = new SessionPresenter<Tab>({
   sessions: () => tabs, conversation,
-  identity: required('project-session'), name: required('project-session-name'), badge: required('mode-badge'),
+  identityChanged: identity => uiTemplates.update({ 'session.present': identity.present, 'session.title': identity.title,
+    'session.badge': identity.badge, 'session.badgeTitle': identity.badgeTitle, 'session.harness': identity.harness }),
   emptyFocus: () => required(`sidebar-${sidebarView}`),
   switched: syncPopouts, controlsChanged: reloadControl,
 });
@@ -189,11 +224,11 @@ function makeDrafts(values: Record<string, unknown> = {}): SessionDrafts {
 }
 const sidebarResize = installSidebarResize(window, {
   layout: required('workspace-layout'), sidebar: required('session-sidebar'),
-  handle: required('sidebar-resizer'), toggle: required('toggle-sidebar'),
+  handle: required('sidebar-resizer'), toggle: projectActions.sidebar,
 }, {
   read: () => workspace ? stored(sidebarWidthKey(workspace)) : undefined,
   save: width => { if (workspace) save(sidebarWidthKey(workspace), width); },
-});
+}, { side: uiTemplates.sidebarSide });
 let drafts = makeDrafts();
 function lastSession() { return harnesses.get(harnesses.primaryId).saved.last(); }
 const previewResponse = notificationPreview(window);
@@ -331,11 +366,11 @@ window.addEventListener('unload', () => {
   notices.dispose();
   settingsSurface.dispose();
   disposeTimeRefresh(); unlistenDraftErrors(); unlistenDraftClose();
-  pluginLoading.dispose();
+  pluginLoading.dispose(); uiTemplates.dispose(); customizationDialog.dispose();
   sessionContextMenu.dispose(); sidebarResize.dispose(); preferences.dispose(); popouts.dispose(); unlistenPopoutErrors(); unlistenLinkErrors(); deletions.dispose(); deletionReview.dispose(); unlistenNotificationClicks();
   for (const tab of tabs) { tab.integration.interactions.dispose(); tab.notices.dispose(); tab.receive?.({ type: 'sessionDisconnected' }); tab.view.dispose(); tab.lifecycle.disconnect('Window closed'); }
   keybindingDispatch.dispose(); unlistenProjectSettings();
-  unlistenProjectPicker(); palette.dispose();
+  unlistenProjectPicker(); unlistenCliAction(); palette.dispose();
 }, { once: true });
 
 function recoverableDrafts(): { key: string; label: string }[] {
@@ -358,7 +393,7 @@ function controls(): void {
   required('recover-draft').hidden = !creationChoices(harnesses.projects, 'saved').length || !recoverableDrafts().length;
   required('session-sidebar').hidden = !workspace || !sidebarVisible;
   sidebarResize.refresh();
-  required('toggle-sidebar').setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
+  projectActions.sidebar.setAttribute('aria-expanded', String(!!workspace && sidebarVisible));
   renderSidebar(); reloadControl();
 }
 function needsAttention(tab: Tab): boolean { return !!tab.inputCount || tab.unread || tab.failed; }
@@ -483,10 +518,10 @@ function deletable(tab: Tab | undefined): boolean {
 }
 function reloadControl(): void {
   const active = presentation.current;
-  const button = required<HTMLButtonElement>('reload-session');
+  const button = projectActions.reload;
   button.hidden = !!active && !active.project.availability.available();
   button.disabled = !ready || !active || !reloadable(active) || active.deleting || locked(active) || blocked(active) || active.starting || active.closing || active.reloading;
-  const remove = required<HTMLButtonElement>('delete-session');
+  const remove = projectActions.delete;
   remove.hidden = !!active && !active.project.availability.available();
   remove.disabled = !deletable(active);
   const operation = tabDeletion(active);
@@ -496,6 +531,7 @@ function reloadControl(): void {
     : active.starting || active.closing || active.reloading ? 'session lifecycle operation pending' : undefined;
   remove.title = `${operation?.label || 'Delete session…'}${unavailable ? ` — ${unavailable}` : ''}`;
   button.title = active?.integration.reload.reason() ?? 'Reload session — no open session';
+  customizationDialog.refresh();
 }
 function layoutKey(): string { return `nimrod.tabs.v1:${workspace}`; }
 function recencyKey(): string { return `nimrod.recency.v1:${workspace}`; }
@@ -550,9 +586,7 @@ async function enterWorkspace(path: string): Promise<void> {
   try { drafts = makeDrafts(await nativeDrafts.load()); }
   catch (failure) { persistenceError(failure); throw failure; }
   const { name, parent } = projectPathParts(path);
-  required('project-name').textContent = name;
-  required('workspace-label').textContent = abbreviateHome(parent, homeDirectory);
-  required('project-identity').title = path;
+  uiTemplates.update({ 'project.name': name, 'project.parent': abbreviateHome(parent, homeDirectory), 'project.path': path });
   save(settingsKey, { cwd: path });
   save(recentKey, [path, ...recentWorkspaces().filter(p => p !== path)].slice(0, 30)); renderRecents();
   const layout = stored(layoutKey()) as { tabs?: unknown[]; active?: string } | null;
@@ -567,7 +601,6 @@ async function enterWorkspace(path: string): Promise<void> {
       const prepared = await project.saved.prepare(entry, { title: entry.name, lastUsed: entry.lastUsed, pinned: entry.pinned }, true);
       if (unloading) return;
       const tab = createTab(prepared.request, project, prepared.title, prepared.lastUsed, prepared.pinned);
-      tab.awaitingSelection = tab.integration.selection.deferRestored;
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
     } catch (failure) { if (!project.saved.removed(key)) persistenceError(failure); }
   }
@@ -579,6 +612,7 @@ async function enterWorkspace(path: string): Promise<void> {
   const selected = tabs.find(t => t.lifecycle.key === layout?.active) || navigation.all()[0];
   if (selected) activate(selected, 'startup');
   controls();
+  if (!unloading) await invoke('cli_action_window_ready').catch(error => notices.report({ id: 'cli-actions', operation: 'Enable CLI actions', message: String(error) }));
 }
 async function ensureWorkspace(): Promise<boolean> { return !!workspace || await openWorkspace(cwd.value.trim()); }
 function openSessionPicker(): PalettePage {
@@ -682,7 +716,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...applicationCommands(window, runApplication),
     { id: 'open-recent-project', label: 'Open recent project…', detail: 'Open or focus a previously opened project', next: true, run: () => palette.projects() },
     { id: 'capture-performance', label: 'Capture performance report', detail: settingsSurface.performancePath ? `Last report: ${settingsSurface.performancePath}` : 'Save recent timing data and copy its path; enable in global Settings → Diagnostics first.', run: () => capturePerformance(true) },
-    { id: 'reload-card-plugins', label: 'Reload card plugins', detail: 'Rescan personal sources and refresh renderers for new cards; no Pi restart', run: () => reloadCardPlugins(true) },
+    { id: 'reload-customizations', label: 'Reload customizations', detail: 'Reload layout, Project bar and card plugins without restarting agents', keywords: actionDefinition('reload-customizations').keywords, run: async () => { await reloadCustomizations(); } },
     { id: 'select-theme', label: 'Select theme…', detail: 'Preview bundled VS Code themes and saved imports', next: true, run: () => pickTheme() },
     { id: 'resume', label: 'Resume session…', detail: 'Open a saved conversation in this project', next: true, run: () => palette.sessions() },
     { id: 'delete-sessions', label: 'Delete sessions…', detail: 'Repeatedly review and delete supported saved sessions in this project', next: true, run: () => palette.deleteSessions() },
@@ -694,6 +728,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...harnesses.projectActions().filter(action => action.available()).map(action => ({ ...action, run: () => runProjectAction(action.id) })),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
+    ...(active && !customizationAvailability(active) ? [{ id: 'customize-nimrod', label: 'Customize Nimrod…', detail: 'Ask this agent to customize Nimrod with included authoring instructions', run: () => requestCustomization(active) }] : []),
     ...(active && reloadable(active) ? [
       { id: 'reload', label: 'Reload session', detail: active.integration.reload.detail, run: () => reloadSession(active!) },
     ] : []),
@@ -705,7 +740,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
       { id: 'pin', label: active.pinned ? 'Unpin session' : 'Pin session', detail: 'Keep this session above unpinned sessions in the sidebar', run: () => runSessionRowAction(active, 'pin') },
       { id: 'close', label: 'Close session', detail: 'Stop its agent and remove it from the sidebar; saved history stays', run: () => runSessionRowAction(active, 'close') },
     ] : []),
-    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => required<HTMLButtonElement>('toggle-sidebar').click() },
+    { id: 'sidebar', label: sidebarVisible ? 'Hide sidebar' : 'Show sidebar', detail: 'Toggle the open-session navigation pane', run: () => projectActions.sidebar.click() },
     { id: 'settings', label: 'Global Settings…', detail: 'Defaults for all projects, notifications and keybindings', run: () => invoke('open_global_settings') },
     ...(workspace ? [{ id: 'project-settings', label: 'Project settings…', detail: 'Override global defaults for this project', run: () => settings.open() }] : []),
     { id: 'keybindings', label: 'Edit keybindings…', detail: 'Customize shortcuts for Nimrod commands', run: openKeybindings },
@@ -824,7 +859,7 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
     lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
     drafts: drafts.fork(), closing: false, reloading: false, deleting: false, deletionExecuting: false,
     awaitingSelection: false, inputCount: 0, unread: false, failed: false,
-    view: { setActive() {}, scrollToBottom() {}, dispose() {} } };
+    view: { userTextLifetime: {}, validateUserText: () => 'Session view is not ready', submitUserText() { throw new Error('Session view is not ready'); }, setActive() {}, scrollToBottom() {}, dispose() {} } };
   try { integration = harnesses.create(project, sessionHost(tab, owner), request); }
   catch (error) { sessionNotices.dispose(); root.remove(); rowNode.remove(); throw error; }
   tab.failed = blocked(tab);
@@ -934,7 +969,9 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   if (!ready) return;
   const plan = navigation.selection(tab, navigationSnapshot(), intent);
   if (!plan) return;
-  if (tab.integration.selection.releasesDeferral(intent)) tab.awaitingSelection = false;
+  // Selection policy belongs to the application, not individual harnesses.
+  // Only deletion teardown sets this guard; startup must not release it.
+  if (intent !== 'startup') tab.awaitingSelection = false;
   notificationNavigation++;
   if (plan.view !== sidebarView) {
     sidebarView = plan.view;
@@ -996,6 +1033,27 @@ async function withTabDialog<T>(tab: Tab, action: (title: string) => Promise<T>,
   tab.inputCount++; updateTab(tab);
   try { return await action(`${tab.title} — ${title}`); }
   finally { tab.inputCount--; if (tabs.includes(tab)) updateTab(tab); }
+}
+function customizationAvailability(tab: Tab): string | undefined {
+  if (!ready || unloading || !workspace || presentation.current !== tab || !tabs.includes(tab) || !isConnected(tab) || locked(tab)) return 'This session is no longer available for customization requests.';
+  return tab.view.validateUserText(CUSTOMIZATION_PREFIX);
+}
+function requestCustomization(tab: Tab): void {
+  const origin = workspace, token = tab.token, lifetime = tab.view.userTextLifetime;
+  const availability = () => tab.token !== token || tab.view.userTextLifetime !== lifetime || workspace !== origin
+    ? 'The session connection changed. Cancel and open Customize Nimrod again; nothing was sent.' : customizationAvailability(tab);
+  const report = (message: string) => { if (!unloading && tabs.includes(tab) && !tab.closing) notices.report({ id: `${tab.id}:customize:${++noticeSequence}`, owner: tab.id, operation: 'Customize Nimrod', message }); };
+  customizationDialog.open({
+    availability,
+    instructions: async () => {
+      const context = await invoke<CustomizationAuthoringContext>('customization_authoring_context');
+      if (context.projectDirectory !== origin) throw new Error('Customization guidance belongs to a different project. Nothing was sent.');
+      return customizationBrief(context, { id: tab.project.id, label: tab.project.label });
+    },
+    validate: text => availability() ?? tab.view.validateUserText(text),
+    submit: text => { const reason = availability(); if (reason) throw new Error(reason); tab.view.submitUserText(text); },
+    report,
+  });
 }
 function sessionCommands(tab: Tab) {
   return sessionActions(tab).filter(action => ACTIONS.some(registered => registered.id === action.id))
@@ -1304,9 +1362,9 @@ required('recover-draft').addEventListener('click', () => {
     const index = choice ? Number.parseInt(choice, 10) - 1 : -1; if (options[index]) return newSession('saved', options[index].key);
   });
 });
-required('reload-session').addEventListener('click', () => { if (presentation.current) void reloadSession(presentation.current); });
-required('delete-session').addEventListener('click', () => { if (presentation.current) void runSessionRowAction(presentation.current, 'delete'); });
-required('toggle-sidebar').addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
+projectActions.reload.addEventListener('click', () => { if (presentation.current) void reloadSession(presentation.current); });
+projectActions.delete.addEventListener('click', () => { if (presentation.current) void runSessionRowAction(presentation.current, 'delete'); });
+projectActions.sidebar.addEventListener('click', () => { sidebarVisible = !sidebarVisible; save('nimrod.sidebar.visible', sidebarVisible); controls(); });
 for (const view of sidebarViews) required(`sidebar-${view}`).addEventListener('click', () => selectSidebarView(view));
 required('sidebar-views').addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || event.repeat) return;
@@ -1329,7 +1387,7 @@ function shortcutHint(id: ActionId): string {
   return bindingsFor(id, preferences.keybindings()).map(binding => shortcutLabel(binding, isMac(window))).join(' / ');
 }
 function refreshShortcutHints(): void {
-  const settingsButton = required('open-settings');
+  const settingsButton = projectActions.settings;
   if (!settingsButton.classList.contains('error')) {
     const label = preferences.projectPath ? 'Project settings' : 'Global Settings';
     settingsButton.title = [label, shortcutHint(preferences.projectPath ? 'project-settings' : 'settings')].filter(Boolean).join(' · ');
@@ -1338,7 +1396,7 @@ function refreshShortcutHints(): void {
   settingsButton.setAttribute('aria-haspopup', preferences.projectPath ? 'dialog' : 'false');
   if (preferences.projectPath) settingsButton.setAttribute('aria-controls', 'settings-page');
   else settingsButton.removeAttribute('aria-controls');
-  required('toggle-sidebar').title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
+  projectActions.sidebar.title = ['Toggle sidebar', shortcutHint('sidebar')].filter(Boolean).join(' · ');
   required('zoom-level').title = ['App zoom', shortcutHint('zoom-in'), shortcutHint('zoom-out'), shortcutHint('zoom-reset')].filter(Boolean).join(' · ');
   const zoomHint = required('zoom-shortcut-hint');
   if (zoomHint) zoomHint.textContent = `Zoom in: ${shortcutHint('zoom-in') || 'unbound'} · Zoom out: ${shortcutHint('zoom-out') || 'unbound'} · Reset to 100%: ${shortcutHint('zoom-reset') || 'unbound'}. Shortcuts pause in other dialogs.`;
@@ -1353,6 +1411,10 @@ async function takeProjectSettingsRequest() {
   const requested = await invoke<boolean>('take_project_settings_request');
   if (requested && workspace) settings.open();
 }
+const unlistenCliAction = await listen<CliCustomizationRequest>('nimrod-cli-action', event => {
+  void reloadCustomizations().then(result => invoke('complete_cli_action', { requestId: event.payload.requestId, result }))
+    .catch(error => console.error('CLI customization result could not be delivered:', error));
+}, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const unlistenProjectSettings = await listen('nimrod-project-settings', () => { if (ready) void takeProjectSettingsRequest().catch(persistenceError); }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 const keybindingDispatch = installKeybindingDispatch(window, {
   read: () => preferences.keybindings(),
@@ -1363,11 +1425,14 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       for (const action of sessionActions(presentation.current)) contributed.add(action.id);
       contributed.add('close');
       if (canPin(presentation.current)) contributed.add('pin');
+      if (!customizationAvailability(presentation.current)) contributed.add('customize-nimrod');
       if (presentation.current.project.availability.available() && canClose(presentation.current) && !blocked(presentation.current)) contributed.add('rename');
       if (reloadable(presentation.current)) contributed.add('reload');
       if (tabDeletion(presentation.current)?.available()) contributed.add('delete');
     }
     if (!actionContextAvailable(id, { project: !!workspace, sessionActions: contributed })) return false;
+    if (id === 'customize-nimrod') return !!presentation.current && !customizationAvailability(presentation.current);
+    if (id === 'reload-customizations') return ready;
     if (actionDefinition(id).context === 'application') return true;
     if (!ready) return false;
     const creation = creationActions().find(action => action.id === id);
@@ -1397,11 +1462,12 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'pin': return presentation.current ? runSessionRowAction(presentation.current, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);
-      case 'reload-card-plugins': return reloadCardPlugins(true);
+      case 'customize-nimrod': if (presentation.current) requestCustomization(presentation.current); return;
+      case 'reload-customizations': return reloadCustomizations().then(() => {});
       case 'select-theme': return pickTheme();
       case 'palette': palette.open(); return;
       case 'close': return presentation.current ? runSessionRowAction(presentation.current, 'close') : undefined;
-      case 'sidebar': required<HTMLButtonElement>('toggle-sidebar').click(); return;
+      case 'sidebar': projectActions.sidebar.click(); return;
       case 'previous': cycleTab(-1); return;
       case 'next': cycleTab(1); return;
       case 'settings': return invoke('open_global_settings');

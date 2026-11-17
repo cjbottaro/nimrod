@@ -13,6 +13,7 @@ interface SidebarResizeHost {
 }
 export interface SidebarResizeOptions {
   widthProperty?: string;
+  side?: () => 'left' | 'right';
   minWidth?: number;
   maxWidth?: number;
   defaultWidth?: () => number;
@@ -86,7 +87,7 @@ export function installSidebarResize(window: Window, nodes: SidebarResizeNodes, 
     if (!drag || event.pointerId !== drag.id) return;
     if (!active() || modal()) { finish(false); return; }
     event.preventDefault();
-    preferred = clamp(drag.width + (event.clientX - drag.x) / drag.scale);
+    preferred = clamp(drag.width + (event.clientX - drag.x) / drag.scale * (options.side?.() === 'right' ? -1 : 1));
     apply();
   };
   const up = (event: PointerEvent) => { if (drag?.id === event.pointerId) finish(active() && !modal()); };
@@ -97,7 +98,7 @@ export function installSidebarResize(window: Window, nodes: SidebarResizeNodes, 
   };
   const key = (event: KeyboardEvent) => {
     if (!active() || modal() || event.isComposing || event.altKey || event.metaKey || event.ctrlKey) return;
-    const { min, max } = limits(), step = event.shiftKey ? 50 : 10;
+    const { min, max } = limits(), step = (event.shiftKey ? 50 : 10) * (options.side?.() === 'right' ? -1 : 1);
     const next = event.key === 'ArrowLeft' ? width - step : event.key === 'ArrowRight' ? width + step : event.key === 'Home' ? min : event.key === 'End' ? max : undefined;
     if (next === undefined) return;
     event.preventDefault(); finish(false);

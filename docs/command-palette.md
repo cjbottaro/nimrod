@@ -2,13 +2,17 @@
 
 **Capture performance report** saves local timing data for a slowdown, after enabling Settings → Diagnostics. It has no default shortcut; the saved path appears in Diagnostics. See [Performance reports](performance-diagnostics.md).
 
-**Reload card plugins** rescans personal TypeScript sources and refreshes the catalog for new cards, using cached bundles when unchanged. It does not restart Pi, send prompts or rebuild inspected cards. It has no default shortcut; assign one in [Keybindings](keybindings.md). See [Card plugins](card-plugins.md#startup-reload-and-caching).
+**Reload customizations** rereads the current window's [layout and Project bar templates](ui-templates.md) and refreshes [card plugins](card-plugins.md#startup-reload-and-caching), using cached bundles when unchanged. It does not restart agents, reload the webview, send prompts or rebuild inspected cards. A template error keeps the current UI without skipping the card refresh; each subsystem reports its own errors. It has no default shortcut; assign one in [Keybindings](keybindings.md). The same operation is available through [CLI actions](cli-actions.md).
 
 Open with **⌘/Ctrl+Shift+P**, type an action or description, then press Enter or click a result. Commands show a short description and their effective shortcut; unbound actions leave the shortcut space empty. Every palette command is bindable; actions such as **Select theme…**, **Select mode…** and **Select context window…** have no default shortcut.
 
 ## Linux application actions
 
 Linux uses the command palette instead of a File/Edit/Window/Help menu bar. **Open project…**, **Quit Nimrod**, **Minimize window**, **Maximize / Restore window**, **Close window** and **About Nimrod** are available here, including from the welcome window. Ctrl+O opens a project and Ctrl+Q quits; both can be rebound or unbound in [Keybindings](keybindings.md). Quit shuts down the whole app; Close window affects only that window. Native title-bar controls and session-row context menus remain. macOS keeps its normal native menu bar.
+
+## Customizing Nimrod
+
+**Customize Nimrod…** asks a connected session's agent to customize the UI. Its modal keeps the Composer draft intact and includes inspectable guidance/reference paths from the installed app in one normal user message. It has no default shortcut; see [Customize Nimrod](customize-nimrod.md). Availability follows the session's normal sending rules, without automatically connecting or resuming it.
 
 ## Harness-aware commands
 

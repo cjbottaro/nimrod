@@ -30,7 +30,7 @@ The default applies only to new conversations—not Resume, Reload or existing s
 
 Resume orders all harnesses together by the displayed time, newest first, using the sidebar's current time for already-open entries. Unknown times appear last. Each row shows its harness immediately after the date, below the title.
 
-Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries and reconnects the last selected session, including Copilot; other restored Copilot rows stay disconnected until selected. Discovery remains independent and never loads a conversation.
+Choosing an already-open entry reuses it. Selecting an inactive saved session loads its history and connects its owning agent without sending a prompt. Reopening a project restores its remembered sidebar entries and reconnects the last selected session, including Copilot and Codex, when visible in the current sidebar view; other restored rows stay disconnected until selected. Discovery remains independent and never loads a conversation.
 
 Resume and Delete sessions query every available supported harness for the project directory, including history created outside Nimrod; no prior use in Nimrod is required. Sources load independently, with results sorted newest first as batches arrive. Listing does not create/resume a conversation or send a prompt. An unavailable source does not hide other results.
 

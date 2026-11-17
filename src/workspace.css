@@ -2,6 +2,9 @@
 .layout-content { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
 .layout-sidebar { box-sizing:border-box; width:var(--sidebar-width,260px); flex:none; min-height:0; overflow:auto; border-right:1px solid var(--vscode-panel-border); padding:14px 10px; background:var(--vscode-editorWidget-background); }
 #workspace-layout { --sidebar-width:var(--session-sidebar-width,260px); }
+#workspace-layout[data-nimrod-sidebar-side=right] > #sidebar-resizer { left:auto; right:var(--sidebar-width,260px); margin-left:0; margin-right:-4px; }
+#workspace-layout[data-nimrod-sidebar-side=right] > #sidebar-resizer::after { left:auto; right:3px; }
+#workspace-layout[data-nimrod-sidebar-side=right] > #session-sidebar { border-right:0; border-left:1px solid var(--vscode-panel-border); }
 #settings-layout { --sidebar-width:var(--settings-sidebar-width,220px); flex:1; }
 #conversation { flex:1; }
 #workspace-empty { box-sizing:border-box; width:min(650px,100%); padding:32px; margin:auto; }
@@ -134,5 +137,7 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor:col-resize !important; u
 #palette-inspection dd { margin:0; overflow-wrap:anywhere; }
 #palette-inspection pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.5; margin:12px 0 0; font-family:var(--vscode-editor-font-family,monospace); }
 @media (max-width:760px) { #session-sidebar { width:var(--session-sidebar-width,210px); } }
-@media (max-width:600px) { #session-sidebar { position:absolute; inset:0 auto 0 0; z-index:10; width:var(--session-sidebar-width,min(250px,calc(100% - 48px))); box-shadow:4px 0 12px var(--vscode-widget-shadow); } }
-@media (max-width:480px) { #workspace-bar { gap:4px; } #toggle-sidebar { padding:4px 7px; } }
+@media (max-width:600px) { #session-sidebar { position:absolute; inset:0 auto 0 0; z-index:10; width:var(--session-sidebar-width,min(250px,calc(100% - 48px))); box-shadow:4px 0 12px var(--vscode-widget-shadow); }
+  #workspace-layout[data-nimrod-sidebar-side=right] > #session-sidebar { inset:0 0 0 auto; box-shadow:-4px 0 12px var(--vscode-widget-shadow); }
+}
+

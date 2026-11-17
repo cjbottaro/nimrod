@@ -14,10 +14,15 @@ import type { DeletionEvent, DeletionSnapshot } from '../src/session-deletion';
 import { ACTIONS } from '../src/keybindings';
 import { INTENTIONALLY_UNBOUND_ACTIONS } from './keybindings-fixture';
 import { copilotHistoryKey } from '../src/copilot/session-history';
+import { parseCustomizationMessage } from '../src/customization-message';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
 
 // Real shell/renderer/controller bundle, mocked native boundary—not native WebKit acceptance.
 interface ShellOptions {
+  uiTemplates?: import('../src/ui-templates').UiTemplateFiles;
+  uiTemplatesError?: string;
+  authoringContextError?: string;
+  authoringContextGate?: Promise<void>;
   fixtureHarness?: boolean;
   fixtureRetention?: 'saved' | 'absent' | 'unknown';
   fixtureProjectActions?: boolean;
@@ -113,7 +118,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           'export function createBundledHarnessRegistry(host) { return new HarnessRegistry(registrations, host, "pi"); }',
         ].join('\n') }));
       }
-      build.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
+      build.onResolve({ filter: /\.(html|css)\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
       build.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'text' }));
     } }],
   });
@@ -165,6 +170,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let deletionEvent: ((event: DeletionEvent, target?: string) => void) | undefined;
   let notificationClick: ((event: unknown, target?: string) => void) | undefined;
   let projectPicker: ((target?: string) => void) | undefined;
+  let cliAction: ((requestId: string, target?: string) => void) | undefined;
   let linkError: ((message: string, target?: string) => void) | undefined;
   let nativeBlurFailure: ((payload: { request: string; message: string }, target?: string) => void) | undefined;
   let projectPickerPending = options.projectPickerPending || false;
@@ -173,7 +179,12 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     transformCallback: (callback: (event: unknown) => void) => { const id = callbacks.size + 1; callbacks.set(id, callback); return id; }, unregisterCallback: () => {},
     invoke: async (command: string, args: JsonRecord = {}) => {
       calls.push({ command, args });
-      if (command === 'application_action') return;
+      if (command === 'customization_authoring_context') {
+        await options.authoringContextGate;
+        if (options.authoringContextError) throw new Error(options.authoringContextError);
+        return { projectDirectory: workspace, uiDirectory: '/user config/nimrod/ui', cardPluginsDirectory: '/user config/nimrod/card-plugins', referenceDirectory: '/installed Nimrod/resources/customization', cliExecutable: '/installed Nimrod/bin/nimrod', version: '0.1.0', platform: 'macos' };
+      }
+      if (command === 'application_action' || command === 'cli_action_window_ready' || command === 'complete_cli_action') return;
       if (command === 'popup_session_menu') {
         await options.menuGate;
         if (options.menuError) throw new Error(options.menuError);
@@ -200,6 +211,10 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
             if (!target || listenerTarget.kind === 'Any' || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload });
           };
         }
+        if (args.event === 'nimrod-cli-action') cliAction = (requestId, target) => {
+          const listenerTarget = args.target as { kind: string; label?: string };
+          if (!target || listenerTarget.label === target) callbacks.get(Number(args.handler))?.({ payload: { requestId } });
+        };
         if (args.event === 'nimrod-session-menu') sessionMenuEvent = (request, action) => callbacks.get(Number(args.handler))?.({ payload: { request, action } });
         if (args.event === 'nimrod-open-project') projectPicker = target => {
           const listenerTarget = args.target as { kind: string; label?: string };
@@ -259,6 +274,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'acknowledge_deletion' || command === 'recover_deletion_session') return;
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
       if (command === 'delete_session_tree') return options.deleteTree ? options.deleteTree(event => deletionEvent?.(event), args) : [];
+      if (command === 'read_ui_templates') { if (options.uiTemplatesError) throw new Error(options.uiTemplatesError); return options.uiTemplates ?? {}; }
       if (command === 'load_personal_card_plugins') return options.personalGate ?? { entries: [], plugins: [], warnings: [] };
       if (command === 'pi_runtime_available') return options.runtimeAvailable?.('pi') ?? true;
       if (command === 'copilot_runtime_available') return options.runtimeAvailable?.('copilot') ?? true;
@@ -405,7 +421,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
         if (options.modelFixture) channel.onmessage({ kind: 'rpc', value: { type: 'extension_ui_request', method: 'setStatus', id: 'scope', statusKey: 'pi-gui:model-scope', statusText: JSON.stringify([{ provider: 'fixture', id: 'reasoner' }]) } });
         for (const event of options.startupEvents || []) channel.onmessage({ kind: 'rpc', value: event });
         await startGate;
-        return { cwd: '/project', session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
+        return { cwd: String(activeConfig.cwd ?? '/project'), session: activeConfig.mode === 'resume' ? { path: activeConfig.sessionFile, sessionId: options.selectedId || 'fixture-id', exists: true } : undefined };
       }
       if (command === 'inspect_workspace_session') return { path: args.path, sessionId: options.selectedId || 'fixture-id', exists: true, parentSession: options.fileParents?.[String(args.path)], lastUserMessageAt: options.fileTimes?.[String(args.path)] };
       if (command === 'workspace_session_file_info') return { path: args.path, sessionId: args.sessionId, exists: options.fileExists?.() ?? true };
@@ -471,6 +487,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     sessions, acpSessions, sdkSessions, codexSessions,
     deletionEvent: (event: DeletionEvent, target?: string) => deletionEvent?.(event, target),
     projectPicker: (target?: string) => projectPicker?.(target),
+    cliAction: (requestId: string, target?: string) => cliAction?.(requestId, target),
     linkError: (message: string, target?: string) => linkError?.(message, target),
     nativeBlurFailure: (payload: { request: string; message: string }, target?: string) => nativeBlurFailure?.(payload, target),
     notificationClick: (event: unknown, target?: string) => notificationClick?.(event, target),
@@ -777,9 +794,66 @@ test('missing Pi keeps ordinary and named creation available through explicit ha
   } finally { f.win.close(); }
 });
 
-test('mounting an explicitly disconnected saved session does not report a connection attempt failure', async () => {
+for (const harness of ['pi', 'copilot-sdk', 'codex', 'fixture-harness'] as const) test(`${harness} startup connects only the restored selection without prompting`, async () => {
+  const scope = harness === 'pi' ? '/sessions/selected.jsonl' : `${harness}:${JSON.stringify('selected')}`;
+  const entry = (sessionId: string) => harness === 'pi'
+    ? { path: `/sessions/${sessionId}.jsonl`, sessionId: 'fixture-id', name: sessionId }
+    : { kind: harness, sessionId, name: sessionId };
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: harness === 'fixture-harness', codexConversation: true,
+    nativeDrafts: { [scope]: { draft: 'Restored draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [entry('selected'), entry('background')], active: scope } } });
+  try {
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 2);
+    assert.equal(f.rows()[0].getAttribute('aria-current'), 'true');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Restored draft');
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false, 'no extra sidebar click is needed');
+    assert.equal(f.rows()[1].querySelector('.session-indicator')!.getAttribute('data-state'), 'inactive');
+    const writes = (command: string) => f.calls.filter(call => call.command === command).map(call => call.args.message as JsonRecord);
+    if (harness === 'pi') assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    if (harness === 'copilot-sdk') assert.deepEqual(writes('write_copilot').filter(message => message.method === 'connect').map(message => message.sessionId), ['selected']);
+    if (harness === 'codex') assert.deepEqual(writes('write_codex').filter(message => message.method === 'thread/resume').map(message => (message.params as JsonRecord).threadId), ['selected']);
+    assert.equal([...writes('write_copilot'), ...writes('write_codex')].some(message => ['prompt', 'thread/start', 'turn/start'].includes(String(message.method))), false);
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    const before = f.calls.length;
+    f.rows()[0].click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'start_copilot', 'start_codex'].includes(call.command)), false, 'reselection reuses the connection');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Restored draft');
+  } finally { f.win.close(); }
+});
+
+for (const fails of [false, true]) test(`Codex startup reconnect waits for native initialization and never retries a failed attempt (${fails})`, async () => {
+  let release!: () => void;
+  const scope = 'codex:"selected"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+    harnessInitializationGate: new Promise<void>(resolve => { release = resolve; }),
+    harnessResumeError: fails ? 'No rollout found for selected' : undefined,
+    nativeDrafts: { [scope]: { draft: 'Keep this draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'selected', name: 'Selected Codex' }], active: scope } } });
+  const resumes = () => f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/resume');
+  try {
+    assert.equal(resumes().length, 0);
+    release(); await f.tick(); await f.tick();
+    assert.equal(resumes().length, 1, 'readiness releases the selected-session deferral without a click');
+    assert.equal(((resumes()[0].args.message as JsonRecord).params as JsonRecord).threadId, 'selected');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Keep this draft');
+    assert.equal(f.calls.some(call => call.command === 'write_codex' && ['thread/start', 'turn/start'].includes(String((call.args.message as JsonRecord).method))), false);
+    if (fails) {
+      assert.match(f.element('session-notices').textContent!, /No rollout found/);
+      f.openPalette();
+      f.element<HTMLDialogElement>('command-palette').close();
+      await f.tick(); await f.tick();
+      assert.equal(resumes().length, 1, 'routine controls and rendering updates never retry');
+      f.rows()[0].click(); await f.tick(); await f.tick();
+      assert.equal(resumes().length, 2, 'explicit reselection can retry the same identity');
+    }
+  } finally { release(); f.win.close(); }
+});
+
+test('mounting a filtered-out saved session does not connect or report a connection attempt failure', async () => {
   const scope = 'codex:"waiting"';
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.sidebar.view:/project': 'unread',
     'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
   } });
   try {
@@ -792,7 +866,7 @@ test('mounting an explicitly disconnected saved session does not report a connec
 
 test('Close consumes a disconnected Codex lifecycle without connecting or requiring saved-history confirmation', async () => {
   const scope = 'codex:"waiting"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'codex', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
   } });
   try {
@@ -810,15 +884,17 @@ test('Close consumes a disconnected Codex lifecycle without connecting or requir
 
 test('disconnected Codex Delete uses the independent catalog and shared review without conversation Resume', async () => {
   const scope = 'codex:"waiting"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
     codexHistory: [{ id: 'waiting', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Waiting Codex' }],
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
   });
-  const conversationWrites = () => f.calls.filter(call => call.command === 'write_codex')
+  let callsStart = 0;
+  const conversationWrites = () => f.calls.slice(callsStart).filter(call => call.command === 'write_codex')
     .map(call => call.args.message as JsonRecord)
     .filter(request => ['thread/start', 'thread/resume', 'turn/start'].includes(String(request.method)));
   try {
-    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(conversationWrites().filter(request => request.method === 'thread/resume').length, 1, 'startup tried the exact saved identity once');
+    callsStart = f.calls.length;
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.delete.disabled, false);
     menu.delete.click(); await f.tick(); await f.tick();
@@ -832,7 +908,7 @@ test('disconnected Codex Delete uses the independent catalog and shared review w
     assert.equal(f.rows().length, 0);
     assert.equal(f.saved().drafts[scope], undefined);
     assert.equal(conversationWrites().length, 0);
-    assert.ok(f.calls.filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
+    assert.ok(f.calls.slice(callsStart).filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
     const deletes = f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete');
     assert.equal(deletes.length, 1);
     assert.equal(((deletes[0].args.message as JsonRecord).params as JsonRecord).threadId, 'waiting');
@@ -846,6 +922,7 @@ test('Delete removes a natively absent Codex session and draft without native de
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'never-saved', name: 'Never saved' }], active: scope } },
   });
   try {
+    const callsStart = f.calls.length; // Only deletion effects, not the failed startup reconnect.
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
     assert.equal(f.element('deletion-title').textContent, 'Delete Codex session');
@@ -853,7 +930,7 @@ test('Delete removes a natively absent Codex session and draft without native de
     assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
     f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
     f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
-    const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
+    const requests = f.calls.slice(callsStart).filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
     assert.equal(requests.some(request => ['thread/delete', 'thread/start', 'thread/resume', 'turn/start'].includes(String(request.method))), false);
     assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
     const fences = f.calls.filter(call => call.command === 'reserve_codex_deletion');
@@ -865,7 +942,7 @@ test('Delete removes a natively absent Codex session and draft without native de
 
 test('Delete retains the Codex row and draft when native absence cannot be established', async () => {
   const scope = 'codex:"lookup-denied"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
     nativeDrafts: { [scope]: { draft: 'Keep unknown history draft', recovered: [] } },
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'lookup-denied', name: 'Unknown history' }], active: scope } },
   });
@@ -880,7 +957,7 @@ test('Delete retains the Codex row and draft when native absence cannot be estab
 
 test('a saved named-empty Codex root omitted by listing still receives native deletion review', async () => {
   const scope = 'codex:"named-empty"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', codexHistory: [],
     codexSavedThread: { id: 'named-empty', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Named empty' },
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'named-empty', name: 'Named empty' }], active: scope } },
   });
@@ -2257,7 +2334,7 @@ test('performance capture is opt-in, bindable, timing-only and preserves the mou
   } finally { f.win.close(); }
 });
 
-test('personal compilation does not gate shell/session boot and Reload card plugins is bindable without Pi reload', async () => {
+test('personal compilation does not gate shell/session boot and Reload customizations is bindable without Pi reload', async () => {
   let release!: (value: import('../src/pi/card-plugins/catalog').PersonalBundles) => void;
   const gate = new Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>(resolve => { release = resolve; });
   const f = await fixture(undefined, { windowWorkspace: '/project', personalGate: gate });
@@ -2268,13 +2345,13 @@ test('personal compilation does not gate shell/session boot and Reload card plug
     assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
     release({ entries: [], plugins: [], warnings: [] }); await f.tick(); await f.tick();
     assert.match(f.element('card-plugin-status').textContent || '', /0 personal/); assert.equal(prompt.value, 'keep draft'); assert.equal(f.win.document.activeElement, prompt);
-    f.preferences.external('{"keybindings":{"reload-card-plugins":["primary+alt+l"]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload-customizations":["primary+alt+l"]}}'); await f.tick();
     const before = f.calls.filter(call => call.command === 'load_personal_card_plugins').length;
     const starts = f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
     assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length, starts); assert.equal(prompt.value, 'keep draft');
-    f.preferences.external('{"keybindings":{"reload-card-plugins":[]}}'); await f.tick();
+    f.preferences.external('{"keybindings":{"reload-customizations":[]}}'); await f.tick();
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'l', metaKey: true, altKey: true, bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, before + 1);
   } finally { f.win.close(); }
@@ -4244,7 +4321,7 @@ test('named-session Escape preserves the existing composer and inline Create lau
 test('welcome stays hidden until startup resolves and appears only without a workspace', async () => {
   const initial = new JSDOM(readFileSync('index.html', 'utf8'));
   assert.equal(initial.window.document.getElementById('welcome')!.hidden, true);
-  assert.equal(initial.window.document.getElementById('mode-badge')!.textContent, '');
+  assert.equal(initial.window.document.getElementById('mode-badge'), null, 'Project bar comes from the shared template pipeline');
   initial.window.close();
   for (const windowWorkspace of [undefined, '/project']) {
     let release!: () => void;
@@ -4267,6 +4344,148 @@ test('welcome stays hidden until startup resolves and appears only without a wor
       }
     } finally { release(); f.dom.window.close(); }
   }
+});
+
+test('Customize Nimrod sends one ordinary turn from an unrelated project without consuming the Composer', async () => {
+  const f = await fixture(undefined, { windowWorkspace: "/unrelated/client's project" });
+  const choose = async () => {
+    f.openPalette();
+    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Customize Nimrod'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+  };
+  try {
+    f.openPalette(); assert.equal(f.element('palette-list').querySelector('[data-key="customize-nimrod"]'), null);
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep existing draft'; prompt.dispatchEvent(new f.win.Event('input')); prompt.focus(); prompt.setSelectionRange(2, 6);
+    await choose();
+    const dialog = f.element<HTMLDialogElement>('customize-nimrod'), input = f.element<HTMLTextAreaElement>('customize-nimrod-input');
+    assert.equal(dialog.open, true); assert.equal(f.element<HTMLDetailsElement>('customize-nimrod-instructions').open, false);
+    const request = '  Move the Status area to the top.\nKeep this exact request.  ';
+    input.value = request; input.dispatchEvent(new f.win.Event('input'));
+    const before = f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;
+    dialog.querySelector<HTMLButtonElement>('[value="send"]')!.click(); await f.tick(); await f.tick();
+    assert.equal(dialog.open, false); assert.equal(prompt.value, 'Keep existing draft'); assert.equal(prompt.selectionStart, 2); assert.equal(prompt.selectionEnd, 6);
+    const sent = f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt');
+    assert.equal(sent.length, 1);
+    const message = parseCustomizationMessage(String((sent[0].args.message as JsonRecord).message))!;
+    assert.equal(message.request, request); assert.match(message.instructions, /\/installed Nimrod\/resources\/customization\/docs\/ui-templates.md/);
+    assert.match(message.instructions, /\/user config\/nimrod\/ui/); assert.match(message.instructions, /client.*project/);
+    assert.ok(f.win.document.querySelector('.customization-request details'));
+    assert.equal(f.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length, before);
+    assert.equal(f.calls.some(call => call.command === 'read_ui_templates' && call !== f.calls.find(item => item.command === 'read_ui_templates')), false, 'request submission does not automatically reload');
+    await choose(); f.element<HTMLTextAreaElement>('customize-nimrod-input').value = 'Cancel this';
+    dialog.querySelector<HTMLButtonElement>('[value="cancel"]')!.click(); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt').length, 1);
+    assert.equal(prompt.value, 'Keep existing draft');
+  } finally { f.win.close(); }
+});
+
+test('Customize Nimrod retains unsent input across lost ownership and uses a configurable shortcut', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/outside/project' });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    f.preferences.external('{"keybindings":{"customize-nimrod":["primary+shift+y"]}}'); await f.tick();
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'y', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    const dialog = f.element<HTMLDialogElement>('customize-nimrod'), input = f.element<HTMLTextAreaElement>('customize-nimrod-input');
+    input.value = 'Preserve unsent instructions'; input.dispatchEvent(new f.win.Event('input'));
+    const channel = f.captureChannel(); channel.onmessage({ kind: 'disconnected', message: 'Fixture connection closed' }); await f.tick();
+    assert.equal(dialog.open, true); assert.equal(input.value, 'Preserve unsent instructions');
+    const send = dialog.querySelector<HTMLButtonElement>('[value="send"]')!; assert.equal(send.disabled, true); send.click();
+    assert.equal(f.calls.filter(call => call.command === 'write_pi' && (call.args.message as JsonRecord).type === 'prompt').length, 0);
+    dialog.querySelector<HTMLButtonElement>('[value="cancel"]')!.click();
+  } finally { f.win.close(); }
+});
+
+test('custom Project bar is wired through real shell identity, actions and Settings consumers', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', uiTemplates: {
+    projectBar: '<nav><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title" data-nimrod-visible="session.present"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>',
+    projectBarCss: 'nav { display:flex; gap:8px; }',
+  } });
+  try {
+    assert.equal(f.element('workspace-bar').querySelector('b')!.textContent, 'project');
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const title = f.element('workspace-bar').querySelector('span')!;
+    assert.equal(title.textContent, 'Temporary session'); assert.equal(title.hidden, false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Keep draft'; prompt.focus();
+    const channel = f.captureChannel(); channel.onmessage({ kind: 'rpc', value: { type: 'agent_start' } }); await f.tick();
+    assert.equal(f.element('workspace-bar').querySelector('span'), title);
+    assert.equal(f.win.document.activeElement, prompt); assert.equal(prompt.value, 'Keep draft');
+    f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, true);
+    f.element<HTMLButtonElement>('open-settings').click(); assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    assert.equal(f.win.document.querySelector('#reload-session'), null, 'omitted buttons are not required DOM hooks');
+  } finally { f.win.close(); }
+});
+
+test('Reload customizations refreshes both subsystems and preserves session/button wiring even with invalid UI files', async () => {
+  const options: ShellOptions = { windowWorkspace: '/project' };
+  const f = await fixture(undefined, options);
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'), content = f.element('workspace-content');
+    prompt.value = 'Do not send'; prompt.focus(); prompt.setSelectionRange(1, 4);
+    const before = f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    const cardsBefore = f.calls.filter(call => call.command === 'load_personal_card_plugins').length;
+    options.uiTemplates = { projectBar: '<nav><b data-nimrod-text="project.name"></b><span data-nimrod-text="session.title"></span><button data-nimrod-action="settings">Preferences</button><button data-nimrod-action="sidebar">Sessions</button></nav>' };
+    f.openPalette();
+    const query = f.element<HTMLInputElement>('palette-input'); query.value = 'Reload customizations'; query.dispatchEvent(new f.win.Event('input', { bubbles: true }));
+    query.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('workspace-content'), content); assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Do not send');
+    assert.equal(f.element('workspace-bar').querySelector('span')!.textContent, 'Temporary session');
+    f.element<HTMLButtonElement>('toggle-sidebar').click(); assert.equal(f.element('session-sidebar').hidden, true);
+    f.preferences.external('{"keybindings":{"reload-customizations":["primary+shift+u"]}}'); await f.tick();
+    options.uiTemplates = {};
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('project-name').textContent, 'project');
+    assert.equal(f.element('project-session-name').textContent, 'Temporary session');
+    f.element<HTMLButtonElement>('open-settings').click(); assert.equal(f.element<HTMLDialogElement>('settings-page').open, true);
+    f.back(); await f.tick();
+    options.uiTemplates = { layout: '<div>Invalid</div>' };
+    f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'u', metaKey: true, shiftKey: true, bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    assert.equal(f.element('project-name').textContent, 'project'); assert.equal(f.element('prompt'), prompt);
+    assert.match(f.element('application-notices').textContent!, /current UI was kept/);
+    assert.equal(f.calls.filter(call => call.command === 'load_personal_card_plugins').length, cardsBefore + 3, 'a template error does not skip card plugin refresh');
+    assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, before);
+    assert.equal(prompt.value, 'Do not send');
+  } finally { f.win.close(); }
+});
+
+test('window-scoped CLI reload returns actual coalesced results and partial errors without harness traffic', async () => {
+  const options: ShellOptions = { windowWorkspace: '/project', windowLabel: 'project-fixture' };
+  const f = await fixture(undefined, options);
+  try {
+    assert.ok(f.calls.some(call => call.command === 'cli_action_window_ready'));
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent CLI draft'; prompt.focus();
+    const harnessBefore = f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length;
+    const readsBefore = f.calls.filter(call => call.command === 'read_ui_templates').length;
+    f.cliAction('wrong', 'another-window'); await f.tick();
+    assert.equal(f.calls.filter(call => call.command === 'complete_cli_action').length, 0);
+    f.cliAction('first', 'project-fixture'); f.cliAction('second', 'project-fixture'); await f.tick(); await f.tick();
+    const replies = f.calls.filter(call => call.command === 'complete_cli_action');
+    assert.deepEqual(replies.map(call => call.args.requestId), ['first', 'second']);
+    const result = replies[0].args.result as import('../src/customization-reload').CustomizationReloadResult;
+    assert.equal(result.uiTemplates.applied, true); assert.equal(result.cardPlugins.report?.personalLoaded, 0); assert.equal(result.cardPlugins.error, undefined);
+    assert.equal(f.calls.filter(call => call.command === 'read_ui_templates').length, readsBefore + 1);
+    options.uiTemplatesError = 'fixture template read error';
+    options.personalGate = Promise.resolve({ entries: [], plugins: [], warnings: ['fixture plugin compile error'] });
+    f.cliAction('partial', 'project-fixture'); await f.tick(); await f.tick();
+    const partial = f.calls.filter(call => call.command === 'complete_cli_action').at(-1)!.args.result as import('../src/customization-reload').CustomizationReloadResult;
+    assert.equal(partial.uiTemplates.applied, false); assert.match(partial.uiTemplates.error!, /template read error/);
+    assert.match(partial.cardPlugins.error!, /plugin compile error/);
+    assert.equal(f.element('prompt'), prompt); assert.equal(prompt.value, 'Unsent CLI draft');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(f.calls.filter(call => ['start_pi', 'stop_pi', 'write_pi'].includes(call.command)).length, harnessBefore);
+  } finally { f.win.close(); }
+});
+
+test('unreadable UI files report an application notice and retain the default shell', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', uiTemplatesError: 'fixture template read failure' });
+  try {
+    assert.equal(f.element('project-name').textContent, 'project');
+    assert.match(f.element('application-notices').textContent!, /fixture template read failure/);
+    assert.equal(f.calls.some(call => call.command === 'start_pi'), false);
+  } finally { f.win.close(); }
 });
 
 test('project bar identifies the directory, abbreviates home and keeps branding on welcome', async () => {

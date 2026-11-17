@@ -33,7 +33,7 @@ Share aligned mechanics, not approximate semantics. An unsupported operation is 
 | Contract | Consumers | Meaning |
 | --- | --- | --- |
 | `SessionPersistence` | Project layout/draft coordination | Saved reference, project-local stable key and draft scope; read-only and independent of connection or Reload support. |
-| `SessionConnectivity` | Selected-session connection coordinator and shell teardown | Display label, connection projection, startup policy, selection eligibility, connect, owned stop and local disconnect. |
+| `SessionConnectivity` | Selected-session connection coordinator and shell teardown | Display label, connection projection, native connection eligibility, connect, owned stop and local disconnect. |
 | `SessionReload` | Project bar, palette and shortcut dispatcher | Required exact-identity reload through a fresh connection/controller, live availability/reason and harness-specific confirmation. Separate from persistence/connectivity. [Reload lifecycle](projects-and-sessions.md#reload-session-lifecycle) owns behavior and concrete mappings. |
 | `SessionLifecycle` | Composition root | Convenience intersection of those two ports, not a destination for every session feature. |
 | `SessionDeletionOperation` / `SessionDeletionSource` | Sidebar/Project bar controls, selected-session action and Delete sessions picker | Target-bound review/removal/reconciliation, with Pi tree and capability-gated Copilot single-session implementations; separate from lifecycle and history discovery. |
@@ -54,7 +54,7 @@ interface changes must preserve that distinction and compatibility explicitly.
 
 - `identity`, `key` and `draftScope` route local layout/drafts; disconnection does not erase them. Existing adapters expose them after identity assignment, but they are not universal proof of saved-history durability. Codex layout records retain exact reconnect candidates and ignore retired continuity markers; Reload uses native history confirmation, whereas deletion candidates are validated independently by the catalog/source; see [durability](session-durability.md#codex-motivating-case-and-implementation). Keys are project-scoped. Saved Pi and tagged Copilot encodings remain unchanged; no history migration.
 - `connection` is a projection: starting takes precedence, then a non-ended available controller is connected. It is not inferred from sidebar membership or native token presence.
-- `eligibility()` is selection/reconnection policy, not general permission to create a session. The shell adds window/membership/selection gates; implementations retain their concrete availability/deletion gates.
+- `eligibility()` reports native connection readiness, not navigation intent or general permission to create a session. The application owns selection/reconnection policy: every visible activation, including the restored startup selection, requests the same connection coordinator. Adapters cannot opt out of startup or require a second click. Background restored entries stay disconnected. This applies to every current/future registration, including Claude Code; implementations retain only their concrete availability/initialization/deletion gates. See [session navigation](session-navigation.md#contracts).
 - `connect()` settles when a guarded attempt has finished. Existing launch paths may skip work or report failure locally; resolution does **not** mean readiness. Observe connection state. Pi finishes its initialization sequence; ACP finishes negotiation and new/load initialization. Do not reinterpret these as equivalent wire acknowledgements. No submission/replay of prompts, repeat navigation or newer-draft mutation is authorized by completion.
 - Concurrent selected-session attempts are coalesced by `SessionConnection`; concrete launch paths synchronously set `starting`. The interface itself is not a new scheduler, retry loop or cancellation framework.
 - `stop()` is valid while disconnected and without confirmed saved history; consumers never call connect/Resume to Close. It awaits release of integration-owned resources through the native host: owned-child exit for process-backed integrations, client detach for daemon-backed Codex. Calls share work per token, including completed stops. Failure retains ownership for explicit retry. A new token has independent work; no token is a no-op. This is connection/resource teardown, **not** the composer Stop/cancel-turn operation or authority to interrupt shared work. Close removes membership only after success; [durability](session-durability.md#close-and-local-removal) owns draft retention.
@@ -128,14 +128,13 @@ native-event translation is required.
 | `retention` | Required native saved/absent/unknown check and integration-local pointer retirement for shared Close/Delete; [cleanup contract](session-durability.md#close-and-local-removal) |
 | `deletion` | Live local-Close versus saved-deletion intent for shared Delete controls; [deletion contract](session-deletion.md#consumer-interface-and-copilot-deletion) |
 | `drafts` | Persistent versus memory-only draft/attachment lifetime |
-| `selection` | Explicit versus restored-selection connection policy |
 | `interactions` | Session activation/suspension and disposal of retained decisions |
 | `references` | Optional native file-backed reference-window compatibility |
 
 Every slot is mandatory, including unsupported feature slots.
 `src/harness-defaults.ts` supplies explicit absent configuration/history/deletion,
 unsupported saved history, no project actions, no retained interactions/references, safe
-selection/close policies and a generic idle text interaction. Reload has no unsupported default: every factory supplies the complete `SessionReload` port; product harnesses implement exact-identity reload with truthful native lifecycle semantics. Core connect,
+close policies and a generic idle text interaction. Reload has no unsupported default: every factory supplies the complete `SessionReload` port; product harnesses implement exact-identity reload with truthful native lifecycle semantics. Core connect,
 submission, protocol response and owned-stop implementations are not replaced
 with successful no-ops. `displayUnsupportedInteraction` displays literal
 question/request details and returns an explicit unsupported outcome; it does

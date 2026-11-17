@@ -1,3 +1,4 @@
+import { installUiTemplates } from './ui-templates';
 import { bundledHarnesses } from './bundled-harnesses';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -19,6 +20,9 @@ export async function mountGlobalSettings() {
     layout: () => { document.getElementById('settings-page')!.getBoundingClientRect(); },
     reveal: () => invoke('settings_window_ready', { generation: new URLSearchParams(location.search).get('settingsGeneration') ?? '' }),
   });
+  const templates = installUiTemplates(document);
+  presentation.own(() => templates.dispose());
+  document.getElementById('workspace-shell')!.hidden = true;
   for (const id of ['workspace-bar', 'workspace-layout']) document.getElementById(id)!.hidden = true;
   const notices = installApplicationNotices(window);
   presentation.own(() => notices.dispose());

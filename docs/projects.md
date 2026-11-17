@@ -39,6 +39,8 @@ Terminal launches open/focus projects without starting or resuming agents. Rapid
 
 **Quit the old build before trying a new build.** Launches forward to an already-running Nimrod, which keeps its old code. On macOS, **⌘+backtick** cycles project windows and skips pop-outs; this native shortcut is separate from session switching and isn't customizable in Nimrod.
 
+To reload customizations in an already-open project without opening/focusing its window, use `nimrod --action reload-customizations --project /path/to/project --json`. Unlike directory launches, [CLI actions](cli-actions.md) wait for the actual result.
+
 Native macOS launch forwarding/window cycling and Linux launcher behavior still need platform acceptance.
 
 See [Sessions](sessions.md) for conversations and [Keybindings](keybindings.md) to customize recent-project navigation.

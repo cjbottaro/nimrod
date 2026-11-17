@@ -3,8 +3,10 @@ mod acp;
 mod application_actions;
 mod card_plugins;
 mod cli;
+mod cli_actions;
 mod command_usage;
 mod copilot;
+mod customization_authoring;
 mod codex;
 mod owned_process;
 mod drafts;
@@ -36,6 +38,7 @@ mod settings_window;
 #[cfg(any(target_os = "macos", all(test, unix)))]
 mod single_instance;
 mod transcript_logs;
+mod ui_templates;
 mod webview_navigation;
 mod window_appearance;
 mod window_presentation;
@@ -386,6 +389,7 @@ fn request_exit(app: &tauri::AppHandle) {
     if exit.closing.swap(true, Ordering::SeqCst) {
         return;
     }
+    app.state::<cli_actions::CliActions>().shutdown();
     for window in app.webview_windows().values() {
         if window.label() == settings_window::LABEL {
             continue;
@@ -441,6 +445,7 @@ fn main() {
         .map_err(|e| e.to_string())
         .and_then(|cwd| cli::parse(std::env::args_os().skip(1), &cwd))
     {
+        Ok(cli::Request::Action(request, json)) => std::process::exit(cli_actions::client(request, json)),
         Ok(cli::Request::Help) => {
             print!("{}", cli::HELP);
             return;
@@ -474,7 +479,8 @@ fn main() {
         .manage(popouts::Popouts::default())
         .manage(native_menu::ProjectPickerRequests::default())
         .manage(session_menu::SessionMenus::default())
-        .manage(cli::CliRequests::default());
+        .manage(cli::CliRequests::default())
+        .manage(cli_actions::CliActions::default());
     // Keep the existing Linux/Windows integration. macOS elects/binds above,
     // rather than using the plugin's racy connect/unlink/asynchronous-bind path.
     #[cfg(not(target_os = "macos"))]
@@ -528,9 +534,15 @@ fn main() {
             workspace_windows::open_initial_window(app.handle(), workspace)
                 .map_err(std::io::Error::other)?;
             app.state::<cli::CliRequests>().ready(app.handle());
+            if let Err(error) = cli_actions::start(app.handle()) {
+                eprintln!("Nimrod CLI control unavailable: {error}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            customization_authoring::customization_authoring_context,
+            cli_actions::cli_action_window_ready,
+            cli_actions::complete_cli_action,
             drafts::drafts_load,
             drafts::drafts_stage,
             drafts::drafts_flush,
@@ -564,6 +576,7 @@ fn main() {
             performance_diagnostics::write_performance_report,
             transcript_logs::append_transcript_logs,
             transcript_logs::transcript_logs_directory,
+            ui_templates::read_ui_templates,
             preferences::preferences_snapshot,
             project_preferences::scoped_preferences_snapshot,
             project_preferences::project_preferences_settings,
@@ -639,6 +652,7 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                window.app_handle().state::<cli_actions::CliActions>().forget_window(window.label());
                 session_menu::forget(window);
             }
             if window.label() == settings_window::LABEL {
@@ -697,6 +711,7 @@ fn main() {
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                window.app_handle().state::<cli_actions::CliActions>().forget_window(window.label());
                 window
                     .app_handle()
                     .state::<session_deletion::SessionDeletion>()
@@ -772,6 +787,7 @@ fn main() {
             if matches!(event, tauri::RunEvent::Exit) {
                 primary.shutdown();
             }
+            if matches!(event, tauri::RunEvent::Exit) { app.state::<cli_actions::CliActions>().shutdown(); }
             match event {
                 tauri::RunEvent::ExitRequested { api, .. } => {
                     if !app.state::<ExitState>().ready.load(Ordering::SeqCst) {

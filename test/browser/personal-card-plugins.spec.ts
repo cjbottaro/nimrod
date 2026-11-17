@@ -33,7 +33,7 @@ test('personal TS is loaded without manifests/settings and reload reuses cache t
     const prompt = page.locator(visible('prompt')); await prompt.fill('untouched draft'); await prompt.focus();
     const primary = await page.evaluate(() => /Mac|iPhone|iPad/i.test(navigator.platform)) ? 'Meta' : 'Control';
     async function reload() {
-      await page.keyboard.press(`${primary}+Shift+P`); await page.locator('#palette-input').fill('Reload card plugins'); await page.locator('#palette-input').press('Enter');
+      await page.keyboard.press(`${primary}+Shift+P`); await page.locator('#palette-input').fill('Reload customizations'); await page.locator('#palette-input').press('Enter');
       await expect(page.locator('#command-palette')).not.toHaveAttribute('open', '');
     }
     const stops = demo.calls.filter(call => call.command === 'start_pi' || call.command === 'stop_pi').length;

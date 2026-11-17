@@ -9,7 +9,7 @@ import { codexIntegrationUi } from './integration-ui';
 import { codexToolPlugin } from './card-plugins';
 import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, explicitSelection, noReferences, taggedSavedSessions } from '../harness-defaults';
+import { configurationActions, noProjectActions, noReferences, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { commandInteraction } from '../command-interaction';
@@ -139,6 +139,6 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       await backend.session.rename(name);
     } },
     close: { alwaysConfirm: false, label: 'Close session',
-      message: 'This disconnects Nimrod from this Codex thread without stopping its shared daemon or active work. Saved history and your draft remain; confirmed-unsaved local state is discarded.' }, selection: explicitSelection, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
+      message: 'This disconnects Nimrod from this Codex thread without stopping its shared daemon or active work. Saved history and your draft remain; confirmed-unsaved local state is discarded.' }, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
   };
 }

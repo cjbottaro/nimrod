@@ -7,7 +7,7 @@ import { renderPermissionDetails } from './tool-state';
 import type { AcpPermissionRequest } from './client';
 import { acpToolPlugin } from './card-plugins';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions, ordinarySelection } from '../harness-defaults';
+import { configurationActions, noProjectActions, noHistory, noDeletion, noReferences, noSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { ownedProcessStop } from '../session-lifecycle';
@@ -106,7 +106,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       async run() { throw new Error('ACP saved-session Resume is not implemented'); } },
     retention: { async check() { return 'absent'; }, forget() {} },
     close: { alwaysConfirm: true, label: 'Close ACP session', message: 'This stops this ACP agent and discards Nimrod’s in-memory transcript, draft and pop-outs. Nimrod cannot resume it in this POC. The agent may keep its own saved history; this does not delete it.' },
-    selection: ordinarySelection, references: noReferences, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); cancelOption?.(); } }, drafts: { durability: 'memory' },
+    references: noReferences, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); cancelOption?.(); } }, drafts: { durability: 'memory' },
   };
 }
 function permission(host: HarnessSessionHost, label: string, request: AcpPermissionRequest, signal: AbortSignal): Promise<string | undefined> {

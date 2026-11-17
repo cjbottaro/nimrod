@@ -91,7 +91,6 @@ export class HarnessRegistry {
       get deletion() { return session.deletion; },
       get close() { return session.close; },
       get drafts() { return session.drafts; },
-      get selection() { return session.selection; },
       get interactions() { return session.interactions; },
       get references() { return session.references; },
       actions: {

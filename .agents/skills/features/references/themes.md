@@ -11,6 +11,8 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 
 ## Code map and invariants
 
+- [Text-selection contrast](#text-selection-contrast) is shared by every palette, independently of list-row selection; no theme-specific highlight overrides.
+
 - `src/themes/theme.ts`: bounded JSONC importer, hex allowlist, broad syntax
   mapping, fallback derivation, imported-library validation and CSS-only application.
   `BUILTIN_THEME_IDS` preserves Nimrod/Dracula/Tokyo Night/Osaka Jade;
@@ -36,6 +38,20 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 - Manual import remains standalone JSON/JSONC (512 KiB, 50 saved imports), not
   arbitrary URLs/CSS/fonts/scripts/includes or extension packages. Catalog-time
   resolution is a maintenance-tool capability, not a runtime importer relaxation.
+
+## Text-selection contrast
+
+`src/text-selection.ts` derives presentation-only highlight/text pairs, without theme IDs or source-palette mutation. `src/window-appearance-controller.ts` computes separate pairs against the nominal editor, input, code and widget backings at installation, completed theme publication (including same-ID previews/restoration) and inherited-system appearance changes. Opacity slider ticks do not recompute or fade them. The shared `src/theme.css` `::selection` rule consumes these roles throughout project, Settings and reference windows; inputs/textareas, code and widget containers select their matching backing roles. Before installation and in forced-colors mode, selection uses system Highlight/HighlightText colors.
+
+Prefer the general UI `selection.background`, then `editor.selectionBackground`; this is DOM text selection, not an embedded editor. Preserve both original tokens independently. Missing selection roles start with a subdued 35% focus-accent blend against the backing, not a full-strength accent or `list.focusBackground`. `editor.selectionForeground` is imported/managed, with normal foreground as its default. Reset clears source overrides and the appearance subscription recomputes derived roles. List/quick-input/suggestion selected-row roles retain their existing recipes.
+
+Composite source highlight alpha against the nominal backing and serialize the derived highlight with alpha **254/255** (`#RRGGBBfe`), independently of the window-opacity slider. WebKit's [`RenderTheme::transformSelectionBackgroundColor`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/rendering/RenderTheme.cpp) calls [`blendWithWhite`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/platform/graphics/ColorBlending.cpp): fully opaque author selection colors are rewritten as translucent colors calibrated for white. This can erase an otherwise contrasting gray highlight on dark surfaces even though `getComputedStyle(..., '::selection')` reports the intended color. The one-byte alpha difference bypasses that rewrite across platforms; do not make this a theme-ID or UA exception or round the alpha back to 1.
+
+Preserve the derived RGB if its composited nominal-backing contrast is at least 3:1; otherwise search toward black and white and choose the passing serialized color with the smallest RGB displacement. Preserve an opaque supplied foreground only if its worst-case highlight contrast at 254/255 alpha is at least 4.5:1 over any sRGB underlay; otherwise choose a passing black/white foreground. Both thresholds are application presentation policy, not native accessibility certification.
+
+The near-opaque highlight protects selected-text contrast independently of window opacity or the desktop. Highlight/background contrast is guaranteed only against each **nominal palette backing**: arbitrary desktop content under transparent surfaces, custom/plugin backgrounds and native inactive-selection painting require visual acceptance, not claims based on palette math. No desktop sampling, native changes, DOM replacement, draft/focus/selection mutation or scroll effects.
+
+`test/text-selection.test.ts` sweeps bundled/catalog palettes and synthetic imported/alpha/mid-tone cases, including paint-alpha contrast bounds; controller fixtures cover preview/reset and retained draft selection; `test/browser/text-selection.spec.ts` covers computed WebKit highlight roles on content, inputs, code and widgets across system schemes, themes and opacity. `test/browser/text-selection-paint.spec.ts` compares actual selected/unselected screenshot pixels in the composer and transcript for Nimrod and Sweet Dracula across both system schemes and opacity 0/65/100. Computed colors alone are not a selection-paint regression check. [Verification](verification.md#text-selection-contrast) owns execution/acceptance status.
 
 ## Bundled catalog and command-palette picker
 

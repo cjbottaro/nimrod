@@ -5,6 +5,8 @@ description: Nimrod feature specifications and implementation guidance. Load for
 
 # Nimrod features
 
+Skills are specifications: document contracts and decisions directly, without design-versus-implementation status labels unless explicitly requested. Keep execution and verification evidence in its canonical reference.
+
 Read repository `AGENTS.md`, [architecture](references/architecture.md) and the relevant references below before changes. For UI work, load the [shared vocabulary](../nimrod-ui-vocabulary/SKILL.md). Implement directly unless delegation is approved.
 
 When adding or changing error paths, notices, banners, flash messages or operational notifications, load the [error presentation policy](references/error-presentation.md). It owns ownership-based placement (session conversation notices versus the application notice strip), shared routing, wording, deduplication and lifecycle. Do not invent additional error surfaces.
@@ -51,10 +53,15 @@ Rapid local development: merge task branches into main and build only when reque
 
 ## Feature index
 
+For workspace layout or Project bar customization, load the [UI customization skill](../ui-customization/SKILL.md). It owns the declarative-template direction and default-template dogfooding requirements.
+
 References own specifications, acceptance criteria, code maps, state/lifecycle, invariants and tests. Labels below route work; they do not duplicate specifications.
 
 | Work area | Canonical reference | User guide |
 | --- | --- | --- |
+| Customize Nimrod… action, explicit ordinary user-turn request and instruction disclosure | [Customize Nimrod skill](../customize-nimrod/SKILL.md), [request contract](references/customize-nimrod.md) | [Customize Nimrod](../../../docs/customize-nimrod.md) |
+| Synchronous CLI customization reload, existing-project targeting and structured completion | [CLI actions](references/cli-actions.md) | [CLI actions](../../../docs/cli-actions.md) |
+| Declarative workspace layout and Project bar templates, public bindings/actions and bundled defaults | [UI templates](references/ui-templates.md) | [UI templates](../../../docs/ui-templates.md) |
 | Codex app-server, interface mappings, protocol evidence, limitations and policy questions | [Codex integration skill](../codex-integration/SKILL.md) | [Codex](../../../docs/codex.md) |
 | Codex shared-daemon transport, CLI interoperability, client detach/reload and multi-client replay | [Codex daemon](../codex-integration/references/daemon.md) | [Codex lifecycle](../../../docs/codex.md#history-drafts-and-close) |
 | Codex experimental protocol, structured questions, unsupported-interaction diagnostics and log capture | [Codex questions](../codex-integration/references/questions.md) | [Codex questions](../../../docs/codex.md#structured-questions-and-experimental-protocol) |

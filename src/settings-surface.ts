@@ -25,7 +25,7 @@ import type { NotificationDispatch } from './notifications';
 import { installTypography } from './typography-controls';
 import type { InstalledFont } from './font-picker';
 
-export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false, harnesses: readonly { id: string; label: string }[] = []) {
+export function installSettingsSurface(preferences: Awaited<ReturnType<typeof installPreferences>>, notices: ReturnType<typeof installApplicationNotices>, global = false, harnesses: readonly { id: string; label: string }[] = [], openButton?: HTMLButtonElement) {
   const required = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   let unloading = false, noticeSequence = 0;
   let chooseSetting: ChooseSetting = async () => undefined;
@@ -34,7 +34,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     if (message) notices.report({ id, operation, message }); else notices.resolve(id);
   };
   const persistenceError = feedback('settings-storage', 'Save Settings layout');
-  const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'), false, {
+  const settings = installSettings(window, required<HTMLDialogElement>('settings-page'), openButton ?? required<HTMLButtonElement>('open-settings'), required<HTMLButtonElement>('settings-back'), false, {
     canOpen: () => global || !!preferences.projectPath,
     unavailable: () => { void invoke('open_global_settings').catch(error => feedback('open-settings', 'Open Settings')(String(error))); },
     closeWindow: global ? () => { void getCurrentWindow().close().catch(error => feedback('close-settings', 'Close Settings')(String(error))); } : undefined,

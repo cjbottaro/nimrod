@@ -47,6 +47,12 @@ Changes apply immediately across project windows and pop-outs and are remembered
 
 Filled buttons use a shared readability policy across every palette, including imports: readable text colours are retained, otherwise a neutral contrast fallback is used. Button fill density can remain higher than the window background opacity to support the label. Button-specific colours are solid RGB, even when a source button token has alpha; the source palette is not modified. See [Translucency](translucency.md).
 
+## Text selection
+
+Every theme—including imports—uses the same text-selection readability policy in the composer, transcript, Settings and pop-outs. Nimrod prefers the theme's general text-selection color, strengthens highlights that blend into their backing, and chooses contrasting selected-text colors when necessary. Themes without a selection color start from a subdued accent rather than a full-strength focus highlight. These adjustments do not change the saved theme or selected-row colors.
+
+Text highlights remain nearly opaque even when the window is translucent, so the selected text remains readable. Visibility against desktop content can still vary through transparent surroundings. System high-contrast color overrides use the system selection colors.
+
 ## Import a theme
 
 1. Obtain a **standalone VS Code color-theme JSON or JSONC file**.

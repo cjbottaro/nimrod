@@ -34,9 +34,10 @@ Starting Pi uses the project's normal Pi trust policy. Sending a prompt is real 
 mise run install-cli       # creates ~/.local/bin/nimrod; does not edit your shell
 nimrod .
 nimrod ~/Projects/another-project
+nimrod --action reload-customizations --project /path/to/open/project --json
 ```
 
-Without installation, use `./bin/nimrod .`. The launcher opens or focuses a project window; it never starts or resumes a session. It supports macOS and Linux. See [Projects and terminal launches](docs/projects.md).
+Without installation, use `./bin/nimrod .`. Directory launches open or focus a project window; they never start or resume a session. [CLI actions](docs/cli-actions.md) can reload customizations in an already-open project and wait for the result, without opening/focusing a window. It supports macOS and Linux. See [Projects and terminal launches](docs/projects.md).
 
 ## Features
 
@@ -57,6 +58,8 @@ Without installation, use `./bin/nimrod .`. The launcher opens or focuses a proj
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
 - [Transcript debug logs](docs/transcript-logs.md) — opt-in full-content native conversation, history, tool and request/result traces for developing/debugging Nimrod.
 - [Settings](docs/settings.md) — global defaults, project overrides, appearance, [conversation/code fonts and sizes](docs/settings.md#typography), zoom and runtime paths.
+- [Customize Nimrod](docs/customize-nimrod.md) — ask a connected session to customize the UI, with inspectable installed-app guidance included in one normal user message; no Nimrod checkout required.
+- [UI templates](docs/ui-templates.md) — experimental local HTML/CSS workspace layouts and Project bar customization, with the bundled default using the same API.
 - [Themes](docs/themes.md) and [Syntax highlighting](docs/syntax-highlighting.md) — bundled palettes, local imports and labeled code.
 - [Translucency](docs/translucency.md) — whole-window background opacity and independently adjustable macOS blur; Linux blur is compositor-owned.
 
@@ -66,7 +69,7 @@ See the [user-guide index](docs/README.md). [Card plugins](docs/card-plugins.md)
 
 macOS is the current development platform; Linux is next, and Windows is a possible future target, not a parity commitment. Linux native delivery/focus and Windows behavior remain unverified. The Bash launcher has no Windows wrapper; Windows Pi npm `.cmd` wrappers are not supported (select Pi's JS entry point and `node.exe` explicitly).
 
-Pi/Copilot have no background process continuity; Codex uses its shared managed daemon, whose work may continue after Nimrod detaches. There is no integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. [Built-in Copilot](docs/copilot.md) uses SDK 2.0.0 (declared CLI 1.0.113 compatibility), a supported installed Node and an explicitly resolved user-installed CLI—not a bundled CLI. Copilot identities/drafts persist with exact-ID Resume and permanent deletion. The earlier Copilot integration is removed; old stored drafts are not migrated or deleted. SDK checks, packaging and native macOS/Linux acceptance remain pending; Windows SDK launch is unavailable. [Reload session](docs/sessions.md#reload-session) supports Pi, Copilot and Codex; installed-runtime/native acceptance of Copilot/Codex reload remains pending. Dormant ACP reload and attachment sending remain unavailable; Copilot supports inline image input with installed-CLI/native acceptance pending; generic ACP infrastructure is not exposed in the UI. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Opening a project never loads Copilot automatically; explicit selection reconnects without sending a prompt. Closing a project stops its owned agents and detaches its Codex daemon clients without stopping shared work.
+Pi/Copilot have no background process continuity; Codex uses its shared managed daemon, whose work may continue after Nimrod detaches. There is no integrated diff editor, fork/tree-navigation UI, Pi `/reload` or in-app update system. [Built-in Copilot](docs/copilot.md) uses SDK 2.0.0 (declared CLI 1.0.113 compatibility), a supported installed Node and an explicitly resolved user-installed CLI—not a bundled CLI. Copilot identities/drafts persist with exact-ID Resume and permanent deletion. The earlier Copilot integration is removed; old stored drafts are not migrated or deleted. SDK checks, packaging and native macOS/Linux acceptance remain pending; Windows SDK launch is unavailable. [Reload session](docs/sessions.md#reload-session) supports Pi, Copilot and Codex; installed-runtime/native acceptance of Copilot/Codex reload remains pending. Dormant ACP reload and attachment sending remain unavailable; Copilot supports inline image input with installed-CLI/native acceptance pending; generic ACP infrastructure is not exposed in the UI. macOS local bundles use ad-hoc signing; the separate [release workflow](CONTRIBUTING.md#release-setup) uses Developer ID signing/notarization and DMG packaging. Reopening a project reconnects its last selected session when visible in the current sidebar view, including Copilot and Codex, without sending a prompt; other restored rows remain disconnected until selected. Closing a project stops its owned agents and detaches its Codex daemon clients without stopping shared work.
 
 Send clears the composer and previews ordinary messages in the transcript immediately (images after local preparation), then reconciles the harness's user turn in place. Failed or uncertain sends show an error without restoring the message or blocking a new draft; nothing is automatically replayed. Pi owns conversation history; Nimrod cannot coordinate external applications writing the same session file.
 

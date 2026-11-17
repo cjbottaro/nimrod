@@ -13,6 +13,8 @@ Pi is primary; curated integrations are bespoke-first: Pi native RPC and the pin
 | Layer | Responsibility | Canonical specification |
 | --- | --- | --- |
 | Project shell (`src/main.ts`) | Mounted session views and effect coordination | [Projects/sessions](projects-and-sessions.md) |
+| User-initiated customization requests | Installation-aware authoring brief, normal message delivery and user-turn disclosure | [Customize Nimrod](customize-nimrod.md) |
+| Declarative workspace shell / Project bar | Shared default/custom layout slots, live presentation bindings and existing action components | [UI templates](ui-templates.md), [customization direction](../../ui-customization/SKILL.md) |
 | Navigation/connection | Shared projections, activation and connection deferral | [Session navigation](session-navigation.md) |
 | Session lists/history | Shared semantic list/status projection and project-bound discovery, separate from connection owners | [Session history](session-history.md) |
 | Session deletion | Registered target-bound operations through one shared UI/effects coordinator; native Pi tree transactions, capability-gated Copilot single-session deletion and guarded Codex spawned-tree deletion | [Session deletion](session-deletion.md) |
@@ -24,6 +26,7 @@ Pi is primary; curated integrations are bespoke-first: Pi native RPC and the pin
 | Rust host | Window/token ownership, pipes, shutdown and file validation | [Projects/sessions](projects-and-sessions.md), [Pi transport](pi-transport.md) |
 | Settings/state | JSONC preferences and separate app-managed bookkeeping | [Preferences](preferences.md) |
 | Window presentation | Shared creation/focus composition, explicit theme snapshots, appearance pipeline and prepared-window lifetime | [Window presentation](window-presentation.md) |
+| CLI action control | Narrow existing-project customization reload with window-bound completion; separate from launch forwarding | [CLI actions](cli-actions.md) |
 | Native integrations | Startup, references and notifications | [Startup](single-instance.md), [pop-outs](pop-outs.md), [notifications](notifications.md) |
 
 The shared mounted engine consumes presentation records and integration-owned interaction/control/status contributions. It has no Pi/ACP mode switch. Card plugins remain presentation-only; concrete session controllers retain semantic authority. `HarnessSession` is the required bundle of consumer ports returned by a typed `HarnessRegistration`/project factory; the shell has no concrete backend union. `SessionLifecycle` composes the Nimrod-owned `SessionPersistence` and `SessionConnectivity` interfaces implemented by Pi, Copilot, Codex and ACP adapters: saved identity, stable project-local key/draft scope, connection state/eligibility, connect, owned stop and transport disconnect. Open/closed membership stays in navigation, independent of connectivity and Reload capability. This is not a common wire/conversation protocol. [Harness presentation](harness-presentation.md) records this boundary, its rationale and regression requirements.

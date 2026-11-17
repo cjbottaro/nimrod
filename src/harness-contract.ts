@@ -44,10 +44,6 @@ export interface SessionClosePolicy {
   readonly label: string;
   readonly message: string;
 }
-export interface SessionSelectionPolicy {
-  readonly deferRestored: boolean;
-  releasesDeferral(intent: import('./session-navigation').SelectionIntent): boolean;
-}
 export interface SessionInteractions { setActive(active: boolean): void; dispose(): void; }
 
 /** Required application ports. No concrete controller, protocol, shell Tab or backend union.
@@ -75,7 +71,6 @@ export interface HarnessSession {
    */
   readonly close: SessionClosePolicy;
   readonly drafts: { readonly durability: 'persistent' | 'memory' };
-  readonly selection: SessionSelectionPolicy;
   readonly interactions: SessionInteractions;
   /** Compatibility binding for native file-backed reference windows, not conversation identity. */
   readonly references: { file(): { path: string; sessionId: string } | undefined };

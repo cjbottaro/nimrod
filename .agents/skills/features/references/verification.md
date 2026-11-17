@@ -2,6 +2,32 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Text-selection contrast
+
+Linux headless Playwright WebKit 26.6 (WPE port) reproduced the reported Sweet Dracula failure before the paint-alpha fix: computed highlight RGB was `98,102,105`, but selected screenshot pixels were approximately `20,25,32` against backing `22,25,37`, in both composer and transcript. A literal opaque CSS color reproduced the failure; changing only its alpha to 254/255 restored the intended paint. The original computed-style-only test passed throughout, so it was insufficient evidence. [Themes](themes.md#text-selection-contrast) owns the WebKit mechanism and shared policy.
+
+Executed on the corrected source: **58 focused unit/DOM tests pass** (`test/text-selection.test.ts`, `test/themes.test.ts`, `test/window-appearance.test.ts`), including all bundled/catalog palettes and worst-case text contrast with the paint alpha. **Five focused offline WebKit tests pass** (`test/browser/text-selection.spec.ts`, `test/browser/text-selection-paint.spec.ts`): computed roles include Sweet Dracula; actual screenshot pixels verify composer/transcript highlighting in Nimrod/Sweet Dracula, both system schemes, and opacity 0/65/100. The missing-color fallback is subdued rather than the full focus accent. A separate existing `test/browser/themes.spec.ts` test fails its title/detail alignment assertion (~27.4px offset versus <1px), independently reproduced on unchanged `main` at `5f5d88f`; it was not changed as part of this fix. The full suite was not run.
+
+This is Linux headless WPE rendering evidence, not native Tauri/WebKitGTK or macOS acceptance. Native active/inactive focus, forced-colors behavior, transparent desktop surroundings and custom/plugin backings still require verification. No app build, user-app launch/restart or live harness requests occurred.
+
+## Customize Nimrod
+
+Source implementation adds the session-scoped action/modal, installed authoring context and canonical packaged guides/defaults/types/examples, ordinary separate-input view submission, and versioned user-turn disclosure. Authored, unrun fixtures cover exact framing/Unicode/delimiters, lazy retained/raw presentation, an unrelated project with absolute installed paths, resource mappings/missing files, modal cancel/IME/local rejection/stale guidance, four shared interaction policies, busy modes, unchanged draft/selection, echo adoption/lifetime fencing, real-shell palette/shortcut sending and an offline browser scenario.
+
+No tests, live model requests, user customization edits, app builds or app launches were performed. Native macOS/Linux focus/accessibility, packaged reference resolution and installed-harness acceptance remain pending; mocks/jsdom are not native acceptance. Mandatory post-merge `mise run check` passed on primary `main` (TypeScript with the harness-boundary gate and Rust compilation). This is compile evidence only. See [request contract](customize-nimrod.md).
+
+## CLI customization reload
+
+Source implementation adds an allowlisted pre-runtime CLI client, separate per-user request/reply socket, existing-project/readiness routing, window-bound results and cleanup, and actual template/card outcomes from the shared reload. Authored, unrun fixtures cover exact argument forwarding on macOS/Linux, parser rejection/canonicalization, private endpoint ownership, bounded/lost replies, exact/ambiguous targets, wrong-window and expired completion, partial diagnostics, loader result identity and real-shell coalesced receipts without harness traffic.
+
+No tests, live endpoint probes, app builds or app launches were performed. macOS/Linux CLI-to-window and installed-artifact acceptance remain pending; Windows transport is unsupported. Mandatory post-merge `mise run check` passed on primary `main` (TypeScript with the harness-boundary gate and Rust compilation). A follow-up native-close readiness fence has an authored, unrun regression fixture; compilation is not native/behavioral acceptance. See [contract](cli-actions.md) and [user guide](../../../../docs/cli-actions.md).
+
+## UI templates
+
+Initial declarative layout and Project bar source implementation uses the same public HTML/CSS pipeline for bundled defaults and user files. Authored, unrun fixtures cover default/custom rendering, retained nodes/focus, literal values, omitted actions, invalid input and I/O-error recovery, real shell identity/Settings consumers, side-aware resize direction and an offline browser right-sidebar/draft scenario. Native file fixtures cover optional files, size limits and escaping symlinks. Follow-up reload fixtures cover retained layout/content/action identity, repeated reloads, selection/focus/scroll, cached bindings, invalid-input rollback and IME/dialog guards; shell coverage exercises palette/rebound-shortcut routes without harness traffic. These additions remain unrun. Consolidated Reload customizations fixtures cover registry/default/override/unbinding and shell/browser updates; shell assertions verify both subsystems refresh and invalid UI input does not suppress the card rescan. These follow-up fixtures are also unrun.
+
+No tests, browser checks, app builds or native app launch were performed for this work. Native macOS/Linux appearance, accessibility, focus and actual user-file loading acceptance remain pending. Mandatory post-merge `mise run check` passed on primary `main` (TypeScript with the harness-boundary gate and Rust compilation). Compilation is not behavioral acceptance. See [contract](ui-templates.md) and [user guide](../../../../docs/ui-templates.md).
+
 ## Codex host/Distrobox project cwd
 
 The user-requested provider-free metadata investigation against the existing
