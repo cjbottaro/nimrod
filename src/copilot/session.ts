@@ -111,7 +111,9 @@ export class CopilotSession {
     this.modelConfiguration = createCopilotConfiguration({
       models: () => this.models.map(model => ({ id: model.id, label: model.name,
         efforts: model.capabilities?.supports?.reasoningEffort === false ? undefined : model.supportedReasoningEfforts,
-        maxContextTokens: model.capabilities?.limits?.max_context_window_tokens })),
+        maxContextTokens: model.capabilities?.limits?.max_context_window_tokens,
+        defaultContextTokens: advertisedCopilotContextLimit(model, 'default'),
+        longContextTokens: advertisedCopilotContextLimit(model, 'long_context') })),
       model: () => this.model, effort: () => this.effort,
       mode: () => this.mode, contextTier: () => this.contextTier,
       contextLimit: (model, tier) => this.contextLimits.get(`${model}:${tier}`),
@@ -704,8 +706,8 @@ export class CopilotSession {
   }
   private updateStatusArea(): void {
     const context = this.usage.snapshot.context;
-    if (this.model && context?.tokenLimit && context.tokenLimit > 0)
-      this.contextLimits.set(`${this.model}:${this.contextTier || 'default'}`, context.tokenLimit);
+    if (this.model && (this.contextTier === 'default' || this.contextTier === 'long_context') && context?.tokenLimit && context.tokenLimit > 0)
+      this.contextLimits.set(`${this.model}:${this.contextTier}`, context.tokenLimit);
     const advertisedLimit = !this.ended && !this.configuring && !this.state.sessionUnavailable
       ? advertisedCopilotContextLimit(this.models.find(model => model.id === this.model), this.contextTier) : undefined;
     if (this.ui.diagnosticLog?.enabled) {

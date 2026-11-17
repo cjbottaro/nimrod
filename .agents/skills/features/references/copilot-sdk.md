@@ -272,16 +272,25 @@ from a child-agent event. Child transcript rows carry an explicit origin label.
 accounting with an estimated USD equivalent; no invented costs/queue capabilities.
 
 The same configuration snapshot retains the SDK `contextTier`. Supported models
-offer Default/Long context through **Select context window…**; the reported
-context limit is the Status-area action target. Default-tier choice details use
-observations keyed to the target model; Long context uses that model's advertised
-catalog maximum, never a transient usage budget learned under a new tier.
+offer Default/Long context through **Select context window…**; the reported or
+provisional context limit is the Status-area action target. A missing tier remains
+undefined in the Copilot configuration adapter: neither choice is marked current,
+and a standard-tier preview in the Status area does not select Default context.
+Both choice details use the same tier-specific advertised prompt-budget helper
+as the Status area, preferring a measured limit only when attributed to that exact
+target model/tier. Cache observations only with an explicitly known `default` or
+`long_context` tier; never file an unknown-tier window under Default context.
+The combined catalog context maximum may advertise control availability but is
+never substituted for a tier's numeric prompt-budget detail. Missing budgets
+leave details absent, not a guessed size. All mapping/cache/picker policy lives
+in `src/copilot/`; shared selection mechanics accept an undefined current value.
 Configuration dispatch fences prior context reads and clears measured context.
 During mutation, root usage observations are ignored and metadata RPCs are
 suppressed: native model events can precede the runtime's committed context
 budget. Settlement invalidates again and requests fresh metadata even when a
 native event outranked the configuration result. Unknown context remains unknown
-until reported; the catalog maximum is picker detail, never a Status-area guess.
+until reported; catalog tier budgets remain display-only, never configuration
+changes or a computed utilization denominator.
 
 `onEvent` is registered before SDK create/resume so early events are buffered.
 Permission and user-input callbacks await explicit choices inside their owning
@@ -733,7 +742,8 @@ consumer, separate from model configuration. The shared Status area only consume
   no mid-mutation observation is attributed to the new model/tier. Regression
   fixtures in `test/copilot-sdk.test.ts` cover early native model events, stale
   reads/live usage and both tier directions. `test/copilot-session-configuration.test.ts`
-  covers catalog maximum stability and pending-target model details. These fixtures
+  covers unknown current selection, tier prompt-budget details, exact model/tier
+measured precedence and pending-target model details. These fixtures
   are authored but unrun; native/installed-CLI acceptance remains pending.
 - Context and credit reads are independent and individually coalesced. Context
   callbacks are fenced by model/invalidation revision, request revision, disposal

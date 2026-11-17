@@ -2,7 +2,8 @@ import { SessionConfigurationController, type ConfigurationAvailability } from '
 import { compactTokenCount } from './usage';
 
 export function createCopilotConfiguration(host: {
-  models(): readonly { id: string; label: string; efforts?: readonly string[]; maxContextTokens?: number }[];
+  models(): readonly { id: string; label: string; efforts?: readonly string[]; maxContextTokens?: number;
+    defaultContextTokens?: number; longContextTokens?: number }[];
   model(): string | undefined;
   effort(): string | undefined;
   mode(): string | undefined;
@@ -26,7 +27,7 @@ export function createCopilotConfiguration(host: {
       ];
     },
     get: setting => setting === 'model' ? host.model() : setting === 'effort' ? host.effort()
-      : setting === 'mode' ? host.mode() : setting === 'context-tier' ? host.contextTier() || 'default' : undefined,
+      : setting === 'mode' ? host.mode() : setting === 'context-tier' ? host.contextTier() : undefined,
     choices: async (setting, desired) => {
       const models = host.models();
       if (setting === 'model') return models.map(model => ({ value: model.id, label: model.label, detail: model.id }));
@@ -38,10 +39,10 @@ export function createCopilotConfiguration(host: {
       ];
       if (setting === 'context-tier') {
         const model = models.find(item => item.id === (desired.model ?? host.model()));
-        const defaultLimit = model && host.contextLimit(model.id, 'default');
-        // The catalog advertises the maximum, not an intermediate usage budget
-        // observed while the runtime is switching tiers.
-        const longLimit = model?.maxContextTokens;
+        // Only observations attributed to this exact model/tier may override
+        // its advertised prompt budget. A combined context maximum is not a tier budget.
+        const defaultLimit = model && (host.contextLimit(model.id, 'default') ?? model.defaultContextTokens);
+        const longLimit = model && (host.contextLimit(model.id, 'long_context') ?? model.longContextTokens);
         return [
           { value: 'default', label: 'Default context', ...(defaultLimit ? { detail: compactTokenCount(defaultLimit) } : {}) },
           { value: 'long_context', label: 'Long context', ...(longLimit ? { detail: compactTokenCount(longLimit) } : {}) },

@@ -793,8 +793,34 @@ test('SDK busy configuration replaces one transcript operation and applies only 
   f.session.disconnect('fixture complete');
 });
 
+test('Copilot picker never assigns an unknown-tier measurement to Default context', async () => {
+  const catalog = [{ ...models[0], capabilities: { limits: { max_context_window_tokens: 1_050_000 } },
+    billing: { tokenPrices: { maxPromptTokens: 272_000, longContext: { maxPromptTokens: 922_000 } } } }];
+  const f = await fixture([], undefined, false, false, catalog);
+  try {
+    assert.equal(f.session.configuration.get('context-tier'), undefined);
+    await f.session.selectPreference('context-window', async (labels, current) => {
+      assert.equal(current, undefined);
+      assert.deepEqual(labels, ['Default context — 272k', 'Long context — 922k']);
+      return undefined;
+    });
+    f.reply('usage', {}); f.reply('context', { currentTokens: 50_000, tokenLimit: 900_000 }); await flush();
+    assert.deepEqual((await f.session.configuration.choices('context-tier')).map(choice => choice.detail), ['272k', '922k'],
+      'an effective window without a reported tier must not poison either tier cache');
+    f.event('session.model_change', { newModel: 'small', contextTier: 'long_context' });
+    f.reply('context', { currentTokens: 50_000, tokenLimit: 900_000 }); await flush();
+    assert.equal(f.session.configuration.get('context-tier'), 'long_context');
+    assert.deepEqual((await f.session.configuration.choices('context-tier')).map(choice => choice.detail), ['272k', '900k']);
+    f.event('session.model_change', { newModel: 'small', contextTier: 'default' });
+    f.reply('context', { currentTokens: 50_000, tokenLimit: 260_000 }); await flush();
+    assert.deepEqual((await f.session.configuration.choices('context-tier')).map(choice => choice.detail), ['260k', '900k']);
+    assert.equal(f.sent.some(request => ['prompt', 'configure', 'command'].includes(request.method)), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
 test('SDK context changes fence old reads and refresh only after native configuration settles', async () => {
-  const catalog = [{ ...models[0], capabilities: { limits: { max_context_window_tokens: 1_000_000 } } }];
+  const catalog = [{ ...models[0], capabilities: { limits: { max_context_window_tokens: 1_000_000 } },
+    billing: { tokenPrices: { maxPromptTokens: 128_000, longContext: { maxPromptTokens: 936_000 } } } }];
   const f = await fixture([], undefined, false, false, catalog);
   try {
     f.reply('usage', {}); f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
@@ -808,7 +834,7 @@ test('SDK context changes fence old reads and refresh only after native configur
     f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
     assert.equal(f.last('context'), oldRead, 'no context RPC inside the configuration mutation');
     assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k/);
-    assert.equal((await f.session.configuration.choices('context-tier'))[1].detail, '1M');
+    assert.equal((await f.session.configuration.choices('context-tier'))[1].detail, '936k', 'in-mutation observations must not replace the catalog prompt budget');
     f.reply('configure', { model: { modelId: 'small', contextTier: 'long_context' } }); await flush();
     assert.notEqual(f.last('context'), oldRead, 'settlement must refresh even when a native event outranked the result');
     f.reply('context', { currentTokens: 100_000, tokenLimit: 1_000_000 }); await flush();

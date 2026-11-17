@@ -496,6 +496,17 @@ Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcr
 
 ## Current automated validation
 
+Copilot context-picker alignment: unknown current tiers now stay undefined in the
+Copilot adapter, both tier details use the existing advertised prompt-budget helper,
+and measured limits are cached only under a known exact model/tier. The generic
+picker, shell and shared interfaces are unchanged. Updated configuration/controller
+fixtures cover no forced current selection, 272k/922k versus a combined 1.05M,
+pending-model lookup, missing budgets, per-tier measured precedence, unknown-tier
+cache isolation and in-mutation/stale-read fences. These fixtures are authored
+**unrun**. No live session/provider operation, app build/launch or native acceptance
+was performed for this correction; required post-merge compilation is separate.
+[Copilot configuration](copilot-sdk.md) owns the picker contract.
+
 Copilot provisional catalog window: a read-only display fallback uses the current
 model's advertised prompt budget without filling measured usage or
 the configuration cache. `test/copilot-advertised-context.test.ts` and extended SDK

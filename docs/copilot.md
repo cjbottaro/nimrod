@@ -164,8 +164,11 @@ The confirmed controls read `model · effort · mode`. **Select mode…** offers
 Interactive, Plan and Autopilot. When Plan finishes, its supported continuation
 choices stay inside the owning conversation. The context usage line keeps its
 reported percentage and limit; clicking the limit opens **Select context
-window…** with tier names as primary labels and reported token amounts as
-secondary details. Unsupported controls and palette actions are omitted rather
+window…** with tier names as primary labels and prompt-budget amounts as
+secondary details. Each tier uses its advertised prompt budget until a window has
+been reported for that exact model/tier; the combined input/output maximum is
+not a tier budget. If Copilot has not reported the current tier, neither choice
+is marked current—even when the Status area previews the standard window. Unsupported controls and palette actions are omitted rather
 than shown as Pi equivalents.
 Copilot inspection/web cards reuse shared components, including cited web answers
 and fetched-content previews when supported by native results. Tool cards appear
