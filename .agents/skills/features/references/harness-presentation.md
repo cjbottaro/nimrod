@@ -9,7 +9,7 @@
 | Integration | Target experience | Commitment |
 | --- | --- | --- |
 | Pi | Excellent | Flagship, bespoke integration that preserves Pi's distinctive supported capabilities and extension ecosystem. |
-| Copilot | Great | Official SDK 1.0.34 with explicit installed CLI; implementation/fixtures authored, acceptance pending. |
+| Copilot | Great | Official SDK 2.0.0 with explicit installed CLI; implementation/fixtures authored, acceptance pending. |
 | Codex | Great | [Native app-server](../../codex-integration/SKILL.md) core workflows implemented against reviewed CLI 0.162.0; installed-runtime/native acceptance and explicit capability gaps remain. |
 | Claude Code | Great | Deliberate workflows, controls and presentation through supported interfaces. |
 | Other ACP agents | Good | Reliable capability-driven baseline, useful generic cards and optional presentation enhancements, without agent-specific completeness promises. |

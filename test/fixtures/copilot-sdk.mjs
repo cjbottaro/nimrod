@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import permissionCommand from './copilot-permission-command.json' with { type: 'json' };
 import autopilotCompletion from './copilot/autopilot-completion.json' with { type: 'json' };
-export const RuntimeConnection = { forStdio: ({ path }) => ({ path }) };
+export const RuntimeConnection = { forSpawnedStdio: options => ({ kind: 'spawned-stdio', ...options }) };
 export class CopilotClient {
   constructor(options) {
-    assert.equal(options.connection.path, '/fixture/copilot');
-    assert.equal(options.mode, 'copilot-cli');
-    assert.equal(options.useLoggedInUser, true);
-    this.cwd = options.workingDirectory;
+    assert.equal(options.runtime.kind, 'spawned-stdio');
+    assert.equal(options.runtime.path, '/fixture/copilot');
+    assert.equal(options.mode, 'coding-agent');
+    assert.equal(options.github.useLoggedInUser, true);
+    for (const key of ['connection', 'workingDirectory', 'useLoggedInUser']) assert.equal(Object.hasOwn(options, key), false, `reject v1 client option ${key}`);
+    this.cwd = options.runtime.workingDirectory;
   }
   defaultsReads = 0;
   userSettings = {
@@ -27,7 +29,7 @@ export class CopilotClient {
     }
   } } } };
   async start() {}
-  async getStatus() { return { version: '1.0.98', protocolVersion: 3 }; }
+  async getStatus() { return { version: '1.0.113', protocolVersion: 4 }; }
   async ping() { return { timestamp: Date.now() }; }
   async stop() { if (this.session) assert.equal(this.session.disconnected, true); return []; }
   async listModels() {
@@ -54,16 +56,17 @@ export class CopilotClient {
     assert.equal(config.name, 'Copilot session');
     assert.equal(this.defaultsReads, 1, 'read configured defaults before creating a session');
     const defaults = { ...this.userSettings, ...JSON.parse(process.env.NIMROD_FIXTURE_COPILOT_DEFAULTS || '{}') };
-    for (const [key, source] of [['model', 'model'], ['reasoningEffort', 'effortLevel']]) {
-      if (defaults[source] === null || defaults[source] === undefined) assert.equal(Object.hasOwn(config, key), false, `omit unset ${key}`);
-      else assert.equal(config[key], defaults[source], `honor the configured ${key}`);
+    for (const [key, source] of [['model', 'model'], ['reasoningEffort', 'effortLevel'], ['contextTier', 'contextTier']]) {
+      const target = key === 'model' ? config : config.inference;
+      if (defaults[source] === null || defaults[source] === undefined) assert.equal(Object.hasOwn(target, key), false, `omit unset ${key}`);
+      else assert.equal(target[key], defaults[source], `honor the configured ${key}`);
     }
     return this.session = new Session(config, false);
   }
   async resumeSession(id, config) {
     assert.equal(id, 'fixture-sdk'); assert.equal(config.allowTranscriptRecovery, false); assert.equal(config.continuePendingWork, false);
     assert.equal(this.defaultsReads, 0, 'resume never probes current user defaults');
-    assert.equal(Object.hasOwn(config, 'model'), false); assert.equal(Object.hasOwn(config, 'reasoningEffort'), false);
+    assert.equal(Object.hasOwn(config, 'model'), false); assert.equal(Object.hasOwn(config, 'inference'), false);
     return this.session = new Session(config, true);
   }
   async deleteSession(id) { assert.equal(id, 'fixture-sdk'); assert.equal(this.session, undefined); this.deleted = id; }
@@ -164,9 +167,15 @@ class Session {
     assert.equal(config.enableConfigDiscovery, true, 'creation and Resume explicitly enable Copilot-owned discovery');
     for (const key of ['skillDirectories', 'agentDirectories', 'hookDirectories', 'pluginDirectories', 'instructionDirectories'])
       assert.equal(Object.hasOwn(config, key), false, `leave ${key} discovery to Copilot`);
-    this.config = config; this.saved = saved; this.listeners = [config.onEvent];
+    for (const key of ['onEvent', 'streaming', 'onPermissionRequest', 'onUserInputRequest', 'onExitPlanModeRequest', 'onAutoModeSwitchRequest', 'reasoningEffort', 'contextTier'])
+      assert.equal(Object.hasOwn(config, key), false, `reject v1 session option ${key}`);
+    for (const group of ['skills', 'agents', 'hooks', 'plugins', 'instructions'])
+      assert.equal(config[group]?.directories, undefined, `leave ${group} roots to Copilot`);
+    assert.equal(config.events.streaming, true);
+    assert.equal(config.interaction.onAutoModeSwitchRequest(), 'no');
+    this.config = config; this.saved = saved; this.listeners = [config.events.onEvent];
     if (saved) { this.model = 'large'; this.effort = undefined; this.totalNanoAiu = 12_300_000_000; }
-    else { this.model = config.model; this.effort = config.reasoningEffort; this.contextTier = config.contextTier; }
+    else { this.model = config.model; this.effort = config.inference?.reasoningEffort; this.contextTier = config.inference?.contextTier; }
   }
   on(listener) { this.listeners.push(listener); return () => { this.listeners = this.listeners.filter(item => item !== listener); }; }
   emit(type, data, metadata = {}) { const event = { id: `fixture-${this.sequence++}`, type, data, ...metadata }; this.listeners.forEach(listener => listener(event)); }
@@ -189,7 +198,7 @@ class Session {
   async permission(request) {
     // Only future requests see the new policy; existing callback promises remain pending.
     if (this.permissionMode === 'allow-all') return { kind: 'approve-once', approvedInteractively: true };
-    const decision = await this.config.onPermissionRequest(request);
+    const decision = await this.config.permissions.onRequest(request);
     assert.ok(['approve-once', 'approve-for-session', 'approve-permanently', 'reject', 'user-not-available'].includes(decision.kind), 'The live CLI accepts decisions, not legacy permission outcomes');
     if (decision.kind === 'approve-once') assert.equal(decision.approvedInteractively, true, 'Only an explicit UI choice may approve');
     if (decision.kind === 'approve-for-session' && ['shell', 'write'].includes(request.kind))
@@ -218,7 +227,7 @@ class Session {
       this.emit('session.idle', { mode: 'autopilot' }); return;
     }
     if (prompt === 'plan mode fixture') {
-      const result = this.config.onExitPlanModeRequest({
+      const result = this.config.interaction.onExitPlanModeRequest({
         summary: 'Fixture plan', planContent: 'Read, change, review.',
         actions: ['interactive', 'autopilot', 'exit_only'],
       });
@@ -250,7 +259,7 @@ class Session {
       this.emit('session.idle', {}); return;
     }
     if (prompt === 'input fixture') {
-      const answer = await this.config.onUserInputRequest({ question: 'Fixture question', choices: ['First', 'Second'], allowFreeform: true });
+      const answer = await this.config.interaction.onUserInputRequest({ question: 'Fixture question', choices: ['First', 'Second'], allowFreeform: true });
       this.emit('assistant.message', { messageId: `answer-${turn}`, content: answer.answer });
       this.emit('session.idle', {}); return;
     }

@@ -127,7 +127,7 @@ test('SDK getEvents returns image history through the same controller projection
 test('production SDK bridge loads only exact project members and disconnects without deleting', { timeout: 5000 }, async () => {
   const f = bridge();
   try {
-    assert.equal((await f.request('initialize')).version, '1.0.98');
+    assert.deepEqual(await f.request('initialize'), { version: '1.0.113', protocolVersion: 4 });
     assert.deepEqual((await f.request('list')).map((session: { sessionId: string }) => session.sessionId), ['fixture-sdk']);
     await assert.rejects(f.request('connect', { sessionId: 'outside' }), /Nothing was loaded or deleted/);
     await f.request('connect', { sessionId: 'fixture-sdk' });
@@ -417,7 +417,7 @@ test('production SDK bridge tool and permission packets reach the JSONL capture 
     const native = f.packets.filter(packet => packet.kind === 'event' && packet.event.type.startsWith('tool.') || packet.kind === 'permission')
       .map(packet => packet.kind === 'permission' ? packet : packet.event);
     assert.deepEqual(tools.map(record => record.payload), native);
-    assert.ok(tools.every(record => record.sessionId === 'fixture-sdk' && record.source.backend === 'copilot-sdk' && record.source.version === '1.0.98'));
+    assert.ok(tools.every(record => record.sessionId === 'fixture-sdk' && record.source.backend === 'copilot-sdk' && record.source.version === '1.0.113'));
     assert.ok(records.some(record => record.event === 'request.prompt' && record.payload.text.includes('Offline fake SDK')));
     assert.ok(records.some(record => record.event === 'session.idle'));
     assert.deepEqual(errors, []);

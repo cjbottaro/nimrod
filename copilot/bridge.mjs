@@ -9,10 +9,10 @@ const [cli, cwd] = process.argv.slice(2);
 if (!cli || !isAbsolute(cli) || !cwd || !isAbsolute(cwd)) throw new Error('An absolute user-installed Copilot executable and project are required.');
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (!(major === 20 && minor >= 19 || major === 22 && minor >= 12 || major > 22)) throw new Error('Copilot SDK requires Node 20.19+ (20.x) or 22.12+.');
-const { CopilotClient, RuntimeConnection } = await import('@github/copilot-sdk');
+const { CopilotClient, RuntimeConnection } = await import('@microsoft/copilot-sdk');
 const client = new CopilotClient({
-  connection: RuntimeConnection.forStdio({ path: cli }),
-  workingDirectory: cwd, useLoggedInUser: true, mode: 'copilot-cli',
+  runtime: RuntimeConnection.forSpawnedStdio({ path: cli, workingDirectory: cwd }),
+  github: { useLoggedInUser: true }, mode: 'coding-agent',
   clientInfo: { applicationName: 'Nimrod', integrationName: 'nimrod-copilot-sdk' },
 });
 const configuration = createCopilotConfiguration(client);
@@ -63,14 +63,16 @@ function decision(kind, request) {
   });
 }
 const config = () => ({
-  workingDirectory: cwd, streaming: true, clientName: 'Nimrod',
+  workingDirectory: cwd, clientName: 'Nimrod',
   // Let Copilot discover its own configuration on both creation and Resume.
   enableConfigDiscovery: true,
-  onEvent: event,
-  onPermissionRequest: request => decision('permission', request),
-  onUserInputRequest: request => decision('input', request),
-  onExitPlanModeRequest: request => decision('plan', request),
-  onAutoModeSwitchRequest: () => 'no',
+  events: { streaming: true, onEvent: event },
+  permissions: { onRequest: request => decision('permission', request) },
+  interaction: {
+    onUserInputRequest: request => decision('input', request),
+    onExitPlanModeRequest: request => decision('plan', request),
+    onAutoModeSwitchRequest: () => 'no',
+  },
 });
 function event(value) {
   if (replaying) buffered.push(value);
@@ -150,10 +152,14 @@ async function dispatch(message) {
         if (message.sessionId !== undefined) await membership(message.sessionId);
         replaying = true;
         const defaults = message.sessionId === undefined ? await configuration.defaults() : undefined;
-        const { permissionMode, ...creationDefaults } = defaults ?? {};
+        const { permissionMode, reasoningEffort, contextTier, ...creationDefaults } = defaults ?? {};
+        const inference = {
+          ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+          ...(contextTier === undefined ? {} : { contextTier }),
+        };
         if (closing) throw new Error('Copilot connection closed while reading configuration. Nothing was created.');
         session = message.sessionId === undefined
-          ? await client.createSession({ ...config(), ...creationDefaults, name: 'Copilot session' })
+          ? await client.createSession({ ...config(), ...creationDefaults, inference, name: 'Copilot session' })
           : await client.resumeSession(message.sessionId, { ...config(), allowTranscriptRecovery: false, continuePendingWork: false });
         if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
         send({ kind: 'identified', sessionId: session.sessionId });

@@ -2,13 +2,13 @@
 
 ## GitHub Copilot SDK
 
-Nimrod bundles `@github/copilot-sdk` 1.0.34 and its runtime dependencies, not the
+Nimrod bundles `@microsoft/copilot-sdk` 2.0.0 and its runtime dependencies, not the
 optional Copilot CLI executables. Dependency packages retain their own notices
 and licenses in the bundled `resources/copilot/node_modules` directory.
 
-- Source: https://github.com/github/copilot-sdk
-- Package: https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.34
-- License: https://github.com/github/copilot-sdk/blob/main/LICENSE
+- Source: https://github.com/microsoft/copilot-sdk
+- Package: https://www.npmjs.com/package/@microsoft/copilot-sdk/v/2.0.0
+- License: https://github.com/microsoft/copilot-sdk/blob/main/LICENSE
 
 MIT License
 

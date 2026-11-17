@@ -25,18 +25,18 @@ Installed-font discovery uses `font-kit` (Core Text on macOS; Fontconfig/FreeTyp
 
 ### Copilot SDK runtime
 
-Built-in Copilot pins `@github/copilot-sdk@1.0.34`, whose released metadata names
-CLI 1.0.112. Install/authenticate that CLI separately and set
+Built-in Copilot pins `@microsoft/copilot-sdk@2.0.0`, whose released metadata names
+CLI 1.0.113. Install/authenticate that CLI separately and set
 `runtime.copilotPath` if discovery fails. Node must satisfy
 `^20.19.0 || >=22.12.0`; mise's 25.9.0 does. Users never install the SDK.
 The bridge explicitly passes the resolved CLI path to
-`RuntimeConnection.forStdio`, so it cannot fall back to SDK-bundled CLI packages.
+`RuntimeConnection.forSpawnedStdio`, so it cannot fall back to SDK-bundled CLI packages.
 
 After `npm ci`, native Cargo asset preparation runs `scripts/prepare-copilot.mjs`
-to stage the bridge, SDK dist, zod/vscode-jsonrpc and koffi with its platform
+to stage the bridge, SDK dist, zod/vscode-jsonrpc/lossless-json and koffi with its platform
 native package. The SDK eagerly imports koffi even with stdio. Do not omit
 optional dependencies from installation: the native koffi package is required.
-Only those runtime dependencies ship; optional `@github/copilot-*` CLI binaries
+Only those runtime dependencies ship; optional `@microsoft/copilot-sdk-*` CLI binaries
 are deliberately excluded. Staging retains dependency licenses and signs native
 files for requested macOS builds; the bundle verifier checks resources/signatures.
 Generated resources stay checkout-local/ignored. No build or staging was run for

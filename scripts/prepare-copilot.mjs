@@ -17,7 +17,7 @@ await mkdir(destination, { recursive: true });
 for (const file of ['bridge.mjs', 'configuration.mjs', 'config-command.mjs', 'command-effects.mjs', 'permissions.mjs'])
   await cp(new URL(`../copilot/${file}`, import.meta.url), new URL(file, destination));
 // Ship the SDK and its dependencies, never the SDK's optional Copilot runtime.
-for (const name of ['@github/copilot-sdk', 'vscode-jsonrpc', 'lossless-json', 'zod', 'koffi', `@koromix/koffi-${platform}-${arch}`]) {
+for (const name of ['@microsoft/copilot-sdk', 'vscode-jsonrpc', 'lossless-json', 'zod', 'koffi', `@koromix/koffi-${platform}-${arch}`]) {
   let directory = dirname(require.resolve(name));
   for (;;) {
     try {
@@ -32,11 +32,11 @@ for (const name of ['@github/copilot-sdk', 'vscode-jsonrpc', 'lossless-json', 'z
   }
   const target = new URL(`node_modules/${name}/`, destination);
   await mkdir(target, { recursive: true });
-  if (name === '@github/copilot-sdk') {
+  if (name === '@microsoft/copilot-sdk') {
     await cp(join(directory, 'dist'), new URL('dist/', target), { recursive: true });
     await cp(join(directory, 'package.json'), new URL('package.json', target));
     const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
-    if (manifest.version !== '1.0.34' || manifest.copilotCliVersion !== '1.0.112') throw new Error('Unexpected Copilot SDK release');
+    if (manifest.version !== '2.0.0' || manifest.copilotCliVersion !== '1.0.113') throw new Error('Unexpected Copilot SDK release');
   } else await cp(directory, target, { recursive: true });
 }
 await writeFile(new URL('package.json', destination), '{"private":true,"type":"module"}\n');

@@ -13,30 +13,41 @@ Copilot SDK. Generic ACP is a separate capability-driven fallback, not the
 mandatory internal protocol. Built-in creation uses the shared [session-creation actions](session-creation.md), selecting Copilot explicitly or through the global/project default. No universal controller,
 duplicated transcript/composer/navigation engine, or SDK-to-ACP/Pi event adapter.
 
-The exact npm dependency is `@github/copilot-sdk@1.0.34`. Its released
-`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.112**.
+The exact npm dependency is `@microsoft/copilot-sdk@2.0.0`. Its released
+`package.json` declares `copilotCliVersion` and `copilotRuntime.version` **1.0.113**.
 The earlier installed-CLI observations below used SDK 1.0.22 / CLI 1.0.98;
 they do not establish native acceptance of the upgraded pair. Its engine range is
 `^20.19.0 || >=22.12.0` (Node 21 is unsupported); mise pins Node 25.9.0.
-The released SDK still speaks protocol 3, minimum 3; this is **not ACP protocol 1**.
-Updating from 1.0.28 does not enable protocol 4. A CLI reporting protocol 4 is
-rejected by the upstream handshake; use a protocol-3 CLI (the declared pair is
-1.0.112) until an SDK release explicitly supports protocol 4. Never bypass that
-handshake or patch the SDK's protocol constant.
+The released SDK requires protocol **4**, minimum/maximum 4/4; this is **not ACP**.
+This replaces the protocol-3-only `@github/copilot-sdk` package. CLI 1.0.112 and
+older protocol-3 runtimes are now incompatible; retire previous 1.0.112 Runtime
+path workarounds. Never bypass the handshake or patch the SDK's protocol constant.
 
-Evidence: [released package](https://www.npmjs.com/package/@github/copilot-sdk/v/1.0.34),
-[npm tarball](https://registry.npmjs.org/@github/copilot-sdk/-/copilot-sdk-1.0.34.tgz).
+Evidence: [released package](https://www.npmjs.com/package/@microsoft/copilot-sdk/v/2.0.0),
+[npm tarball](https://registry.npmjs.org/@microsoft/copilot-sdk/-/copilot-sdk-2.0.0.tgz).
 Inspect that release's `dist/types.d.ts`, `client.js`, `session.js`,
 `generated/rpc.d.ts` and `generated/session-events.d.ts` when changing this
 boundary; repository main documentation can describe unreleased interfaces.
 
-`CopilotClient({connection: RuntimeConnection.forStdio({path: absoluteUserCli}),
-workingDirectory, useLoggedInUser:true, mode:'copilot-cli'})` is the released
-explicit executable API. SDK default transport otherwise selects its bundled
-runtime. Nimrod does not use that fallback, older `cliPath/useStdio` examples,
-in-process execution, an existing user's server or a user-installed SDK.
+`CopilotClient({runtime: RuntimeConnection.forSpawnedStdio({path: absoluteUserCli,
+workingDirectory}), github:{useLoggedInUser:true}, mode:'coding-agent'})` is the
+released explicit executable API. SDK 2.0 defaults to **in-process** hosting;
+Nimrod explicitly selects the spawned-stdio transport instead. Do not retain
+v1's `connection`, `forStdio`, top-level `workingDirectory`/`useLoggedInUser` or
+`mode:'copilot-cli'`. Nimrod does not use runtime fallback, older `cliPath/useStdio`
+examples, in-process execution, an existing user's server or a user-installed SDK.
 The SDK launches the selected CLI with `--headless --no-auto-update --stdio`.
 Nimrod leaves authentication to the installed CLI; no tokens enter settings.
+
+SDK 2.0 groups session options: `events.{streaming,onEvent}`,
+`permissions.onRequest`, `interaction.{onUserInputRequest,onExitPlanModeRequest,
+onAutoModeSwitchRequest}` and `inference.{reasoningEffort,contextTier}`.
+`workingDirectory`, `clientName`, `model`, `enableConfigDiscovery` and Resume's
+`allowTranscriptRecovery:false` / `continuePendingWork:false` remain top-level.
+Creation defaults remain Nimrod-private flat data until the bridge maps effort
+and context tier into `inference`; never apply new-session defaults on Resume.
+The public generated RPC wrapper methods used by configuration/commands are
+unchanged. Existing callback scope, streaming and owned-process semantics remain.
 
 ## Harness-owned configuration discovery
 
@@ -56,7 +67,8 @@ and catalog reads without prompts. These fixtures are authored but unrun;
 installed-CLI discovery parity remains pending user acceptance.
 
 New sessions additionally read `defaultPermissionMode` through user settings.
-The SDK create API has no permission-mode creation input: after publishing the
+Nimrod retains its explicit confirmed permission initialization rather than
+adopting SDK 2.0's new `permissions.mode` creation option: after publishing the
 new identity and before publishing Connected, the configuration adapter reads
 `permissions.getMode()`, applies a differing explicit default through
 `permissions.setMode({mode, source:'user_setting'})`, and confirms the result
@@ -78,12 +90,12 @@ installed-runtime/native acceptance remains pending.
 - `scripts/prepare-copilot.mjs`, called by `src-tauri/build.rs`, stages the bridge,
   SDK dist/package metadata and required dependency packages into ignored
   `src-tauri/resources/copilot/`. It excludes every optional SDK CLI runtime
-  package. User installation/authentication of CLI 1.0.112 and a supported Node
+  package. User installation/authentication of CLI 1.0.113 and a supported Node
   remain prerequisites. SDK upgrades require deliberate source/API review.
 - SDK imports `koffi` eagerly even for stdio; ship it and its matching
   `@koromix/koffi-<platform>-<arch>` native dependency, plus
-  zod/vscode-jsonrpc/lossless-json. SDK 1.0.34 adds lossless-json for its JSON
-  codecs; staging must include it even though Nimrod uses ordinary history reads.
+  zod/vscode-jsonrpc/lossless-json. Staging uses the `@microsoft/copilot-sdk`
+  namespace and includes lossless-json even though Nimrod uses ordinary history reads.
   Native files are signed during requested macOS staging.
   Staging requires a native same-platform/architecture build and rejects an
   incompatible target rather than shipping the host native package. The bundle verifier

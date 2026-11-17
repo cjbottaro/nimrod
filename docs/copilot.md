@@ -2,10 +2,12 @@
 
 Nimrod’s built-in Copilot integration uses the **official Copilot SDK**, bundled
 with the app. Install and authenticate the Copilot CLI yourself; you do not need
-to install an SDK. The pinned SDK 1.0.34 declares CLI **1.0.112** compatibility.
-It still supports only protocol **3**. If connection or Resume reports that the
-server uses protocol **4**, select a protocol-3 CLI, such as the declared version,
-in **Settings → Runtime**; updating to this SDK alone does not resolve that mismatch.
+to install an SDK. The pinned Microsoft Copilot SDK **2.0.0** declares CLI
+**1.0.113** compatibility and requires protocol **4**. CLI 1.0.112 and older
+protocol-3 runtimes are no longer compatible. If you previously pinned a 1.0.112
+executable as a workaround, select a protocol-4 CLI in **Settings → Runtime**
+after updating Nimrod. Copilot is still launched as a separate owned process;
+Nimrod does not use the SDK's default in-process runtime.
 It requires Node `^20.19.0 || >=22.12.0`; the development toolchain uses 25.9.0.
 Configure **Settings → Runtime → Copilot executable** and **Node executable** if
 desktop executable discovery fails. Account/authentication stays with Copilot.
