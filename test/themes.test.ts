@@ -31,6 +31,21 @@ test('all standard/bright terminal palette tokens survive imports and clear on t
   } finally { dom.window.close(); }
 });
 
+test('text selection foreground imports, falls back, and clears with the palette', () => {
+  const theme = parse({ ...minimal, colors: { ...minimal.colors, 'editor.selectionForeground': '#102921', 'selection.background': '#77d8bd' } }).theme;
+  const dom = new JSDOM(''); const root = dom.window.document.documentElement;
+  try {
+    applyTheme(root, theme);
+    assert.equal(root.style.getPropertyValue('--vscode-selection-background'), '#77d8bd');
+    assert.equal(root.style.getPropertyValue('--vscode-editor-selectionForeground'), '#102921');
+    applyTheme(root, parse(minimal).theme);
+    assert.equal(root.style.getPropertyValue('--vscode-editor-selectionForeground'), minimal.colors['editor.foreground']);
+    applyTheme(root);
+    assert.equal(root.style.getPropertyValue('--vscode-selection-background'), '');
+    assert.equal(root.style.getPropertyValue('--vscode-editor-selectionForeground'), '');
+  } finally { dom.window.close(); }
+});
+
 test('Dracula uses the official base/accent/syntax palette', () => {
   assert.equal(DRACULA.name, 'Dracula'); assert.equal(DRACULA.mode, 'dark');
   const properties = themeProperties(DRACULA);

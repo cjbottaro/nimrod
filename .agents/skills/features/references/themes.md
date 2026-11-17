@@ -11,6 +11,8 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 
 ## Code map and invariants
 
+- `src/theme.css` gives the Nimrod scheme dedicated opaque text-selection pairs: mint/dark text in dark mode and teal/white text in light mode, independently of subdued list-row selection. The shared `::selection` rule covers selectable text and input fields. `editor.selectionForeground` is imported and managed alongside selection backgrounds; palettes without it retain their normal foreground, and resetting to Nimrod clears both inline selection overrides. Native selection rendering still requires platform acceptance.
+
 - `src/themes/theme.ts`: bounded JSONC importer, hex allowlist, broad syntax
   mapping, fallback derivation, imported-library validation and CSS-only application.
   `BUILTIN_THEME_IDS` preserves Nimrod/Dracula/Tokyo Night/Osaka Jade;

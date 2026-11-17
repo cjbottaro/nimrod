@@ -126,6 +126,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Text selection in the default Nimrod scheme uses a high-contrast mint/teal highlight with a contrasting text color instead of the subdued list-selection background, making selected composer and transcript text easier to see in dark and light modes.
+
 - Reopening a project now reconnects its selected Codex session automatically, like Pi and Copilot, without an extra sidebar click or sending a prompt. Background restored sessions stay disconnected. Startup selection policy is application-owned rather than adapter-configurable, so future harness integrations inherit the same behavior.
 
 - Codex history keeps host/Distrobox project paths separate without trusting the daemon's alias-normalizing cwd filter, preventing sessions from appearing in a project that cannot resume or delete them. Resume validates exact saved-project membership before attaching and accepts only native-verified equivalent runtime paths; deletion remains exact-project scoped. Path errors now include expected/reported directories. Existing drafts/layouts are not migrated or purged; native acceptance is pending.

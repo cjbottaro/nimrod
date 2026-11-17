@@ -12,7 +12,7 @@ export const BUILTIN_THEME_IDS = ['nimrod', 'dracula', 'tokyo-night', 'osaka-jad
 // Only color-valued keys actually used by Nimrod (plus inputs used to derive fallbacks).
 export const COLOR_KEYS = [
   'foreground', 'descriptionForeground', 'focusBorder', 'errorForeground',
-  'editor.background', 'editor.foreground', 'editor.selectionBackground', 'selection.background',
+  'editor.background', 'editor.foreground', 'editor.selectionBackground', 'editor.selectionForeground', 'selection.background',
   'editorWidget.background', 'editorGroupHeader.tabsBackground', 'editorCodeLens.foreground',
   'editorIndentGuide.background1', 'editorWarning.foreground', 'editorError.foreground',
   'input.background', 'input.foreground', 'input.border',
@@ -142,7 +142,7 @@ export function themeProperties(theme: ColorTheme): Record<string, string> {
   const warning = c['editorWarning.foreground'] || c['terminal.ansiYellow'] || (theme.mode === 'dark' ? '#e8bc79' : '#805316');
   const defaults: Record<string, string> = {
     foreground: fg, descriptionForeground: muted, focusBorder: accent, errorForeground: error,
-    'editor.background': bg, 'editor.foreground': fg, 'editor.selectionBackground': selection, 'selection.background': selection,
+    'editor.background': bg, 'editor.foreground': fg, 'editor.selectionBackground': selection, 'editor.selectionForeground': fg, 'selection.background': selection,
     'editorWidget.background': surface, 'editorGroupHeader.tabsBackground': surface,
     'editorCodeLens.foreground': muted, 'editorIndentGuide.background1': border,
     'editorWarning.foreground': warning, 'editorError.foreground': error,
