@@ -253,7 +253,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       if (command === 'plugin:window|is_focused') return options.focused?.() ?? true;
       if (command === 'plugin:clipboard-manager|write_text' && options.performanceControl?.copyError) throw new Error(options.performanceControl.copyError);
       if (command === 'transcript_logs_directory') return '/fixture/.local/state/nimrod/transcript-logs';
-      if (command === 'append_transcript_logs') return;
+      if (command === 'append_transcript_logs' || command === 'append_diagnostic_logs') return;
+      if (command === 'diagnostic_logs_directory') return '/fixture/.local/state/nimrod/diagnostic-logs';
       if (command === 'write_performance_report') {
         if (options.performanceControl?.writeError) throw new Error(options.performanceControl.writeError);
         return '/fixture/.local/state/nimrod/performance-captures/2026-10-14_12-00-00.000Z.json';
@@ -1988,6 +1989,32 @@ test('palette commands show shortcuts except intentionally unbound actions and r
     f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true, cancelable: true }));
     await f.tick();
     assert.ok(f.calls.some(call => call.command === 'open_global_settings' && call.args.category === 'keybindings'));
+  } finally { f.win.close(); }
+});
+
+test('diagnostic logging captures allowlisted SDK metadata independently without restarting or recording a draft', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project' });
+  try {
+    assert.equal(f.element<HTMLInputElement>('diagnostic-logs-mode').checked, false);
+    const enter = () => f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    f.openPalette(); const input = f.element<HTMLInputElement>('palette-input'); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input')); enter(); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
+    const target = [...f.sdkSessions.values()].find(session => session.sessionId === 'sdk-fixture')!;
+    const metadata = () => target.channel.onmessage({ kind: 'rpc', value: { kind: 'diagnostic', event: 'model.snapshot',
+      data: { raw: { modelId: 'fixture', contextTier: null, prompt: 'SECRET' }, resolved: { modelId: 'fixture' } } } });
+    metadata(); assert.equal(f.calls.some(call => call.command === 'append_diagnostic_logs'), false);
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'SECRET draft'; prompt.dispatchEvent(new f.win.Event('input'));
+    const starts = f.calls.filter(call => call.command === 'start_copilot').length;
+    f.preferences.external('{"diagnostics.diagnosticLogs":true}'); await f.tick();
+    assert.equal(f.element<HTMLInputElement>('diagnostic-logs-mode').checked, true);
+    metadata(); await new Promise(resolve => setTimeout(resolve, 150)); await f.tick();
+    const records = f.calls.filter(call => call.command === 'append_diagnostic_logs').flatMap(call => (call.args.lines as string[]).map(line => JSON.parse(line)));
+    assert.ok(records.some(record => record.event === 'model.snapshot' && record.payload.raw.contextTier === null));
+    assert.doesNotMatch(JSON.stringify(records), /SECRET/);
+    assert.equal(f.calls.some(call => call.command === 'append_transcript_logs'), false);
+    assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, starts);
+    assert.equal(prompt.value, 'SECRET draft');
+    f.preferences.external('{}'); await f.tick();
   } finally { f.win.close(); }
 });
 

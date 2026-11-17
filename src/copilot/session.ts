@@ -1,4 +1,5 @@
 import { copilotSessionName } from './session-name';
+import { copilotDiagnosticMetadata } from '../../copilot/diagnostics.mjs';
 import { commandCatalog, type SessionCommands } from '../session-commands';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
@@ -51,6 +52,7 @@ export interface CopilotSessionUi {
   commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
   commandInput?(title: string, signal: AbortSignal): Promise<string | undefined>;
   transcriptLog?: TranscriptLogSink;
+  diagnosticLog?: TranscriptLogSink;
 }
 /** SDK semantic events project directly to shared presentation, never Pi/ACP events. */
 export class CopilotSession {
@@ -93,12 +95,13 @@ export class CopilotSession {
   private waitingStatus?: string;
   private captureConnectionId = crypto.randomUUID();
   private runtimeVersion?: string;
+  private contextDiagnostic?: string;
   private nameRevision = 0;
   private renaming = false;
   constructor(send: (message: BridgeRequest) => Promise<void>, private ui: CopilotSessionUi) {
     this.connection = new CopilotConnection(async message => {
       this.capture(`request.${message.method}`, message);
-      return send(message);
+      return send(ui.diagnosticLog ? { ...message, diagnostics: ui.diagnosticLog.enabled } : message);
     }, packet => this.packet(packet), reason => {
       this.capture('bridge.disconnected', { reason });
       this.ended = true; this.acceptedCompletion = undefined; this.cancelDecisions(); this.commandQueue?.cancel(reason); this.configuration?.dispose(reason); this.usage?.dispose(); this.finish();
@@ -160,7 +163,7 @@ export class CopilotSession {
   }
   cancelCommands(): void { this.commandQueue.cancel(); }
   receive(packet: unknown): void {
-    if (record(packet) && !['event', 'connected', 'permission', 'input', 'plan'].includes(String(packet.kind)))
+    if (record(packet) && !['event', 'connected', 'permission', 'input', 'plan', 'diagnostic'].includes(String(packet.kind)))
       this.capture(`bridge.${String(packet.kind)}`, packet);
     this.connection.receive(packet);
   }
@@ -466,7 +469,9 @@ export class CopilotSession {
     if (!this.ended && !this.replaying && !this.configuring && !this.state.sessionUnavailable) this.usage.refreshContext();
   }
   private packet(packet: Record<string, unknown>): void {
-    if (packet.kind === 'identified') {
+    if (packet.kind === 'diagnostic') {
+      if (typeof packet.event === 'string' && record(packet.data)) this.diagnostic(packet.event, packet.data);
+    } else if (packet.kind === 'identified') {
       if (typeof packet.sessionId !== 'string' || !packet.sessionId || this.sessionId && this.sessionId !== packet.sessionId) throw new Error('Invalid or changed Copilot session identity');
       this.ui.identified(packet.sessionId); this.sessionId = packet.sessionId;
     } else if (packet.kind === 'connected') {
@@ -687,15 +692,34 @@ export class CopilotSession {
       // SDK callbacks can arrive before create/resume publishes its authoritative identity.
       sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, toolCallId, event, payload });
   }
+  private diagnostic(event: string, payload: Record<string, unknown>): void {
+    const log = this.ui.diagnosticLog;
+    if (!log?.enabled) return;
+    try {
+      const metadata = copilotDiagnosticMetadata(event, payload);
+      if (metadata === undefined) return;
+      log.append({ source: { backend: 'copilot-sdk', agent: 'copilot', ...(this.runtimeVersion ? { version: this.runtimeVersion } : {}) },
+        sessionId: this.sessionId || `connecting:${this.captureConnectionId}`, connectionId: this.captureConnectionId, event, payload: metadata });
+    } catch { /* Diagnostic-only failures cannot interrupt session delivery. */ }
+  }
   private updateStatusArea(): void {
     const context = this.usage.snapshot.context;
     if (this.model && context?.tokenLimit && context.tokenLimit > 0)
       this.contextLimits.set(`${this.model}:${this.contextTier || 'default'}`, context.tokenLimit);
+    const advertisedLimit = !this.ended && !this.configuring && !this.state.sessionUnavailable
+      ? advertisedCopilotContextLimit(this.models.find(model => model.id === this.model), this.contextTier) : undefined;
+    if (this.ui.diagnosticLog?.enabled) {
+      const metadata = { modelId: this.model, contextTier: this.contextTier, currentTokens: context?.currentTokens,
+        reportedLimit: context?.tokenLimit, advertisedLimit, configuring: this.configuring,
+        source: context?.tokenLimit && context.tokenLimit > 0 ? 'reported' : advertisedLimit
+          ? this.contextTier === undefined ? 'catalog-standard-preview' : 'catalog-reported-tier' : 'unknown' };
+      const signature = JSON.stringify(metadata);
+      if (signature !== this.contextDiagnostic) { this.contextDiagnostic = signature; this.diagnostic('display.context', metadata); }
+    } else this.contextDiagnostic = undefined;
     const statusArea = this.projectStatus({ model: this.model, effort: this.effort, mode: this.mode, supportsModel: this.supports('model'),
       supportsThinking: this.supports('thinking'), supportsMode: this.supports('mode'), supportsContext: this.supports('context'),
       available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot, contextTier: this.contextTier,
-      advertisedContextLimit: !this.ended && !this.configuring && !this.state.sessionUnavailable
-        ? advertisedCopilotContextLimit(this.models.find(model => model.id === this.model), this.contextTier) : undefined });
+      advertisedContextLimit: advertisedLimit });
     if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };
   }
   private publish(rows?: DisplayMessage[]): void {

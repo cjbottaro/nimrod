@@ -31,7 +31,7 @@ interface ConfigurationSession {
 }
 export function createCopilotConfiguration(client: {
   rpc: { user: { settings: { get(): Promise<unknown> } } };
-}): {
+}, observe?: (event: string, metadata: unknown) => void): {
   defaults(): Promise<Defaults>;
   initializePermissions(session: {
     rpc: { permissions: {

@@ -769,7 +769,7 @@ function sessionHost(tab: Tab, owner: SessionLifecycleOwner): HarnessSessionHost
   };
   return {
     id: tab.id, project, ownership: owner, drafts: tab.drafts,
-    performance: settingsSurface.performanceProbe, transcriptLog: settingsSurface.transcriptLog,
+    performance: settingsSurface.performanceProbe, transcriptLog: settingsSurface.transcriptLog, diagnosticLog: settingsSurface.diagnosticLog,
     lifetime: {
       current, selected, settingsOpen: () => settings.isOpen,
       closing: () => tab.closing, reloading: () => tab.reloading, deleting: () => tab.deleting,

@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { CopilotSession } from '../src/copilot/session';
 import { createTranscriptLog } from '../src/transcript-logs';
+import { createDiagnosticLog } from '../src/diagnostic-logs';
 
 function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete', contextState = 'default') {
   const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState, NIMROD_FIXTURE_COPILOT_CONTEXT_STATE: contextState } });
@@ -45,6 +46,57 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+test('Copilot diagnostic metadata captures exact Resume configuration separately and stays off by default', { timeout: 5000 }, async () => {
+  const off = bridge();
+  try {
+    await off.request('initialize'); await off.request('connect', { sessionId: 'fixture-sdk' });
+    assert.equal(off.packets.some(packet => packet.kind === 'diagnostic'), false);
+  } finally { await off.close(); }
+  const f = bridge();
+  try {
+    await f.request('initialize', { diagnostics: true });
+    await f.request('connect', { sessionId: 'fixture-sdk', diagnostics: true });
+    await f.request('context', { diagnostics: true });
+    const metadata = f.packets.filter(packet => packet.kind === 'diagnostic');
+    assert.ok(metadata.some(packet => packet.event === 'runtime.start' && packet.data.cliPath === '/fixture/copilot'));
+    assert.ok(metadata.some(packet => packet.event === 'runtime.status' && packet.data.protocolVersion === 4));
+    const requested = metadata.find(packet => packet.event === 'session.connect.requested')!.data;
+    assert.equal(requested.operation, 'resume'); assert.equal(requested.requestedSessionId, 'fixture-sdk');
+    assert.equal(requested.continuePendingWork, false);
+    assert.equal(metadata.find(packet => packet.event === 'session.connect.completed')!.data.returnedSessionId, 'fixture-sdk');
+    assert.equal(metadata.find(packet => packet.event === 'model.snapshot')!.data.raw.modelId, 'large');
+    assert.equal(metadata.find(packet => packet.event === 'context.metadata')!.data.present, true);
+    assert.doesNotMatch(JSON.stringify(metadata), /Saved SDK question|Saved SDK answer/);
+    const count = metadata.length;
+    await f.request('context', { diagnostics: false });
+    assert.equal(f.packets.filter(packet => packet.kind === 'diagnostic').length, count);
+  } finally { await f.close(); }
+});
+
+test('production bridge and controller correlate Resume diagnostics without recording conversation history', { timeout: 5000 }, async () => {
+  const lines: string[] = [];
+  const log = createDiagnosticLog({ write: async batch => { lines.push(...batch); }, failure: message => assert.fail(message), recovered() {} });
+  log.setEnabled(true);
+  let session: CopilotSession | undefined;
+  const f = bridge('interactive', packet => session?.receive(packet));
+  session = new CopilotSession(async message => f.send(message), { diagnosticLog: log,
+    publish() {}, changed() {}, identified() {}, disconnected() {}, completed() {}, notice() {}, decision: async () => undefined });
+  try {
+    await session.initialize('fixture-sdk');
+    await f.waitFor(packet => packet.kind === 'diagnostic' && packet.event === 'context.metadata');
+    await log.flush();
+    const records = lines.map(line => JSON.parse(line));
+    assert.ok(records.some(record => record.event === 'session.connect.requested'));
+    assert.ok(records.some(record => record.event === 'model.snapshot'));
+    assert.ok(records.some(record => record.event === 'model.catalog' && record.payload.id === 'large' && record.payload.found === true));
+    assert.ok(records.some(record => record.event === 'display.context'));
+    assert.equal(new Set(records.map(record => record.connectionId)).size, 1);
+    assert.ok(records.some(record => record.sessionId === 'fixture-sdk'));
+    assert.doesNotMatch(lines.join(''), /Saved SDK question|Saved SDK answer/);
+    assert.equal(session.state.sessionUnavailable, false);
+  } finally { session.disconnect('fixture complete'); log.dispose(); await f.close(); }
+});
+
 test('SDK exact metadata distinguishes native absence, hidden saved history and failed/cross-project lookup', { timeout: 5000 }, async () => {
   const f = bridge();
   try {

@@ -4,6 +4,7 @@ import { createCopilotConfiguration } from './configuration.mjs';
 import { completeCommandEffect } from './command-effects.mjs';
 import { applyConfigCommand, configCommand } from './config-command.mjs';
 import { validPermissionDecision } from './permissions.mjs';
+import { copilotDiagnosticMetadata } from './diagnostics.mjs';
 
 const [cli, cwd] = process.argv.slice(2);
 if (!cli || !isAbsolute(cli) || !cwd || !isAbsolute(cwd)) throw new Error('An absolute user-installed Copilot executable and project are required.');
@@ -15,7 +16,15 @@ const client = new CopilotClient({
   github: { useLoggedInUser: true }, mode: 'coding-agent',
   clientInfo: { applicationName: 'Nimrod', integrationName: 'nimrod-copilot-sdk' },
 });
-const configuration = createCopilotConfiguration(client);
+const configuration = createCopilotConfiguration(client, observeDiagnostic);
+let diagnosticsEnabled = false;
+function observeDiagnostic(event, metadata) {
+  if (!diagnosticsEnabled) return;
+  try {
+    const data = copilotDiagnosticMetadata(event, metadata);
+    if (data !== undefined) send({ kind: 'diagnostic', event, data });
+  } catch { /* Optional metadata capture never changes the SDK operation. */ }
+}
 let session, connecting = false, closing = false, initialized = false;
 let checkingHealth = false;
 let replaying = false, buffered = [];
@@ -109,6 +118,10 @@ function promptImages(value) {
 }
 async function dispatch(message) {
   if (!message || typeof message !== 'object' || typeof message.id !== 'string') throw new Error('Invalid bridge request');
+  if (message.diagnostics !== undefined) {
+    if (typeof message.diagnostics !== 'boolean') throw new Error('Invalid diagnostic logging flag');
+    diagnosticsEnabled = message.diagnostics;
+  }
   if (message.method === 'decision') {
     const pending = decisions.get(message.decisionId);
     if (!pending) throw new Error('This Copilot decision is no longer pending.');
@@ -131,8 +144,10 @@ async function dispatch(message) {
   if (closing) throw new Error('Copilot connection is closing');
   if (message.method === 'initialize') {
     if (initialized) throw new Error('Copilot bridge is already initialized');
+    observeDiagnostic('runtime.start', { cliPath: cli, nodeVersion: process.version });
     await client.start();
     const status = await client.getStatus();
+    observeDiagnostic('runtime.status', status);
     initialized = true;
     return status;
   }
@@ -148,6 +163,9 @@ async function dispatch(message) {
     case 'connect': {
       if (session || connecting) throw new Error('This bridge already owns or is connecting a conversation');
       connecting = true;
+      const attempt = { requestId: message.id, operation: message.sessionId === undefined ? 'create' : 'resume',
+        ...(message.sessionId === undefined ? {} : { requestedSessionId: message.sessionId, allowTranscriptRecovery: false, continuePendingWork: false }) };
+      observeDiagnostic('session.connect.requested', attempt);
       try {
         if (message.sessionId !== undefined) await membership(message.sessionId);
         replaying = true;
@@ -161,6 +179,7 @@ async function dispatch(message) {
         session = message.sessionId === undefined
           ? await client.createSession({ ...config(), ...creationDefaults, inference, name: 'Copilot session' })
           : await client.resumeSession(message.sessionId, { ...config(), allowTranscriptRecovery: false, continuePendingWork: false });
+        observeDiagnostic('session.connect.completed', { ...attempt, returnedSessionId: session.sessionId });
         if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
         send({ kind: 'identified', sessionId: session.sessionId });
         if (message.sessionId === undefined) await configuration.initializePermissions(session, permissionMode);
@@ -170,6 +189,7 @@ async function dispatch(message) {
         // them. Later root events/configuration results remain authoritative.
         const model = await configuration.snapshot(session, defaults);
         const models = await client.listModels();
+        observeDiagnostic('model.catalog', models.find(item => item.id === model.modelId));
         // History and streamed events share IDs. Publish replay first, synchronously
         // in this channel, before any events received while getEvents was in flight.
         send({ kind: 'connected', sessionId: session.sessionId, events, model, mode, models });
@@ -199,7 +219,9 @@ async function dispatch(message) {
       // Zero limits ask the runtime to resolve its selected model/context tier.
       // `limit` is the display window; promptTokenLimit is a different effective
       // input budget and must not silently become the denominator.
-      const { contextInfo } = await session.rpc.metadata.contextInfo({ promptTokenLimit: 0, outputTokenLimit: 0 });
+      const metadata = await session.rpc.metadata.contextInfo({ promptTokenLimit: 0, outputTokenLimit: 0 });
+      observeDiagnostic('context.metadata', metadata);
+      const { contextInfo } = metadata;
       if (contextInfo === null || contextInfo === undefined) return null;
       if (typeof contextInfo !== 'object' || Array.isArray(contextInfo)) throw new Error('Invalid Copilot context snapshot');
       return { currentTokens: contextInfo.totalTokens, tokenLimit: contextInfo.limit };
@@ -323,7 +345,10 @@ input.on('line', line => {
   // Do not serialize prompt completion ahead of cancel or permission replies.
   void dispatch(message).then(
     result => send({ kind: 'result', id: message.id, result: result ?? null }),
-    error => send({ kind: 'result', id: message.id, error: failure(error) }),
+    error => {
+      observeDiagnostic('operation.failed', { requestId: message.id, method: message.method, outcome: 'error' });
+      send({ kind: 'result', id: message.id, error: failure(error) });
+    },
   );
 });
 input.on('close', () => { void shutdown(); });

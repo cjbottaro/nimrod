@@ -78,4 +78,5 @@ export interface HarnessSessionHost {
   readonly drafts: SessionDrafts;
   readonly performance: PerformanceProbe;
   readonly transcriptLog: TranscriptLogSink;
+  readonly diagnosticLog?: TranscriptLogSink;
 }

@@ -620,6 +620,10 @@ performed for this change.
 
 ## Usage metrics
 
+Opt-in [diagnostic logs](diagnostic-logs.md) capture allowlisted public model/context
+metadata and the display source to distinguish missing harness metadata from
+Nimrod fallback/projection errors. They do not add reads, prompts or session state.
+
 **Status: source-implemented; new/updated fixtures unrun.** `src/copilot/usage.ts`
 provides the narrow concrete `CopilotUsage` snapshot and session-bound metadata
 consumer, separate from model configuration. The shared Status area only consumes

@@ -10,6 +10,7 @@ use tauri::{Emitter, Manager};
 
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 const TRANSCRIPT_LOGS_SETTING: &str = "diagnostics.transcriptLogs";
+const DIAGNOSTIC_LOGS_SETTING: &str = "diagnostics.diagnosticLogs";
 // Read compatibility only; frontend saves replace this key atomically.
 const LEGACY_TRANSCRIPT_LOGS_SETTING: &str = "diagnostics.toolCapture";
 
@@ -19,6 +20,10 @@ pub(crate) fn transcript_logs_enabled(settings: &Value) -> bool {
         .or_else(|| settings.get(LEGACY_TRANSCRIPT_LOGS_SETTING))
         .and_then(Value::as_bool)
         == Some(true)
+}
+
+pub(crate) fn diagnostic_logs_enabled(settings: &Value) -> bool {
+    settings.get(DIAGNOSTIC_LOGS_SETTING).and_then(Value::as_bool) == Some(true)
 }
 
 #[derive(Clone, Serialize)]
@@ -187,7 +192,11 @@ pub(crate) fn validate(text: &str) -> Result<(), String> {
     {
         return Err("diagnostics.performance must be a boolean".into());
     }
-    for key in [TRANSCRIPT_LOGS_SETTING, LEGACY_TRANSCRIPT_LOGS_SETTING] {
+    for key in [
+        TRANSCRIPT_LOGS_SETTING,
+        LEGACY_TRANSCRIPT_LOGS_SETTING,
+        DIAGNOSTIC_LOGS_SETTING,
+    ] {
         if object.get(key).is_some_and(|v| !v.is_boolean()) {
             return Err(format!("{key} must be a boolean"));
         }

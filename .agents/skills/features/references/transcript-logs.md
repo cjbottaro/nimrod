@@ -2,6 +2,11 @@
 
 **Status: implemented.** This reference owns implementation contracts and fixture locations. [Verification](verification.md#transcript-logging) owns executed evidence and remaining acceptance gaps; [Transcript debug logs](../../../../docs/transcript-logs.md) owns user instructions and trace-reading examples. Related: [preferences](preferences.md), [error presentation](error-presentation.md), [consumer interfaces](consumer-interfaces.md).
 
+The separate metadata-only [diagnostic stream](diagnostic-logs.md) reuses the bounded
+transport/writer below with its own setting, storage root, captures and errors.
+Its payload allowlists remain integration-owned; this transcript stream continues
+to capture full content under its independent opt-in.
+
 ## Boundary and settings
 
 One opt-in full-content native trace serves Nimrod development/debugging, not playback, execution or a durable audit journal. Preserve harness payloads rather than inventing a universal conversation protocol. Record only normal traffic: no enabling-time history fetch, snapshot walk, unsent-draft subscription, DOM capture, prompt replay, permissions, navigation or harness-session mutation.

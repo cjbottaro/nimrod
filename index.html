@@ -164,6 +164,12 @@ console.log(greeting); // 0123456789</code></pre>
       <section id="settings-panel-diagnostics" class="settings-panel" data-category="diagnostics" role="tabpanel" aria-labelledby="settings-category-diagnostics" tabindex="0" hidden>
         <h2>Diagnostics</h2><p class="settings-description">Local tools for understanding what happened.</p>
         <div class="settings-group settings-inset">
+        <div class="settings-row"><label for="diagnostic-logs-mode">Diagnostic logs</label>
+        <div class="settings-field"><label class="settings-toggle"><input id="diagnostic-logs-mode" type="checkbox"> Enabled</label></div></div>
+        <p class="settings-hint">Record Copilot connection, model/context metadata and display decisions locally, without prompts, reasoning, tool contents or credentials. Session IDs and executable paths are included. Enable before Resume or Reload to capture the full connection; enabling alone performs no harness reads. Files are separate from transcript/performance logs, rotate at 25 MiB, and retain at most 250 MiB and seven days. Logging never gates chat; overload drops records and reports an incomplete capture.</p>
+        <p id="diagnostic-logs-status" class="settings-hint" role="status">Diagnostic logging is off.</p>
+        </div>
+        <div class="settings-group settings-inset settings-spaced-group">
         <div class="settings-row"><label for="transcript-logs-mode">Transcript debug logs</label>
         <div class="settings-field"><label class="settings-toggle"><input id="transcript-logs-mode" type="checkbox"> Enabled</label></div></div>
         <p class="settings-hint">Log native conversation events, prompts, assistant text/reasoning, tools, history, configuration and requests/results locally. Logs include full content and may contain secrets. Nothing is uploaded. Best-effort logging never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture. Files rotate at a 25 MiB target, keeping captured events whole; oldest logs are deleted to keep at most 250 MiB and seven days. Agent history is untouched.</p>

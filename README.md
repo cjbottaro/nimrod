@@ -56,6 +56,7 @@ Without installation, use `./bin/nimrod .`. Directory launches open or focus a p
 - [MCP inspector](docs/mcp.md) — read-only session server status, exposure, counts and reported errors.
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.
 - [Performance reports](docs/performance-diagnostics.md) — opt-in local timing captures for sluggish typing/scrolling.
+- [Diagnostic logs](docs/diagnostic-logs.md) — opt-in, metadata-only Copilot connection/context traces, separate from conversations and performance reports.
 - [Transcript debug logs](docs/transcript-logs.md) — opt-in full-content native conversation, history, tool and request/result traces for developing/debugging Nimrod.
 - [Settings](docs/settings.md) — global defaults, project overrides, appearance, [conversation/code fonts and sizes](docs/settings.md#typography), zoom and runtime paths.
 - [Customize Nimrod](docs/customize-nimrod.md) — ask a connected session to customize the UI, with inspectable installed-app guidance included in one normal user message; no Nimrod checkout required.

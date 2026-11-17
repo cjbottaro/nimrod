@@ -13,6 +13,18 @@ function fixture() {
   return { dom, host, errors, install: () => installPreferences(host, dom.window.localStorage, error => errors.push(error)) };
 }
 
+test('diagnostic logging is independently opt-in and boolean-validated', async () => {
+  const f = fixture(), p = await f.install();
+  try {
+    assert.equal(p.diagnosticLogEnabled(), false);
+    await p.saveDiagnosticLog(true);
+    assert.equal(p.diagnosticLogEnabled(), true); assert.equal(p.transcriptLogEnabled(), false);
+    await p.saveTranscriptLog(true); await p.saveDiagnosticLog(false);
+    assert.equal(p.diagnosticLogEnabled(), false); assert.equal(p.transcriptLogEnabled(), true);
+    assert.throws(() => parseSettings('{"diagnostics.diagnosticLogs":"true"}'), /must be a boolean/);
+  } finally { p.dispose(); f.dom.window.close(); }
+});
+
 test('default harness layers future-launch defaults without rewriting equal overrides or unrelated JSONC', async () => {
   const f = fixture(), p = await f.install();
   try {

@@ -25,6 +25,7 @@
 - [MCP inspector](mcp.md) — read-only session server status and reported diagnostics.
 - [Keybindings](keybindings.md) — shortcuts, reassignment and configuration syntax.
 - [Performance reports](performance-diagnostics.md) — opt-in timing diagnostics and local slowdown captures.
+- [Diagnostic logs](diagnostic-logs.md) — opt-in Copilot connection, configuration and context-display metadata without conversation content.
 - [Transcript debug logs](transcript-logs.md) — opt-in native conversation, history, tool and request/result traces for debugging Nimrod.
 - [Settings](settings.md) — categories, conversation/code fonts and sizes, zoom, runtime paths and local files.
 - [Themes](themes.md) — live previews, bundled themes and standalone imports.

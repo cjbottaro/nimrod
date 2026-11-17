@@ -113,6 +113,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |
 | Shared modal shell, configurable motion and action focus | [Modal layout](references/modal-layout.md) | [Confirmations](../../../docs/command-palette.md#confirmation-dialogs) |
+| Opt-in metadata-only diagnostics, Copilot Resume/context evidence and shared bounded log storage | [Diagnostic logs](references/diagnostic-logs.md) | [Diagnostic logs](../../../docs/diagnostic-logs.md) |
 | Transcript logging | [Transcript debug logging](references/transcript-logs.md) | [Transcript debug logs](../../../docs/transcript-logs.md) |
 | Opt-in timing history, explicit local capture and bounded report storage | [Performance diagnostics](references/performance-diagnostics.md) | [Performance reports](../../../docs/performance-diagnostics.md) |
 | Completed performance work, rationale/results and potential future optimizations (catalogue, not replacement feature contracts) | [Performance optimizations skill](../performance-optimizations/SKILL.md) | Agent-facing only |

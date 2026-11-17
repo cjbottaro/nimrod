@@ -651,6 +651,23 @@ matrix; do not treat this handoff as full Plan/Autopilot support.
 
 Grouped Pi codemode cards are source-implemented. Authored fixtures in `test/codemode-groups.test.ts`, `test/native-view.test.ts`, `test/builtin-tool-plugins.test.ts`, `test/tool-card.test.ts` and `test/browser/codemode-groups.spec.ts` cover explicit relationships, adoption/history, bounded/missing records, independent parent/child output, child failures, dynamic progress, coalesced/hidden/gapped delivery, reset and retained DOM/disclosures/focus. Follow-up authored fixtures additionally cover normal saved-child cards/themed dots, absent-data silence, personal overrides, unchanged-record renderer suppression, saved-to-live shell adoption and plugin disposal. These fixtures have **not been run** for this change. Native visual/disclosure/scroll acceptance on macOS/Linux remains pending; no platform acceptance follows from authored jsdom/browser fixtures.
 
+## Diagnostic logs
+
+Independent global opt-in diagnostic logging is implemented for Copilot connection,
+configuration/context metadata and display decisions. It shares the existing bounded
+frontend transport/native writer but uses a separate storage root, setting,
+capture identity and failure event. Explicit primitive-field allowlists exclude
+conversation/tool contents, credentials and arbitrary SDK/error payloads.
+New pure, production-bridge/controller, preference, shell and native fixtures cover
+null/omission/zero, exact Resume identities, off/default and disable, observer/IO
+failure isolation, privacy projection, shared connection correlation and no hidden
+metadata/provider requests. These fixtures are authored **unrun**. No live session,
+paid request, app build/launch or native macOS/Linux acceptance was performed.
+Mandatory post-merge compilation is not behavioral or native acceptance. Actual
+cross-window settings propagation, file/error/overflow delivery, retention and
+native checkbox/Resume capture remain user/native acceptance work.
+[Diagnostic logs](diagnostic-logs.md) owns the contract and fixture map.
+
 ## Transcript logging
 
 Before this correction, the CLI 1.0.100 trace above showed native completion at

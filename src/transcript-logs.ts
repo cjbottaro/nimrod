@@ -13,6 +13,8 @@ export interface TranscriptLogSink {
   append(record: TranscriptLogRecord): void;
 }
 export interface TranscriptLogHost {
+  /** Human-readable stream name for diagnostic-only failures. */
+  label?: string;
   /** Resolves at native queue admission, not disk completion. False admission means dropped records. */
   write(lines: string[], captureId: string): Promise<unknown>;
   failure(message: string): void;
@@ -36,7 +38,7 @@ export function createTranscriptLog(host: TranscriptLogHost) {
   function fail(error: unknown): void {
     if (failed || disposed) return;
     failed = true; pending = []; chars = 0; cancelSchedule();
-    try { host.failure(`Conversation unaffected; diagnostic logging stopped. Some events may not have been saved. ${String(error)} Toggle transcript debug logs off and on to start a new segment. Nothing was retried.`); }
+    try { host.failure(`Conversation unaffected; diagnostic logging stopped. Some events may not have been saved. ${String(error)} Toggle ${host.label || 'transcript debug logs'} off and on to start a new segment. Nothing was retried.`); }
     catch (noticeError) { console.error('Could not report transcript debug logging failure', noticeError); }
   }
   function reportDropped(): void {

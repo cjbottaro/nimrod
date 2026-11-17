@@ -159,6 +159,7 @@ fn main() {
         "copilot/config-command.mjs",
         "copilot/command-effects.mjs",
         "copilot/permissions.mjs",
+        "copilot/diagnostics.mjs",
         "scripts/prepare-copilot.mjs",
         "package-lock.json",
     ] {

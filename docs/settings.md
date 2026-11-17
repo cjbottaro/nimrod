@@ -115,7 +115,9 @@ Use the **Enabled** checkbox for Background session alerts; Test and Refresh rem
 
 ## Diagnostics
 
-Transcript logging and performance diagnostics use **Enabled** checkboxes, not On/Off menus. Their content/privacy guidance remains visible.
+Diagnostic logging, transcript logging and performance diagnostics use **Enabled** checkboxes, not On/Off menus. Their content/privacy guidance remains visible.
+
+**Diagnostic logs** is off by default. Capture allowlisted Copilot connection/model/context metadata and Nimrod's display decision, without conversation content or credentials. Enable before Resume or Reload for a complete connection trace. Files are local and separate from transcript/performance captures; the resolved path appears below the checkbox. See [Diagnostic logs](diagnostic-logs.md).
 
 **Transcript debug logs** is off by default. Enable full-content local conversation traces for debugging; logs can contain secrets and are never uploaded. Logging is best-effort and never waits for disk during session delivery. Full buffers drop diagnostic records and report an incomplete capture rather than slowing session processing. See [Transcript debug logs](transcript-logs.md) for storage, retention and troubleshooting.
 

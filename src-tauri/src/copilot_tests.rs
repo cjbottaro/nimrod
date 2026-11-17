@@ -13,6 +13,17 @@ fn startup_discovery_uses_configured_paths_without_launching_a_harness() {
 use serde_json::json;
 
 #[test]
+fn diagnostics_flag_is_optional_and_boolean_without_adding_a_harness_operation() {
+    for enabled in [true, false] {
+        assert!(validate_message(&json!({"id":"one","method":"initialize","diagnostics":enabled})).is_ok());
+    }
+    for invalid in [json!(null), json!("true"), json!(1), json!({})] {
+        assert!(validate_message(&json!({"id":"one","method":"initialize","diagnostics":invalid})).is_err());
+    }
+    assert!(validate_message(&json!({"id":"one","method":"diagnostics"})).is_err());
+}
+
+#[test]
 fn rename_validates_the_sdk_name_limits() {
     assert!(validate_message(&json!({"id":"one","method":"rename","name":"Friendly name"})).is_ok());
     for name in ["".to_string(), " ".into(), "two\nlines".into(), "x".repeat(101)] {

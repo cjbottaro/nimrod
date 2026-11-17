@@ -21,6 +21,7 @@ import { DEFAULT_MODAL_DURATIONS, DEFAULT_PIXEL_OPTIONS, DEFAULT_SCAN_SPEEDS, is
 import { installNativeWindowAppearance } from './native-window-appearance';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 import { createTranscriptLog } from './transcript-logs';
+import { createDiagnosticLog } from './diagnostic-logs';
 import type { NotificationDispatch } from './notifications';
 import { installTypography } from './typography-controls';
 import type { InstalledFont } from './font-picker';
@@ -178,6 +179,51 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     if (!unloading) { transcriptLogPath = path; reloadTranscriptLog(); }
   }).catch(error => {
     if (!unloading) notices.report({ id: 'transcript-logs-path', operation: 'Locate transcript debug logs', message: String(error) });
+  });
+  const diagnosticLogPicker = required<HTMLInputElement>('diagnostic-logs-mode');
+  const diagnosticLogStatus = required('diagnostic-logs-status');
+  let diagnosticLogPath = '', diagnosticLogFailure = '', diagnosticLogLoss = '';
+  const diagnosticLog = createDiagnosticLog({
+    write: (lines, captureId) => invoke('append_diagnostic_logs', { lines, captureId }),
+    failure: message => {
+      if (unloading) return;
+      diagnosticLogFailure = message; diagnosticLogStatus.textContent = message;
+      notices.report({ id: 'diagnostic-logs', operation: 'Record diagnostic logs', message });
+    },
+    recovered: () => { diagnosticLogFailure = ''; diagnosticLogLoss = ''; notices.resolve('diagnostic-logs'); notices.resolve('diagnostic-log-loss'); },
+    dropped: count => {
+      if (unloading) return;
+      diagnosticLogLoss = `Diagnostic logging dropped ${count} records. Capture is incomplete; session processing is unaffected.`;
+      diagnosticLogStatus.textContent = diagnosticLogLoss;
+      notices.report({ id: 'diagnostic-log-loss', operation: 'Diagnostic logs', severity: 'warning', message: diagnosticLogLoss });
+    },
+  });
+  let unlistenDiagnosticErrors: UnlistenFn | undefined;
+  void listen<{ captureId: string; message: string }>('diagnostic-log-error', event => {
+    if (!unloading) diagnosticLog.writeFailed(event.payload.captureId, event.payload.message);
+  }).then(unlisten => {
+    if (unloading) unlisten(); else unlistenDiagnosticErrors = unlisten;
+  }).catch(error => {
+    if (!unloading) notices.report({ id: 'diagnostic-log-monitor', operation: 'Monitor diagnostic logging', message: String(error) });
+  });
+  function reloadDiagnosticLog(): void {
+    const enabled = preferences.diagnosticLogEnabled();
+    diagnosticLog.setEnabled(enabled && !global);
+    diagnosticLogPicker.checked = enabled;
+    diagnosticLogStatus.textContent = diagnosticLogFailure || diagnosticLogLoss || `${enabled ? 'Diagnostic logging enabled for project windows. Resume or Reload to capture a complete connection.' : 'Diagnostic logging is off; existing logs are retained.'}${diagnosticLogPath ? ` Logs: ${diagnosticLogPath}` : ''}`;
+  }
+  const changeDiagnosticLog = () => {
+    diagnosticLogPicker.disabled = true;
+    void preferences.saveDiagnosticLog(diagnosticLogPicker.checked).then(() => notices.resolve('diagnostic-logs-settings'))
+      .catch(error => notices.report({ id: 'diagnostic-logs-settings', operation: 'Save diagnostic logging setting', message: String(error) }))
+      .finally(() => { if (!unloading) { reloadDiagnosticLog(); diagnosticLogPicker.disabled = false; } });
+  };
+  diagnosticLogPicker.addEventListener('change', changeDiagnosticLog);
+  reloadDiagnosticLog();
+  void invoke<string>('diagnostic_logs_directory').then(path => {
+    if (!unloading) { diagnosticLogPath = path; reloadDiagnosticLog(); }
+  }).catch(error => {
+    if (!unloading) notices.report({ id: 'diagnostic-logs-path', operation: 'Locate diagnostic logs', message: String(error) });
   });
   const performanceDiagnostics = installPerformanceDiagnostics(window, () => ({
     userAgent: navigator.userAgent.slice(0, 512), fieldSizing: window.CSS?.supports('field-sizing', 'content') ?? false,
@@ -534,7 +580,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
   const unsubscribe = preferences.subscribe(() => {
     const width = preferences.readState(settingsSidebarWidthKey);
     if (!Object.is(width, settingsSidebarWidth)) { settingsSidebarWidth = width; settingsSidebarResize.reload(); }
-    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadDefaultHarness(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
+    runtime.reload(); themes.reload(); typography.reload(); appearance.reload(); void zoom.reload(); reloadNotifications(); reloadPerformance(); reloadTranscriptLog(); reloadDiagnosticLog(); reloadSendAutoFollow(); reloadAutocomplete(); reloadDefaultHarness(); reloadModalAnimation(); keybindingEditor?.reload(); reloadSources();
   });
   reloadSources();
   return {
@@ -546,7 +592,7 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
     initializeRuntime(defaults: { pi: string; node: string }) { runtimeDefaults = defaults; runtime.initialize(defaults); },
     notificationError, notificationProgress, capturePerformance,
     performanceProbe: performanceDiagnostics.probe,
-    transcriptLog,
+    transcriptLog, diagnosticLog,
     get capturingPerformance() { return capturingPerformance; },
     get performancePath() { return performancePath; },
     openKeybindings() { settings.open(); if (settings.isOpen && settingsNavigation.select('keybindings')) keybindingEditor?.focus(); },
@@ -563,6 +609,8 @@ export function installSettingsSurface(preferences: Awaited<ReturnType<typeof in
       pixelBindings.forEach(dispose => dispose()); pixelFade.removeEventListener('change', changePixelFade);
       if (animationPreview.open) closeModal(animationPreview);
       performanceDiagnostics.dispose(); transcriptLog.dispose(); unlistenLogErrors?.();
+      diagnosticLogPicker.removeEventListener('change', changeDiagnosticLog);
+      diagnosticLog.dispose(); unlistenDiagnosticErrors?.();
       keybindingEditor?.dispose(); settingsNavigation.dispose(); settingsSidebarResize.dispose();
       appearance.dispose(); zoom.dispose(); themes.dispose(); runtime.dispose(); settings.dispose(); modalMotion.dispose();
     },

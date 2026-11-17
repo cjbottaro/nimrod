@@ -245,6 +245,9 @@ fn validate_message(value: &Value) -> Result<(), String> {
     {
         return Err("Invalid Copilot SDK bridge record".into());
     }
+    if value.get("diagnostics").is_some_and(|flag| !flag.is_boolean()) {
+        return Err("Invalid Copilot diagnostic logging flag".into());
+    }
     match value["method"].as_str() {
         Some(
             "initialize"

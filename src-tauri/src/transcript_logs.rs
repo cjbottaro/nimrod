@@ -1,4 +1,5 @@
-//! Opt-in transcript debug logs; never mutates harness-owned history.
+//! Shared bounded writer for opt-in transcript and metadata diagnostic logs.
+//! Neither stream mutates harness-owned history.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -522,6 +523,50 @@ pub fn append_transcript_logs(
     Ok(serde_json::json!({ "accepted": accepted }))
 }
 
+fn diagnostic_directory(snapshot: &crate::preferences::Snapshot) -> Result<PathBuf, String> {
+    directory(snapshot).map(|path| path.with_file_name("diagnostic-logs"))
+}
+fn diagnostics_enabled(snapshot: &crate::preferences::Snapshot) -> bool {
+    snapshot.error.is_none()
+        && crate::preferences::jsonc(&snapshot.text)
+            .ok()
+            .is_some_and(|settings| crate::preferences::diagnostic_logs_enabled(&settings))
+}
+#[tauri::command]
+pub fn diagnostic_logs_directory(
+    preferences: tauri::State<'_, crate::preferences::Preferences>,
+) -> Result<String, String> {
+    diagnostic_directory(&preferences.snapshot()).map(|path| path.to_string_lossy().into_owned())
+}
+#[tauri::command]
+pub fn append_diagnostic_logs(
+    window: tauri::Window,
+    logs: tauri::State<'_, TranscriptLogs>,
+    preferences: tauri::State<'_, crate::preferences::Preferences>,
+    lines: Vec<String>,
+    capture_id: String,
+) -> Result<serde_json::Value, String> {
+    let snapshot = preferences.snapshot();
+    if !diagnostics_enabled(&snapshot) {
+        return Err("Diagnostic logging is disabled or global settings are invalid".into());
+    }
+    let root = diagnostic_directory(&snapshot)?;
+    if uuid::Uuid::parse_str(&capture_id).is_err() {
+        return Err("Invalid diagnostic capture ID".into());
+    }
+    // Same globally bounded, nonblocking admission and writer; separate storage/retention root.
+    let accepted = logs.append(root, lines, move |message| {
+        if let Err(error) = window.emit_to(
+            window.label(),
+            "diagnostic-log-error",
+            WriteFailure { capture_id, message },
+        ) {
+            eprintln!("Could not report diagnostic log writer failure: {error}");
+        }
+    })?;
+    Ok(serde_json::json!({ "accepted": accepted }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -831,6 +876,23 @@ mod tests {
         assert_eq!(fs::read_to_string(deep_file).unwrap(), "preserve");
         assert!(log_name("2026-99-99.jsonl").is_none());
         assert!(log_name("2026-10-16.0.jsonl").is_none());
+    }
+    #[test]
+    fn diagnostic_stream_has_independent_opt_in_and_storage() {
+        let temp = tempfile::tempdir().unwrap();
+        let prefs = crate::preferences::Preferences::isolated(temp.path());
+        let mut snapshot = prefs.snapshot();
+        assert!(!diagnostics_enabled(&snapshot));
+        snapshot.text = r#"{"diagnostics.transcriptLogs":true}"#.into();
+        assert!(enabled(&snapshot));
+        assert!(!diagnostics_enabled(&snapshot));
+        snapshot.text = r#"{"diagnostics.diagnosticLogs":true}"#.into();
+        assert!(!enabled(&snapshot));
+        assert!(diagnostics_enabled(&snapshot));
+        assert_ne!(directory(&snapshot).unwrap(), diagnostic_directory(&snapshot).unwrap());
+        assert!(diagnostic_directory(&snapshot).unwrap().ends_with("diagnostic-logs"));
+        crate::preferences::validate(&snapshot.text).unwrap();
+        assert!(crate::preferences::validate(r#"{"diagnostics.diagnosticLogs":"true"}"#).is_err());
     }
     #[test]
     fn opt_in_and_incomplete_tail_are_not_silently_ignored() {

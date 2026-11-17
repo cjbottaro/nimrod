@@ -83,7 +83,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
     const valid = () => lifetime.current() && owner.token === token;
     let initialized = false;
     const session: CopilotSession = new CopilotSession(message => transport.send(token, message), {
-      transcriptLog: host.transcriptLog,
+      transcriptLog: host.transcriptLog, diagnosticLog: host.diagnosticLog,
       publish: message => { if (valid()) effects.publish(message); },
       identified: id => {
         if (!valid()) throw new Error('Copilot connection is no longer owned');

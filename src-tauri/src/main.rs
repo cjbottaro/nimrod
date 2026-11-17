@@ -576,6 +576,8 @@ fn main() {
             performance_diagnostics::write_performance_report,
             transcript_logs::append_transcript_logs,
             transcript_logs::transcript_logs_directory,
+            transcript_logs::append_diagnostic_logs,
+            transcript_logs::diagnostic_logs_directory,
             ui_templates::read_ui_templates,
             preferences::preferences_snapshot,
             project_preferences::scoped_preferences_snapshot,

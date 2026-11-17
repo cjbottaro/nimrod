@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- **Diagnostic logs** in global Settings → Diagnostics provides an independent, opt-in metadata-only trace of Copilot startup/Resume, runtime identity, public model snapshots, context reads and Nimrod's context-window display decision. Correlated local files reuse bounded nonblocking logging and rotation without recording prompts, reasoning, tool contents or credentials, fetching extra metadata or persisting session state.
+
 - **Customize Nimrod…** lets a connected session's agent customize the UI from any project, without a Nimrod checkout or repository skills. A separate modal previews installed-app authoring guidance and submits it with the user's request as one ordinary message, preserving the existing Composer draft and normal harness permissions. Bundled guides/defaults/public card examples use resolved installation paths; the supplied brief stays collapsed in the Transcript and reconstructs from history. The action is bindable with no default shortcut; native and packaging acceptance remain pending.
 
 - `nimrod --action reload-customizations [--project DIRECTORY] [--json]` reloads templates and card plugins in an already-open project window and waits for actual per-subsystem completion/errors. It never opens/focuses windows or restarts agents; missing targets fail, partial failures are explicit, and uncertain delivery never retries. Implemented for macOS/Linux; native installed-runtime acceptance remains pending.

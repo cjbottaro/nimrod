@@ -33,6 +33,7 @@ export interface PreferencesHost {
   listen(receive: (snapshot: PreferencesSnapshot) => void): Promise<() => void>;
 }
 const TRANSCRIPT_LOGS_SETTING = 'diagnostics.transcriptLogs';
+const DIAGNOSTIC_LOGS_SETTING = 'diagnostics.diagnosticLogs';
 // Read compatibility only; an explicit save replaces this key in the same JSONC edit.
 const LEGACY_TRANSCRIPT_LOGS_SETTING = 'diagnostics.toolCapture';
 
@@ -57,7 +58,7 @@ export function parseSettings(text: string): Record<string, unknown> {
   if (errors.length || !settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Settings must be a valid JSON/JSONC object.');
   if (settings['notifications.enabled'] !== undefined && typeof settings['notifications.enabled'] !== 'boolean') throw new Error('notifications.enabled must be a boolean.');
   if (settings['diagnostics.performance'] !== undefined && typeof settings['diagnostics.performance'] !== 'boolean') throw new Error('diagnostics.performance must be a boolean.');
-  for (const key of [TRANSCRIPT_LOGS_SETTING, LEGACY_TRANSCRIPT_LOGS_SETTING]) {
+  for (const key of [TRANSCRIPT_LOGS_SETTING, LEGACY_TRANSCRIPT_LOGS_SETTING, DIAGNOSTIC_LOGS_SETTING]) {
     if (settings[key] !== undefined && typeof settings[key] !== 'boolean') throw new Error(`${key} must be a boolean.`);
   }
   readWindowAppearance(settings);
@@ -276,6 +277,8 @@ export async function installPreferences(host: PreferencesHost, storage: Storage
     cardPlugins() { return readPluginSettings(globalSettings); },
     transcriptLogEnabled() { return (globalSettings[TRANSCRIPT_LOGS_SETTING] ?? globalSettings[LEGACY_TRANSCRIPT_LOGS_SETTING]) === true; },
     saveTranscriptLog(enabled: boolean) { return patch({ [TRANSCRIPT_LOGS_SETTING]: enabled, [LEGACY_TRANSCRIPT_LOGS_SETTING]: undefined }, false); },
+    diagnosticLogEnabled() { return globalSettings[DIAGNOSTIC_LOGS_SETTING] === true; },
+    saveDiagnosticLog(enabled: boolean) { return patch({ [DIAGNOSTIC_LOGS_SETTING]: enabled }, false); },
     performanceEnabled() { return globalSettings['diagnostics.performance'] === true; },
     savePerformance(enabled: boolean) { return patch({ 'diagnostics.performance': enabled }, false); },
     notificationsEnabled() { return globalSettings['notifications.enabled'] !== false; },

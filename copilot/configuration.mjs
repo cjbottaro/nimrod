@@ -10,7 +10,8 @@ function optionalValue(value, label) {
  * Defaults are creation inputs, never guessed selections or resume overrides.
  * Only supported session-setting values leave the settings response; no raw settings are published.
  */
-export function createCopilotConfiguration(client) {
+export function createCopilotConfiguration(client, observe = () => {}) {
+  const diagnostic = (event, metadata) => { try { observe(event, metadata); } catch { /* Diagnostics cannot fail configuration. */ } };
   async function snapshot(session, createdDefaults = {}) {
     const current = await session.rpc.model.getCurrent();
     if (!record(current)) throw new Error('Copilot returned an invalid configuration snapshot.');
@@ -20,13 +21,16 @@ export function createCopilotConfiguration(client) {
     // Once the runtime reports a different model (e.g. policy), do not attach
     // effort configured for the requested model to that authoritative selection.
     const sameModel = !model || !createdDefaults.model || model === createdDefaults.model;
-    return { ...current, modelId: model ?? createdDefaults.model,
+    const resolved = { ...current, modelId: model ?? createdDefaults.model,
       reasoningEffort: effort ?? (sameModel ? createdDefaults.reasoningEffort : undefined),
       contextTier: contextTier ?? (sameModel ? createdDefaults.contextTier : undefined) };
+    diagnostic('model.snapshot', { raw: current, resolved });
+    return resolved;
   }
   return {
     async defaults() {
       const response = await client.rpc.user.settings.get();
+      diagnostic('configuration.defaults', response);
       if (!record(response) || !record(response.settings)) throw new Error('Copilot did not return configured model/effort settings.');
       const read = key => {
         const setting = response.settings[key];
