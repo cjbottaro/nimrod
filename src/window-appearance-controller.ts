@@ -1,5 +1,6 @@
 import { buttonSurface, primaryButtonSurfaces, buttonDensity, buttonUnderlayCredit, tintedButtonDensity } from './button-surfaces';
 import { updateRangeFill } from './range-input';
+import { textSelectionSurface } from './text-selection';
 import { appliedTheme, subscribeAppliedTheme } from './themes/applied-theme';
 import { installAppearanceEffects, type NativeAppearanceHost } from './window-appearance-effects';
 import { modalDepthBlurRadius, titlebarTint, windowSurfaceOpacities, type AppearanceCapabilities, type WindowAppearance } from './window-appearance';
@@ -46,6 +47,16 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
     secondary = secondaryPair.normal; secondaryHover = secondaryPair.hover;
     danger = buttonSurface(background, color('errorForeground'));
+    const selection = color('editor-selectionBackground') || color('selection-background') || color('focusBorder') || foreground;
+    const selectionText = color('editor-selectionForeground') || foreground;
+    for (const [role, backing] of [
+      ['content', background], ['input', color('input-background') || background],
+      ['code', color('textCodeBlock-background') || background], ['widget', color('editorWidget-background') || background],
+    ]) {
+      const pair = textSelectionSurface(backing, selection, selectionText);
+      root.style.setProperty(`--nimrod-${role}-text-selection-background`, pair.background);
+      root.style.setProperty(`--nimrod-${role}-text-selection-foreground`, pair.foreground);
+    }
     const roles = { button: primary, 'button-hover': hover, secondary, 'secondary-hover': secondaryHover, danger };
     credits = Object.fromEntries([['sidebar', color('editorWidget-background')], ['project-bar', background], ['modal', color('editorWidget-background')]].map(([context, underlay]) =>
       [context, Object.fromEntries(Object.entries(roles).map(([role, surface]) => [role, buttonUnderlayCredit(surface, underlay)]))]));

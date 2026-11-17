@@ -7,7 +7,6 @@
 :root {
   color-scheme: dark;
   --vscode-foreground:#d8e0e3; --vscode-editor-background:#151c20;
-  --vscode-selection-background:#77d8bd; --vscode-editor-selectionForeground:#102921;
   --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --vscode-editor-font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --vscode-descriptionForeground:#91a1aa; --vscode-panel-border:#33434c;
@@ -155,7 +154,27 @@ input:focus, select:focus { outline:1px solid var(--vscode-focusBorder); }
 #theme-notice { display:flex; align-items:start; gap:8px; margin:12px 0; padding:10px; background:var(--vscode-editorWidget-background); border:1px solid var(--vscode-panel-border); border-radius:6px; }
 #theme-notice-text { overflow-wrap:anywhere; line-height:1.5; }
 #theme-notice-dismiss { flex:none; padding:0 5px; color:var(--vscode-foreground); background:transparent; }
-::selection { background:var(--vscode-selection-background, var(--vscode-list-focusBackground)); color:var(--vscode-editor-selectionForeground, var(--vscode-foreground)); }
+/* Text highlights are independent of list-row selection and window opacity. */
+:root {
+  --nimrod-text-selection-background:var(--nimrod-content-text-selection-background, Highlight);
+  --nimrod-text-selection-foreground:var(--nimrod-content-text-selection-foreground, HighlightText);
+}
+:is(.nimrod-modal, #settings-sidebar, .layout-sidebar) {
+  --nimrod-text-selection-background:var(--nimrod-widget-text-selection-background, Highlight);
+  --nimrod-text-selection-foreground:var(--nimrod-widget-text-selection-foreground, HighlightText);
+}
+:is(pre, code) {
+  --nimrod-text-selection-background:var(--nimrod-code-text-selection-background, Highlight);
+  --nimrod-text-selection-foreground:var(--nimrod-code-text-selection-foreground, HighlightText);
+}
+:is(input, textarea) {
+  --nimrod-text-selection-background:var(--nimrod-input-text-selection-background, Highlight);
+  --nimrod-text-selection-foreground:var(--nimrod-input-text-selection-foreground, HighlightText);
+}
+::selection { background:var(--nimrod-text-selection-background); color:var(--nimrod-text-selection-foreground); text-shadow:none; }
+@media (forced-colors:active) {
+  ::selection { background:Highlight; color:HighlightText; }
+}
 #zoom-level { display:block; width:140px; max-width:100%; }
 .appearance-duration { display:flex; align-items:center; gap:16px; width:400px; max-width:100%; }
 .appearance-duration input[type=range] { flex:1; min-width:0; padding:0; }
@@ -186,6 +205,5 @@ h1 { font-size:clamp(28px,4vw,42px); line-height:1.12; letter-spacing:-1.4px; ma
   #host-dialog-input { field-sizing:content; height:auto; overflow-y:auto; }
 }
 @media (prefers-color-scheme:light) {
-  :root { --vscode-selection-background:#287c69; --vscode-editor-selectionForeground:#fff; }
   :root { color-scheme:light; --vscode-foreground:#23343d; --vscode-editor-background:#f7f9f8; --vscode-descriptionForeground:#586d76; --vscode-panel-border:#ccd8d8; --vscode-input-border:#b8caca; --vscode-input-foreground:#23343d; --vscode-input-background:#fff; --vscode-editorWidget-background:#eef3f1; --vscode-textCodeBlock-background:#eaf0ee; --vscode-textBlockQuote-background:#edf4f2; --vscode-textLink-foreground:#156c83; --vscode-textLink-activeForeground:#084858; --vscode-focusBorder:#287c69; --vscode-progressBar-background:#287c69; --vscode-button-secondaryBackground:#e2ebe7; --vscode-button-secondaryForeground:#23343d; --vscode-list-focusBackground:#d3e8e1; --vscode-list-focusForeground:#23343d; --vscode-errorForeground:#a32d38; --vscode-editorWarning-foreground:#805316; --vscode-widget-shadow:#0002; }
 }

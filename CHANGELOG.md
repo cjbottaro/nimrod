@@ -126,7 +126,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Text selection in the default Nimrod scheme uses a high-contrast mint/teal highlight with a contrasting text color instead of the subdued list-selection background, making selected composer and transcript text easier to see in dark and light modes.
+- Text selection uses a shared contrast policy across all themes, including imports: subdued highlights are strengthened and unreadable text colors repaired against content, input, code and widget backings. Highlights remain solid under window translucency; source palettes and selected-row colors are unchanged.
 
 - Reopening a project now reconnects its selected Codex session automatically, like Pi and Copilot, without an extra sidebar click or sending a prompt. Background restored sessions stay disconnected. Startup selection policy is application-owned rather than adapter-configurable, so future harness integrations inherit the same behavior.
 

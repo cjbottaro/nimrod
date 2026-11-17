@@ -2,6 +2,10 @@
 
 This is the current evidence/acceptance map, not a chronological test log. Feature references own current specifications and test maps. [Historical records](history/verification.md) preserve prior runs, native observations and superseded implementation steps; never follow their old acceptance instructions as current UI.
 
+## Text-selection contrast
+
+The shared [text-selection policy](themes.md#text-selection-contrast) has authored pure fixtures covering all bundled/catalog palettes, alpha/missing/imported colors, foreground repair, backing visibility and list/text-selection separation. Controller fixtures cover same-ID preview/rollback/reset, opacity independence and retained draft/focus/range; offline WebKit fixtures cover computed selection roles across four backings, dark/light system schemes, multiple palettes and opacity endpoints. These new fixtures have not been run. Native macOS/Linux active/inactive-selection paint, forced-colors behavior, transparent desktop surroundings and custom/plugin backings remain unverified; palette math/computed styles are not platform acceptance.
+
 ## Customize Nimrod
 
 Source implementation adds the session-scoped action/modal, installed authoring context and canonical packaged guides/defaults/types/examples, ordinary separate-input view submission, and versioned user-turn disclosure. Authored, unrun fixtures cover exact framing/Unicode/delimiters, lazy retained/raw presentation, an unrelated project with absolute installed paths, resource mappings/missing files, modal cancel/IME/local rejection/stale guidance, four shared interaction policies, busy modes, unchanged draft/selection, echo adoption/lifetime fencing, real-shell palette/shortcut sending and an offline browser scenario.

@@ -11,7 +11,7 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 
 ## Code map and invariants
 
-- `src/theme.css` gives the Nimrod scheme dedicated opaque text-selection pairs: mint/dark text in dark mode and teal/white text in light mode, independently of subdued list-row selection. The shared `::selection` rule covers selectable text and input fields. `editor.selectionForeground` is imported and managed alongside selection backgrounds; palettes without it retain their normal foreground, and resetting to Nimrod clears both inline selection overrides. Native selection rendering still requires platform acceptance.
+- [Text-selection contrast](#text-selection-contrast) is shared by every palette, independently of list-row selection; no theme-specific highlight overrides.
 
 - `src/themes/theme.ts`: bounded JSONC importer, hex allowlist, broad syntax
   mapping, fallback derivation, imported-library validation and CSS-only application.
@@ -38,6 +38,18 @@ Theme application changes palette CSS colors only. After CSS is complete, `apply
 - Manual import remains standalone JSON/JSONC (512 KiB, 50 saved imports), not
   arbitrary URLs/CSS/fonts/scripts/includes or extension packages. Catalog-time
   resolution is a maintenance-tool capability, not a runtime importer relaxation.
+
+## Text-selection contrast
+
+`src/text-selection.ts` derives opaque presentation-only highlight/text pairs, without theme IDs or source-palette mutation. `src/window-appearance-controller.ts` computes separate pairs against the nominal editor, input, code and widget backings at installation, completed theme publication (including same-ID previews/restoration) and inherited-system appearance changes. Opacity slider ticks do not recompute or fade them. The shared `src/theme.css` `::selection` rule consumes these roles throughout project, Settings and reference windows; inputs/textareas, code and widget containers select their matching backing roles. Before installation and in forced-colors mode, selection uses system Highlight/HighlightText colors.
+
+Prefer `editor.selectionBackground`, then `selection.background`; missing imported text-selection roles derive from editor background/foreground, not `list.focusBackground`. Nimrod's otherwise-unspecified highlight uses the palette focus accent. `editor.selectionForeground` is imported/managed, with normal foreground as its default. Reset clears source overrides and the appearance subscription recomputes derived roles. List/quick-input/suggestion selected-row roles retain their existing recipes.
+
+Composite source highlight alpha against the nominal backing, then make the result opaque. Preserve that color if its backing contrast is at least 3:1; otherwise search toward black and white and choose the passing color with the smallest RGB displacement. Preserve an opaque supplied foreground with at least 4.5:1 highlight contrast; otherwise choose a passing black/white foreground. Both thresholds are application presentation policy, not native accessibility certification.
+
+The opaque highlight protects selected-text contrast independently of window opacity or the desktop. Highlight/background contrast is guaranteed only against each **nominal palette backing**: arbitrary desktop content under transparent surfaces, custom/plugin backgrounds and native inactive-selection painting require visual acceptance, not claims based on palette math. No desktop sampling, native changes, DOM replacement, draft/focus/selection mutation or scroll effects.
+
+`test/text-selection.test.ts` sweeps bundled/catalog palettes and synthetic imported/alpha/mid-tone cases; controller fixtures cover preview/reset and retained draft selection; `test/browser/text-selection.spec.ts` covers computed WebKit highlight roles on content, inputs, code and widgets across system schemes, themes and opacity. [Verification](verification.md#text-selection-contrast) owns execution/acceptance status.
 
 ## Bundled catalog and command-palette picker
 

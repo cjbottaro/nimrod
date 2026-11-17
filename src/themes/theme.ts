@@ -136,13 +136,14 @@ export function themeProperties(theme: ColorTheme): Record<string, string> {
   const muted = c.descriptionForeground || mix(bg, fg, .65);
   const surface = c['editorWidget.background'] || mix(bg, fg, .035);
   const selection = c['list.focusBackground'] || c['editor.selectionBackground'] || c['selection.background'] || mix(bg, fg, .18);
+  const textSelection = c['editor.selectionBackground'] || c['selection.background'] || mix(bg, fg, .18);
   const button = c['button.background'] || selection;
   const error = c.errorForeground || c['editorError.foreground'] || c['terminal.ansiRed'] || (theme.mode === 'dark' ? '#ff9d9d' : '#a32d38');
   const success = c['testing.iconPassed'] || c['terminal.ansiGreen'] || (theme.mode === 'dark' ? '#77d8bd' : '#287c69');
   const warning = c['editorWarning.foreground'] || c['terminal.ansiYellow'] || (theme.mode === 'dark' ? '#e8bc79' : '#805316');
   const defaults: Record<string, string> = {
     foreground: fg, descriptionForeground: muted, focusBorder: accent, errorForeground: error,
-    'editor.background': bg, 'editor.foreground': fg, 'editor.selectionBackground': selection, 'editor.selectionForeground': fg, 'selection.background': selection,
+    'editor.background': bg, 'editor.foreground': fg, 'editor.selectionBackground': textSelection, 'editor.selectionForeground': fg, 'selection.background': textSelection,
     'editorWidget.background': surface, 'editorGroupHeader.tabsBackground': surface,
     'editorCodeLens.foreground': muted, 'editorIndentGuide.background1': border,
     'editorWarning.foreground': warning, 'editorError.foreground': error,

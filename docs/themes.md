@@ -35,7 +35,7 @@ remain usable; the old Gogh discovery/download feature is no longer present.
 
 Open **global Settings** using **⌘/Ctrl ,** or the native **Settings…** menu item, then click **Change theme…** under **Appearance**. Global selections apply to projects without theme overrides. The Project bar gear / **⌘/Ctrl+Shift+,** opens Project settings, where you can select a project override from the same library or **Remove override**. Imports and removal are global-only:
 
-- **Nimrod (system)** — the app's custom Nimrod scheme; follows macOS/Windows/Linux light/dark appearance. This remains the default. Selected text uses a solid mint highlight with dark text in dark mode, and a teal highlight with white text in light mode, including in the composer.
+- **Nimrod (system)** — the app's custom Nimrod scheme; follows macOS/Windows/Linux light/dark appearance. This remains the default.
 - **Dracula** — a dark adaptation of [Dracula's official palette](https://draculatheme.com/), including purple accents, pink keywords, yellow strings, and green functions. It stays dark even when the OS is light. Attribution and license are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 - **Tokyo Night** — a dark adaptation of [Omarchy’s Tokyo Night palette](https://github.com/omacom/omarchy/blob/quattro/themes/tokyo-night/colors.toml), with blue accents, purple keywords and green strings.
@@ -46,6 +46,12 @@ Both Omarchy adaptations stay dark regardless of OS appearance and work without 
 Changes apply immediately across project windows and pop-outs and are remembered between launches. They do not change zoom, layout, fonts, draft text, or the conversation. Switching colors does not reset expanded cards, reading position or restart Pi. Native window decorations and OS file choosers still follow platform appearance settings.
 
 Filled buttons use a shared readability policy across every palette, including imports: readable text colours are retained, otherwise a neutral contrast fallback is used. Button fill density can remain higher than the window background opacity to support the label. Button-specific colours are solid RGB, even when a source button token has alpha; the source palette is not modified. See [Translucency](translucency.md).
+
+## Text selection
+
+Every theme—including imports—uses the same text-selection readability policy in the composer, transcript, Settings and pop-outs. Nimrod preserves usable theme selection colors, strengthens highlights that blend into their backing, and chooses contrasting selected-text colors when necessary. These adjustments do not change the saved theme or selected-row colors.
+
+Text highlights stay solid even when the window is translucent, so the selected text remains readable. Visibility against desktop content can still vary through transparent surroundings. System high-contrast color overrides use the system selection colors.
 
 ## Import a theme
 
