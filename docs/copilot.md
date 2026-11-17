@@ -295,10 +295,13 @@ The Status area uses a compact layout similar to Pi:
 ```
 
 A new session initially displays `~$0.000 · 0% / ~128k` when Copilot advertises
-that prompt budget for the confirmed model and context tier. The `~` window is
-provisional catalog capacity, not a measured session limit; hover for its meaning.
+that prompt budget for the selected model and reported context tier. If the
+session has not reported its tier yet, Nimrod previews the model's standard-tier
+catalog budget (for example `~272k`) without selecting that tier. Its tooltip
+explicitly says the tier is unknown and the actual window may differ. The `~`
+window is provisional catalog capacity, not a measured session limit.
 The actual session window replaces it without `~` when Copilot reports it.
-Unresolved models/tiers, Auto routing and missing tier budgets keep `—` rather
+Unresolved models, unrecognized tiers, Auto routing and missing tier budgets keep `—` rather
 than using a model's combined maximum context size. Those initial zeros are provisional
 display values, not measurements, and remain while the session is untouched even
 if successful startup reads return no data. Reported values replace their own

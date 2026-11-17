@@ -693,7 +693,7 @@ export class CopilotSession {
       this.contextLimits.set(`${this.model}:${this.contextTier || 'default'}`, context.tokenLimit);
     const statusArea = this.projectStatus({ model: this.model, effort: this.effort, mode: this.mode, supportsModel: this.supports('model'),
       supportsThinking: this.supports('thinking'), supportsMode: this.supports('mode'), supportsContext: this.supports('context'),
-      available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot,
+      available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot, contextTier: this.contextTier,
       advertisedContextLimit: !this.ended && !this.configuring && !this.state.sessionUnavailable
         ? advertisedCopilotContextLimit(this.models.find(model => model.id === this.model), this.contextTier) : undefined });
     if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };

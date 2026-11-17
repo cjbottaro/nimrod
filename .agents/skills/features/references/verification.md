@@ -497,7 +497,7 @@ Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcr
 ## Current automated validation
 
 Copilot provisional catalog window: a read-only display fallback uses the current
-confirmed model/tier's advertised prompt budget without filling measured usage or
+model's advertised prompt budget without filling measured usage or
 the configuration cache. `test/copilot-advertised-context.test.ts` and extended SDK
 controller fixtures cover standard/long tiers, unknown/Auto/malformed metadata,
 fresh/Resume display, reported-limit precedence, clickable capacity, stable controls,
@@ -505,9 +505,21 @@ metadata errors and mutation/model/tier/stale-read fences. New fixtures are auth
 **unrun**. Installed `copilot --no-auto-update help config` confirms `contextTier`
 accepts `default`/`long_context` and unset uses the model's preferred tier, otherwise
 `default`; existing creation code already maps that setting into SDK inference.
-No setting was written, provider work issued or app built/launched. Native visual
-acceptance remains pending. [Usage policy](copilot-sdk.md#usage-metrics) owns the
-fallback and lifetime rules.
+A user subsequently reported no visible startup change. A sessionless read-only
+SDK metadata inspection against installed CLI 1.0.113 / protocol 4 returned
+`model=gpt-6.2-sol`, `contextTier=null`, and a catalog standard prompt budget of
+272,000 versus long-context/maximum 1,050,000. The original implementation required
+an explicit reported tier; it could suppress the fallback with normal unset
+context defaults. The selected model's sanitized capacity metadata is retained in
+`test/fixtures/copilot/catalog-gpt-6.2-sol.json`; no session model snapshot was
+captured or fabricated as runtime evidence. Missing-tier presentation now previews
+that standard-tier budget with explicit unknown-tier provenance, without choosing
+a session tier. New pure/controller fixtures cover absent tier, provenance-only
+confirmation, explicit long tier, measured precedence and no configuration calls;
+they are **unrun**. The metadata inspection called only startup/status, user-settings
+read and model catalog; no session was created/resumed, prompt sent or setting
+written. No app build/launch or native visual acceptance was performed.
+[Usage policy](copilot-sdk.md#usage-metrics) owns the fallback and lifetime rules.
 
 Copilot usage seed experiment: the user reported all dashes after empty startup reads. Untouched fresh sessions now retain display-only zeros across successful empty reads, but not actual errors. Locally valid prompt/command Send or live SDK activity retires remaining zeros before any operation result and fences old metadata; Resume retains the same fetching/reconciliation/rendering path. Window size and Auto compact remain unseeded. Updated pure/controller/offline-browser fixtures are authored **unrun**; no app build/launch, paid request or native visual acceptance was performed for this correction. [Usage policy](copilot-sdk.md#usage-metrics) owns lifetime and the one-point reversal to unknown seeds.
 

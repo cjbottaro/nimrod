@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import capturedPermissionCommand from './fixtures/copilot-permission-command.json' with { type: 'json' };
 import autopilotCompletion from './fixtures/copilot/autopilot-completion.json' with { type: 'json' };
+import capturedModel from './fixtures/copilot/catalog-gpt-6.2-sol.json' with { type: 'json' };
 import { CopilotSession, type CopilotSessionUi, type CopilotDecision } from '../src/copilot/session';
 import { CopilotConnection, type BridgeRequest } from '../src/copilot/connection';
 import { copilotSdkScope } from '../src/copilot/session-lifecycle';
@@ -618,12 +619,36 @@ test('provisional windows follow confirmed model/tier changes, never pending tar
     assert.match(f.session.state.statusArea!.metrics!, /~936k/);
     f.reply('context', null); await flush();
     f.event('session.model_change', { newModel: 'large' });
-    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k|936k|256k/, 'a different model cannot inherit the prior model tier');
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k|936k/, 'a different model cannot inherit the prior model tier');
+    assert.match(f.session.state.statusArea!.metrics!, /~256k/, 'preview the new model standard budget without selecting a tier');
+    assert.match(f.session.state.statusArea!.metricsTitle!, /tier has not been reported/);
     f.event('session.model_change', { newModel: 'large', contextTier: 'default' });
     assert.match(f.session.state.statusArea!.metrics!, /~256k/);
     f.event('session.model_deselected', {});
     assert.doesNotMatch(f.session.state.statusArea!.metrics!, /256k/);
     assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+for (const fresh of [true, false]) test(`missing startup context tier still shows the captured model standard budget (${fresh ? 'new' : 'resume'})`, async () => {
+  const f = await fixture([], undefined, false, fresh, [capturedModel], { modelId: capturedModel.id, reasoningEffort: 'medium' });
+  try {
+    const controls = f.session.state.statusArea!.controls;
+    assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / ~272k' : '— · — / ~272k');
+    assert.match(f.session.state.statusArea!.metricsTitle!, /tier has not been reported/);
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /~272k/);
+    assert.deepEqual(f.sent.map(request => request.method), ['initialize', 'connect', 'usage', 'context']);
+    f.event('session.model_change', { newModel: capturedModel.id, contextTier: 'default' });
+    assert.match(f.session.state.statusArea!.metrics!, /~272k/);
+    assert.doesNotMatch(f.session.state.statusArea!.metricsTitle!, /tier has not been reported/);
+    f.event('session.model_change', { newModel: capturedModel.id, contextTier: 'long_context' });
+    assert.match(f.session.state.statusArea!.metrics!, /~1\.1M/);
+    f.event('session.usage_info', { currentTokens: 2500, tokenLimit: 250_000 });
+    assert.match(f.session.state.statusArea!.metrics!, /1% \/ 250k/);
+    assert.doesNotMatch(f.session.state.statusArea!.metricsTitle!, /Provisional context window/);
+    assert.equal(f.session.state.statusArea!.controls, controls);
+    assert.equal(f.sent.some(request => ['prompt', 'command', 'configure'].includes(request.method)), false);
   } finally { f.session.disconnect('fixture complete'); }
 });
 

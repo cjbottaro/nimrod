@@ -656,19 +656,24 @@ consumer, separate from model configuration. The shared Status area only consume
   explicitly identifies provisional values, not a measured empty context or zero
   AI credits. No model-window measurement or Auto compact setting is seeded.
 - Catalog capacity is a separate, read-only display fallback, not a usage seed.
-  `advertisedCopilotContextLimit` in `usage.ts` reads only the confirmed selected
-  model's `billing.tokenPrices.maxPromptTokens` for `contextTier:'default'`, or
-  `billing.tokenPrices.longContext.maxPromptTokens` for `'long_context'`.
-  Require a finite positive budget. Unknown/missing tier (including an unreported
-  model preference), unresolved/Auto/Fusion model, missing tier budget or malformed
-  capacity keeps the window unknown. Never substitute `max_context_window_tokens`,
+  `advertisedCopilotContextLimit` in `usage.ts` reads only the selected
+  model's `billing.tokenPrices.maxPromptTokens` for `contextTier:'default'` or a
+  missing reported tier, or `billing.tokenPrices.longContext.maxPromptTokens` for
+  `'long_context'`. Missing tier uses a **standard-tier catalog preview**, not an
+  inferred confirmed tier or model preference; do not write `contextTier`, set a
+  default or configure the session to enable the preview. Require a finite positive
+  budget. Unrecognized tier, unresolved/Auto/Fusion model, missing tier budget or
+  malformed capacity keeps the window unknown. Never substitute `max_context_window_tokens`,
   output allowance or another tier's budget. Do not fetch models or prompt to fill it.
   The existing connected catalog supplies this data.
-  `CopilotStatusAreaState.advertisedContextLimit` is computed from current confirmed
-  configuration and passed to `presentCopilotUsage`; it is never stored in measured
+  `CopilotStatusAreaState.advertisedContextLimit` is computed from the current
+  selection and passed alongside reported `contextTier` to `presentCopilotUsage`; it is never stored in measured
   `CopilotUsage.context`, its zero seed or the configuration picker's reported-limit
   cache. Both new and resumed sessions use the same fallback. A displayed budget
-  has a `~` prefix and explicit catalog/not-effective-session-limit tooltip.
+  has a `~` prefix and explicit catalog/not-effective-session-limit tooltip. When
+  the tier is missing, the tooltip identifies the standard-tier budget and says
+  the session tier may differ. Tier confirmation invalidates tooltip provenance
+  even if the numeric capacity and visible text do not change; retain controls.
   Existing fresh `0%` may accompany it; unknown utilization stays `—`. Never compute
   a utilization percentage from catalog capacity. A positive measured session limit
   wins immediately and removes the provisional marker.
@@ -749,7 +754,8 @@ consumer, separate from model configuration. The shared Status area only consume
   suppresses late results; disconnected views keep only their last reported data.
 
 `test/copilot-advertised-context.test.ts` and the SDK controller fixtures cover
-per-tier catalog budgets, unresolved/Auto/malformed cases, fresh/Resume projection,
+per-tier catalog budgets, missing-tier standard previews, unresolved/Auto/malformed
+cases, fresh/Resume projection,
 reported-window precedence, click targets and stable control/snapshot identity,
 metadata failure and pending-configuration/model/tier/stale-read fences.
 The fallback adds no runtime calls. See [verification](verification.md) for executed

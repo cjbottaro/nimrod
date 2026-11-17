@@ -168,16 +168,16 @@ export const compactTokenCount = (tokens: number) => tokens >= 1_000_000 ? `${(t
   : tokens >= 1_000 ? `${(tokens / 1_000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(tokens));
 
 /** Only tier-specific advertised prompt budgets, never the combined catalog maximum.
- * An unresolved tier (including a model's implicit preference) is not a default-tier selection. */
+ * With no reported tier, preview the standard-tier budget without selecting that tier. */
 export function advertisedCopilotContextLimit(model: unknown, tier?: string): number | undefined {
   if (!record(model) || typeof model.id !== 'string' || !model.id || model.id === 'auto' || model.id === 'fusion' || !record(model.billing) || !record(model.billing.tokenPrices)) return;
   const prices = model.billing.tokenPrices;
-  const budget = tier === 'default' ? prices.maxPromptTokens
+  const budget = tier === undefined || tier === 'default' ? prices.maxPromptTokens
     : tier === 'long_context' && record(prices.longContext) ? prices.longContext.maxPromptTokens : undefined;
   return nonnegative(budget) && budget > 0 ? budget : undefined;
 }
 
-export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = false, advertisedContextLimit?: number):
+export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = false, advertisedContextLimit?: number, contextTier?: string):
   { metrics?: string; metricParts?: readonly StatusAreaMetricPart[]; metricsTitle?: string } {
   if (!usage) return {};
   const parts: string[] = [], details: string[] = [];
@@ -219,7 +219,12 @@ export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = 
     details.push(catalogLimit ? 'Context usage is not reported yet; no utilization percentage is inferred.'
       : 'Context usage/window is not reported yet; no percentage or window size is inferred.');
   }
-  if (catalogLimit) details.push(`Provisional context window: ${catalogLimit.toLocaleString('en-US', { maximumFractionDigits: 20 })} prompt tokens advertised by Copilot's model catalog for the selected tier; not the effective session limit. No utilization percentage is calculated from this budget.`);
+  if (catalogLimit) {
+    const source = contextTier === undefined
+      ? 'standard-tier catalog budget; the session context tier has not been reported and may differ'
+      : 'catalog budget for the reported context tier';
+    details.push(`Provisional context window: ${catalogLimit.toLocaleString('en-US', { maximumFractionDigits: 20 })} prompt tokens (${source}); not the effective session limit. No utilization percentage is calculated from this budget.`);
+  }
   if (!parts.length) return {};
   const metrics = parts.join(' · '), metricsTitle = details.join('\n');
   if (!configurableContext || !reportedLimit && !catalogLimit) return { metrics, metricsTitle };
