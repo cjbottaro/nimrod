@@ -10,7 +10,7 @@ import type { ConversationViewMessage, ConversationViewState } from '../conversa
 import type { TranscriptLogSink } from '../transcript-logs';
 import { copilotToolResult } from './tool-result';
 import { createCopilotStatusArea } from './status-area';
-import { CopilotUsageController } from './usage';
+import { advertisedCopilotContextLimit, CopilotUsageController } from './usage';
 import { CopilotCommandQueue } from './command-queue';
 import { parseCopilotSkillInvocation } from './skill-invocation';
 import type { ConfigurationOperation } from '../session-configuration';
@@ -597,7 +597,7 @@ export class CopilotSession {
       const changed = this.model !== model;
       this.model = model;
       this.effort = typeof data.reasoningEffort === 'string' ? data.reasoningEffort : undefined;
-      const contextTier = typeof data.contextTier === 'string' ? data.contextTier : this.contextTier;
+      const contextTier = typeof data.contextTier === 'string' ? data.contextTier : changed ? undefined : this.contextTier;
       const contextChanged = this.contextTier !== contextTier;
       this.contextTier = contextTier;
       if (changed || contextChanged) this.invalidateContext();
@@ -693,7 +693,9 @@ export class CopilotSession {
       this.contextLimits.set(`${this.model}:${this.contextTier || 'default'}`, context.tokenLimit);
     const statusArea = this.projectStatus({ model: this.model, effort: this.effort, mode: this.mode, supportsModel: this.supports('model'),
       supportsThinking: this.supports('thinking'), supportsMode: this.supports('mode'), supportsContext: this.supports('context'),
-      available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot });
+      available: !this.ended && !this.state.sessionUnavailable, usage: this.usage.snapshot,
+      advertisedContextLimit: !this.ended && !this.configuring && !this.state.sessionUnavailable
+        ? advertisedCopilotContextLimit(this.models.find(model => model.id === this.model), this.contextTier) : undefined });
     if (this.state.statusArea !== statusArea) this.state = { ...this.state, statusArea };
   }
   private publish(rows?: DisplayMessage[]): void {

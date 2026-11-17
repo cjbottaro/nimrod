@@ -14,6 +14,8 @@ export interface CopilotStatusAreaState {
   /** Whether the connected session accepts configuration intent (including deferred changes). */
   readonly available: boolean;
   readonly usage?: CopilotUsage;
+  /** Catalog prompt budget for the confirmed model/tier; never measured usage. */
+  readonly advertisedContextLimit?: number;
 }
 
 export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => StatusAreaSnapshot {
@@ -33,8 +35,9 @@ export function createCopilotStatusArea(): (state: CopilotStatusAreaState) => St
       ];
     }
     const usage = previous && previous.usage === state.usage && previous.supportsContext === state.supportsContext
+      && previous.advertisedContextLimit === state.advertisedContextLimit
       ? { metrics: snapshot?.metrics, metricParts: snapshot?.metricParts, metricsTitle: snapshot?.metricsTitle }
-      : presentCopilotUsage(state.usage, state.supportsContext);
+      : presentCopilotUsage(state.usage, state.supportsContext, state.advertisedContextLimit);
     if (!snapshot || snapshot.controls !== controls || snapshot.metrics !== usage.metrics || snapshot.metricParts !== usage.metricParts
       || snapshot.metricsTitle !== usage.metricsTitle)
       snapshot = { capabilities, controlsLabel: 'Copilot configuration', controls: controls || [], ...usage };

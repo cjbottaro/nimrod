@@ -167,10 +167,23 @@ const USD_PER_CREDIT = 0.01;
 export const compactTokenCount = (tokens: number) => tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
   : tokens >= 1_000 ? `${(tokens / 1_000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(tokens));
 
-export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = false):
+/** Only tier-specific advertised prompt budgets, never the combined catalog maximum.
+ * An unresolved tier (including a model's implicit preference) is not a default-tier selection. */
+export function advertisedCopilotContextLimit(model: unknown, tier?: string): number | undefined {
+  if (!record(model) || typeof model.id !== 'string' || !model.id || model.id === 'auto' || model.id === 'fusion' || !record(model.billing) || !record(model.billing.tokenPrices)) return;
+  const prices = model.billing.tokenPrices;
+  const budget = tier === 'default' ? prices.maxPromptTokens
+    : tier === 'long_context' && record(prices.longContext) ? prices.longContext.maxPromptTokens : undefined;
+  return nonnegative(budget) && budget > 0 ? budget : undefined;
+}
+
+export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = false, advertisedContextLimit?: number):
   { metrics?: string; metricParts?: readonly StatusAreaMetricPart[]; metricsTitle?: string } {
   if (!usage) return {};
   const parts: string[] = [], details: string[] = [];
+  const reportedLimit = usage.context && nonnegative(usage.context.tokenLimit) && usage.context.tokenLimit > 0 ? usage.context.tokenLimit : undefined;
+  const catalogLimit = !reportedLimit && nonnegative(advertisedContextLimit) && advertisedContextLimit > 0 ? advertisedContextLimit : undefined;
+  const window = reportedLimit ? compactTokenCount(reportedLimit) : catalogLimit ? `~${compactTokenCount(catalogLimit)}` : '—';
   if (usage.credits) {
     const { nanoAiu, status } = usage.credits;
     if (status === 'unavailable' || !nonnegative(nanoAiu) || status === 'unknown' && nanoAiu === 0) {
@@ -194,21 +207,23 @@ export function presentCopilotUsage(usage?: CopilotUsage, configurableContext = 
   if (usage.context && nonnegative(usage.context.currentTokens) && nonnegative(usage.context.tokenLimit)) {
     const { currentTokens, tokenLimit } = usage.context;
     const percent = tokenLimit > 0 ? currentTokens / tokenLimit * 100 : NaN;
-    parts.push(`${Number.isFinite(percent) ? `${percent.toFixed(1).replace(/\.0$/, '')}%` : '—'} / ${tokenLimit > 0 ? compactTokenCount(tokenLimit) : '—'}`);
+    parts.push(`${Number.isFinite(percent) ? `${percent.toFixed(1).replace(/\.0$/, '')}%` : '—'} / ${window}`);
     details.push(`Context: ${currentTokens.toLocaleString('en-US', { maximumFractionDigits: 20 })} / ${tokenLimit > 0 ? tokenLimit.toLocaleString('en-US', { maximumFractionDigits: 20 }) : 'unknown limit'} tokens reported by Copilot.`);
   } else if (usage.provisional?.context) {
-    parts.push(usage.provisional.context === 'zero' ? '0% / —' : '— / —');
+    parts.push(`${usage.provisional.context === 'zero' ? '0%' : '—'} / ${window}`);
     details.push(usage.provisional.context === 'zero'
       ? 'Provisional new-session context display; actual usage and window have not been reported yet.'
       : 'Context usage/window has not been reported yet.');
-  } else if (usage.credits || usage.provisional?.credits) {
-    parts.push('— / —');
-    details.push('Context usage/window is not reported yet; no percentage or window size is inferred.');
+  } else if (usage.credits || usage.provisional?.credits || catalogLimit) {
+    parts.push(`— / ${window}`);
+    details.push(catalogLimit ? 'Context usage is not reported yet; no utilization percentage is inferred.'
+      : 'Context usage/window is not reported yet; no percentage or window size is inferred.');
   }
+  if (catalogLimit) details.push(`Provisional context window: ${catalogLimit.toLocaleString('en-US', { maximumFractionDigits: 20 })} prompt tokens advertised by Copilot's model catalog for the selected tier; not the effective session limit. No utilization percentage is calculated from this budget.`);
   if (!parts.length) return {};
   const metrics = parts.join(' · '), metricsTitle = details.join('\n');
-  if (!configurableContext || !usage.context || usage.context.tokenLimit <= 0) return { metrics, metricsTitle };
-  const limit = compactTokenCount(usage.context.tokenLimit);
+  if (!configurableContext || !reportedLimit && !catalogLimit) return { metrics, metricsTitle };
+  const limit = window;
   const at = metrics.lastIndexOf(limit);
   return at < 0 ? { metrics, metricsTitle } : {
     metrics, metricsTitle,

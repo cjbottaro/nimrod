@@ -17,7 +17,8 @@ const models = [
   { id: 'small', name: 'Small', supportedReasoningEfforts: ['low', 'high'] },
   { id: 'large', name: 'Large' },
 ];
-async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false, catalog: unknown[] = models) {
+async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decision'] = async () => undefined, autoUsage = true, fresh = false, catalog: unknown[] = models,
+  configuration: Record<string, unknown> = { modelId: 'small', reasoningEffort: 'low' }) {
   const sent: BridgeRequest[] = [], published: ConversationViewMessage[] = [], completed: boolean[] = [], responses: (string | undefined)[] = [], captured: TranscriptLogRecord[] = [];
   const session: CopilotSession = new CopilotSession(async request => {
     sent.push(request);
@@ -31,7 +32,7 @@ async function fixture(events: unknown[] = [], decision: CopilotSessionUi['decis
   const reply = (method: string, result: unknown = null) => session.receive({ kind: 'result', id: last(method).id, result });
   const initializing = session.initialize(fresh ? undefined : 'saved-id');
   reply('initialize'); await flush();
-  session.receive({ kind: 'connected', sessionId: 'saved-id', events, models: catalog, model: { modelId: 'small', reasoningEffort: 'low' } });
+  session.receive({ kind: 'connected', sessionId: 'saved-id', events, models: catalog, model: configuration });
   reply('connect'); await initializing; await flush();
   let sequence = 0;
   const event = (type: string, data: Record<string, unknown>, id = `event-${sequence++}`) => session.receive({ kind: 'event', event: { id, type, data } });
@@ -575,6 +576,55 @@ test('SDK status publishes root usage and reconciles selector capabilities witho
   f.session.disconnect('fixture complete');
   assert.equal(f.session.state.statusArea!.metrics, reported.metrics);
   assert.ok(f.session.state.statusArea!.controls.every(control => control.disabled));
+});
+
+for (const fresh of [true, false]) test(`catalog context capacity fills an unmeasured ${fresh ? 'new' : 'resumed'} session without provider work`, async () => {
+  const catalog = [{ ...models[0], billing: { tokenPrices: { maxPromptTokens: 128_000, longContext: { maxPromptTokens: 936_000 } } } }];
+  const f = await fixture([], undefined, false, fresh, catalog, { modelId: 'small', contextTier: 'default' });
+  try {
+    assert.equal(f.session.state.statusArea!.metrics, fresh ? '~$0.000 · 0% / ~128k' : '— · — / ~128k');
+    const controls = f.session.state.statusArea!.controls;
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /~128k/);
+    f.event('session.compaction_complete', {});
+    f.session.receive({ kind: 'result', id: f.last('context').id, error: 'Optional metadata unavailable' }); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /— \/ ~128k/, 'a metadata failure cannot erase advertised capacity or invent utilization');
+    f.event('session.usage_info', { currentTokens: 31_250, tokenLimit: 125_000 });
+    assert.match(f.session.state.statusArea!.metrics!, /25% \/ 125k/);
+    assert.doesNotMatch(f.session.state.statusArea!.metricsTitle!, /Provisional context window/);
+    assert.equal(f.session.state.statusArea!.controls, controls);
+    assert.equal(f.sent.some(request => ['prompt', 'command', 'configure'].includes(request.method)), false);
+  } finally { f.session.disconnect('fixture complete'); }
+});
+
+test('provisional windows follow confirmed model/tier changes, never pending targets or stale measurements', async () => {
+  const catalog = [
+    { ...models[0], capabilities: { limits: { max_context_window_tokens: 1_000_000 } },
+      billing: { tokenPrices: { maxPromptTokens: 128_000, longContext: { maxPromptTokens: 936_000 } } } },
+    { ...models[1], billing: { tokenPrices: { maxPromptTokens: 256_000 } } },
+  ];
+  const f = await fixture([], undefined, false, true, catalog, { modelId: 'small', contextTier: 'default' });
+  try {
+    f.reply('usage', {}); f.reply('context', null); await flush();
+    f.event('session.compaction_complete', {});
+    const oldRead = f.last('context');
+    await f.session.selectPreference('context-window', async choices => choices[1]); await flush();
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k|936k/, 'no provisional capacity during a mutation');
+    f.event('session.model_change', { newModel: 'small', contextTier: 'long_context' });
+    f.reply('context', { currentTokens: 100_000, tokenLimit: 128_000 }); await flush();
+    assert.equal(f.last('context'), oldRead);
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k|936k/);
+    f.reply('configure', { model: { modelId: 'small', contextTier: 'long_context' } }); await flush();
+    assert.match(f.session.state.statusArea!.metrics!, /~936k/);
+    f.reply('context', null); await flush();
+    f.event('session.model_change', { newModel: 'large' });
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /128k|936k|256k/, 'a different model cannot inherit the prior model tier');
+    f.event('session.model_change', { newModel: 'large', contextTier: 'default' });
+    assert.match(f.session.state.statusArea!.metrics!, /~256k/);
+    f.event('session.model_deselected', {});
+    assert.doesNotMatch(f.session.state.statusArea!.metrics!, /256k/);
+    assert.equal(f.sent.some(request => request.method === 'prompt'), false);
+  } finally { f.session.disconnect('fixture complete'); }
 });
 
 test('new and resumed sessions use distinct display seeds but identical usage reads and reconciliation', async () => {

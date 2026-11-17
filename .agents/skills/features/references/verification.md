@@ -496,6 +496,19 @@ Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcr
 
 ## Current automated validation
 
+Copilot provisional catalog window: a read-only display fallback uses the current
+confirmed model/tier's advertised prompt budget without filling measured usage or
+the configuration cache. `test/copilot-advertised-context.test.ts` and extended SDK
+controller fixtures cover standard/long tiers, unknown/Auto/malformed metadata,
+fresh/Resume display, reported-limit precedence, clickable capacity, stable controls,
+metadata errors and mutation/model/tier/stale-read fences. New fixtures are authored
+**unrun**. Installed `copilot --no-auto-update help config` confirms `contextTier`
+accepts `default`/`long_context` and unset uses the model's preferred tier, otherwise
+`default`; existing creation code already maps that setting into SDK inference.
+No setting was written, provider work issued or app built/launched. Native visual
+acceptance remains pending. [Usage policy](copilot-sdk.md#usage-metrics) owns the
+fallback and lifetime rules.
+
 Copilot usage seed experiment: the user reported all dashes after empty startup reads. Untouched fresh sessions now retain display-only zeros across successful empty reads, but not actual errors. Locally valid prompt/command Send or live SDK activity retires remaining zeros before any operation result and fences old metadata; Resume retains the same fetching/reconciliation/rendering path. Window size and Auto compact remain unseeded. Updated pure/controller/offline-browser fixtures are authored **unrun**; no app build/launch, paid request or native visual acceptance was performed for this correction. [Usage policy](copilot-sdk.md#usage-metrics) owns lifetime and the one-point reversal to unknown seeds.
 
 Copilot reconnect context: the user observed restored USD with the context portion missing. The source now requests an independent optional SDK context snapshot on reconnect and preserves `— / —` beside known cost if the runtime reports null/uninitialized context. Fixtures cover no-event Resume, the actual display-window denominator, independent errors, stale/model/live races and retained totals; they are **unrun**. No paid request or live session operation was performed for this correction, and actual cold-reconnect reporting/native acceptance remains unverified. [Usage contract](copilot-sdk.md#usage-metrics) owns the limitation.

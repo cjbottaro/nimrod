@@ -654,7 +654,30 @@ consumer, separate from model configuration. The shared Status area only consume
   seeds. No dwell, retry or polling timer.
   Confirmed fields retain their existing error/lifetime semantics. Tooltip detail
   explicitly identifies provisional values, not a measured empty context or zero
-  AI credits. No model-window capacity or Auto compact setting is seeded.
+  AI credits. No model-window measurement or Auto compact setting is seeded.
+- Catalog capacity is a separate, read-only display fallback, not a usage seed.
+  `advertisedCopilotContextLimit` in `usage.ts` reads only the confirmed selected
+  model's `billing.tokenPrices.maxPromptTokens` for `contextTier:'default'`, or
+  `billing.tokenPrices.longContext.maxPromptTokens` for `'long_context'`.
+  Require a finite positive budget. Unknown/missing tier (including an unreported
+  model preference), unresolved/Auto/Fusion model, missing tier budget or malformed
+  capacity keeps the window unknown. Never substitute `max_context_window_tokens`,
+  output allowance or another tier's budget. Do not fetch models or prompt to fill it.
+  The existing connected catalog supplies this data.
+  `CopilotStatusAreaState.advertisedContextLimit` is computed from current confirmed
+  configuration and passed to `presentCopilotUsage`; it is never stored in measured
+  `CopilotUsage.context`, its zero seed or the configuration picker's reported-limit
+  cache. Both new and resumed sessions use the same fallback. A displayed budget
+  has a `~` prefix and explicit catalog/not-effective-session-limit tooltip.
+  Existing fresh `0%` may accompany it; unknown utilization stays `—`. Never compute
+  a utilization percentage from catalog capacity. A positive measured session limit
+  wins immediately and removes the provisional marker.
+  Successful null/error/timeout reads and first work do not erase independently
+  advertised capacity or revive zero seeds. Configuration mutations hide the fallback
+  until settlement; model/tier changes recompute from the new confirmed selection,
+  and a model change without a tier clears the previous model's tier. Disconnect
+  suppresses provisional capacity while retaining existing reported usage. Do not
+  add polling, persistence, RPC gates or extra window reads.
 - The private bridge `usage` read calls `session.rpc.usage.getMetrics()` and returns
   only `totalNanoAiu` and `aiCreditsStatus`. SDK totals include the main agent and
   subagents and restore accumulated usage on Resume; never sum ephemeral
@@ -694,7 +717,9 @@ consumer, separate from model configuration. The shared Status area only consume
   send a prompt, select a model, replay history or gate ordinary interaction.
   The bridge returns only `{currentTokens:contextInfo.totalTokens, tokenLimit:contextInfo.limit}`.
   Use **`limit`**, the advertised display window, not the distinct effective
-  `promptTokenLimit` input budget. No catalog capacity/last-call-token guesses.
+  `promptTokenLimit` input budget. Catalog capacity never substitutes for this
+  measured denominator or produces a computed percentage; the separately marked
+  fallback above is display-only. No last-call-token guesses.
 - Configuration settlement owns the post-mutation context refresh described above;
   no mid-mutation observation is attributed to the new model/tier. Regression
   fixtures in `test/copilot-sdk.test.ts` cover early native model events, stale
@@ -707,8 +732,9 @@ consumer, separate from model configuration. The shared Status area only consume
   cannot resurrect the previous model's window or overwrite live counts. Newer
   context requests coalesce into one owed follow-up; no polling/retry timer.
 - `contextInfo` can be null on a cold reconnect before system-prompt/tool metadata
-  is cached. Keep unknown context visibly `— / —` next to known cost, not omitted
-  or fabricated as zero. Context null/error/timeout does not withhold a successful
+  is cached. Keep unknown utilization visibly `—` next to known cost, with a
+  separately marked catalog window when available (`— / ~128k`), otherwise `— / —`;
+  never omit context or fabricate measured zero usage. Context null/error/timeout does not withhold a successful
   credit read. Later live usage or supported metadata updates fill the slot.
   Percentage is `currentTokens / tokenLimit * 100`, denominator uses decimal
   compact notation (`125k`, `1.1M`). These are current root context counters,
@@ -722,13 +748,20 @@ consumer, separate from model configuration. The shared Status area only consume
   draft/focus/scroll owners and sidebar bookkeeping remain unchanged. Disposal
   suppresses late results; disconnected views keep only their last reported data.
 
+`test/copilot-advertised-context.test.ts` and the SDK controller fixtures cover
+per-tier catalog budgets, unresolved/Auto/malformed cases, fresh/Resume projection,
+reported-window precedence, click targets and stable control/snapshot identity,
+metadata failure and pending-configuration/model/tier/stale-read fences.
+The fallback adds no runtime calls. See [verification](verification.md) for executed
+evidence; authored fixtures alone do not establish native acceptance.
+
 Code: `src/copilot/usage-seed.ts`, `usage.ts`, `status-area.ts`, `session.ts`, the private bridge
 read and native method allowlist, plus the generic `metricsTitle` field/render
 dependency. `test/copilot-usage-seed.test.ts` and the SDK controller fixture cover
 new/resume initialization with identical request sequences, independent seed
 retirement, retained empty startup reads, real/malformed errors, pre-work result
 fencing, local prompt/command Send before acknowledgement, root/child activity,
-no inferred window, known-data precedence, late results and disposal;
+no fabricated measured window, known-data precedence, late results and disposal;
 these additions are unrun and visual flicker acceptance remains a user check.
 Fixtures: `test/copilot-usage.test.ts` covers formatting, partial/missing
 coverage, coalescing/stale responses, reconnect snapshot reads, null cold context,

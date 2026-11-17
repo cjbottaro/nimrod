@@ -193,6 +193,24 @@ Copilot skills. Full original output remains available; links open only through
 an explicit action. These follow-up card/permission changes still need native
 acceptance after a requested build.
 
+### Default context tier
+
+Copilot's `~/.copilot/settings.json` supports a context-tier default alongside
+`model` and `effortLevel`:
+
+```json
+{
+  "contextTier": "long_context"
+}
+```
+
+Use `"default"` for the model's standard tier. When unset, Copilot uses the
+model catalog's preferred tier, falling back to `"default"`. This selects a
+model-supported tier, not an arbitrary token count; availability and pricing
+depend on the model. Nimrod reads this value for new sessions. Resume retains
+its saved configuration, and changing a connected session's tier does not change
+the default for future sessions.
+
 ### Images
 
 Paste a screenshot or image into the prompt field, add an optional caption, then
@@ -276,7 +294,12 @@ The Status area uses a compact layout similar to Pi:
 ~$0.123 · 25.5% / 125k
 ```
 
-A new session initially displays `~$0.000 · 0% / —`. Those zeros are provisional
+A new session initially displays `~$0.000 · 0% / ~128k` when Copilot advertises
+that prompt budget for the confirmed model and context tier. The `~` window is
+provisional catalog capacity, not a measured session limit; hover for its meaning.
+The actual session window replaces it without `~` when Copilot reports it.
+Unresolved models/tiers, Auto routing and missing tier budgets keep `—` rather
+than using a model's combined maximum context size. Those initial zeros are provisional
 display values, not measurements, and remain while the session is untouched even
 if successful startup reads return no data. Reported values replace their own
 field immediately; actual API errors become `—` instead of being masked by zeros.
@@ -284,8 +307,11 @@ Your first valid Send (including a command), or live agent activity, immediately
 retires any remaining provisional zeros—without waiting for a result. After that,
 unavailable values use `—`; nothing restores the seed. Replayed history and startup
 idle events do not consume it. A reconnect starts unknown (`— · — / —`) and uses the
-same update path, not a separate implementation. Window size and **Auto compact**
-are never guessed.
+same update path, not a separate implementation. A reconnect can also show the
+advertised window with `~` while utilization remains `—`. Sending retires the
+provisional zeros, not catalog capacity: until measured, the line can read
+`— / ~128k`. No percentage is calculated from a provisional window. Neither
+catalog capacity nor the tooltip claims an **Auto compact** setting.
 
 - **Estimated USD** is the SDK's accumulated session AI-credit usage converted at
   GitHub's published **$0.01 per AIC**. Hover for the AIC amount, accounting coverage
@@ -299,8 +325,9 @@ are never guessed.
 - **`≥$…`** means partial/unknown coverage: the displayed amount is only a reported
   subtotal and the full amount may be higher. **`—` in the cost position** means
   accounting was not reported/read successfully, not that the session was free. A missing
-  context count/window displays `— / —` next to known cost rather than disappearing
-  or showing a guessed percentage. On a cold reconnect, Copilot may not report
+  context count displays `— / ~128k` next to known cost when tier-specific catalog
+  capacity is available, otherwise `— / —`, rather than disappearing or showing
+  a guessed percentage. On a cold reconnect, Copilot may not report
   context until its system-prompt/tool metadata is initialized.
 
 Accounting includes the main agent and subagents and refreshes at usage/idle

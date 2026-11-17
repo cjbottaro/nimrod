@@ -63,6 +63,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
+- Copilot's context usage line can show a provisional catalog window (for example `0% / ~128k`) before session metadata is initialized. It uses only the confirmed model/tier's advertised prompt budget, labels its provenance on hover, and yields immediately to the actual session limit. Unknown utilization remains unknown; configuration changes cannot reuse stale capacity. Copilot's `contextTier` default in `~/.copilot/settings.json` is documented for future sessions.
+
 - Codex connects to the CLI's managed local daemon instead of launching competing app-server writers, allowing Resume of threads already owned by that daemon. Close, window close and quit detach only Nimrod's clients; Reload reconnects the same thread without restarting shared work. Stop remains an explicit thread interrupt. Replayed approvals wait for validated identity and retire when another client answers; uncertain deletion outcomes retain their safety fence. Shared interface signatures and Pi/Copilot lifecycle behavior are unchanged. Installed-runtime and native macOS/Linux acceptance remain pending.
 
 - Settings extends value-plus-Change… pickers to autocomplete acceptance, zoom, modal animation, auto-follow and font controls; current values no longer look like dropdowns. Notification/logging/performance booleans use direct Enabled checkboxes. Shared outlined utility buttons make Settings, Keybindings, actionable notices, edit-preview Copy/Wrap, operation Cancel visibly clickable. All Status-area buttons use a borderless ghost style with hover and keyboard-focus feedback; navigation, disclosures, primary actions and informational metrics retain their roles.
