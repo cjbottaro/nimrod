@@ -24,7 +24,10 @@ export interface SessionPersistence {
 export interface SessionConnectivity {
   readonly label: string;
   readonly connection: SessionConnectionState;
-  /** Selection eligibility, not permission to create a new session or a readiness acknowledgement. */
+  /** Native readiness/ownership gates, not navigation policy, permission to create a
+   * new session or a readiness acknowledgement. The application requests connection
+   * for every visible selection, including startup; adapters must not require reselection.
+   */
   eligibility(): ConnectionEligibility;
   /** Settles when the guarded attempt finishes, including a skipped or locally reported failure.
    * Read connection state for readiness. Never submits/replays a prompt or navigates on completion.

@@ -794,9 +794,66 @@ test('missing Pi keeps ordinary and named creation available through explicit ha
   } finally { f.win.close(); }
 });
 
-test('mounting an explicitly disconnected saved session does not report a connection attempt failure', async () => {
+for (const harness of ['pi', 'copilot-sdk', 'codex', 'fixture-harness'] as const) test(`${harness} startup connects only the restored selection without prompting`, async () => {
+  const scope = harness === 'pi' ? '/sessions/selected.jsonl' : `${harness}:${JSON.stringify('selected')}`;
+  const entry = (sessionId: string) => harness === 'pi'
+    ? { path: `/sessions/${sessionId}.jsonl`, sessionId: 'fixture-id', name: sessionId }
+    : { kind: harness, sessionId, name: sessionId };
+  const f = await fixture(undefined, { windowWorkspace: '/project', fixtureHarness: harness === 'fixture-harness', codexConversation: true,
+    nativeDrafts: { [scope]: { draft: 'Restored draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [entry('selected'), entry('background')], active: scope } } });
+  try {
+    await f.tick(); await f.tick();
+    assert.equal(f.rows().length, 2);
+    assert.equal(f.rows()[0].getAttribute('aria-current'), 'true');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Restored draft');
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false, 'no extra sidebar click is needed');
+    assert.equal(f.rows()[1].querySelector('.session-indicator')!.getAttribute('data-state'), 'inactive');
+    const writes = (command: string) => f.calls.filter(call => call.command === command).map(call => call.args.message as JsonRecord);
+    if (harness === 'pi') assert.equal(f.calls.filter(call => call.command === 'start_pi').length, 1);
+    if (harness === 'copilot-sdk') assert.deepEqual(writes('write_copilot').filter(message => message.method === 'connect').map(message => message.sessionId), ['selected']);
+    if (harness === 'codex') assert.deepEqual(writes('write_codex').filter(message => message.method === 'thread/resume').map(message => (message.params as JsonRecord).threadId), ['selected']);
+    assert.equal([...writes('write_copilot'), ...writes('write_codex')].some(message => ['prompt', 'thread/start', 'turn/start'].includes(String(message.method))), false);
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    const before = f.calls.length;
+    f.rows()[0].click(); await f.tick(); await f.tick();
+    assert.equal(f.calls.slice(before).some(call => ['start_pi', 'start_copilot', 'start_codex'].includes(call.command)), false, 'reselection reuses the connection');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Restored draft');
+  } finally { f.win.close(); }
+});
+
+for (const fails of [false, true]) test(`Codex startup reconnect waits for native initialization and never retries a failed attempt (${fails})`, async () => {
+  let release!: () => void;
+  const scope = 'codex:"selected"';
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true,
+    harnessInitializationGate: new Promise<void>(resolve => { release = resolve; }),
+    harnessResumeError: fails ? 'No rollout found for selected' : undefined,
+    nativeDrafts: { [scope]: { draft: 'Keep this draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'selected', name: 'Selected Codex' }], active: scope } } });
+  const resumes = () => f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/resume');
+  try {
+    assert.equal(resumes().length, 0);
+    release(); await f.tick(); await f.tick();
+    assert.equal(resumes().length, 1, 'readiness releases the selected-session deferral without a click');
+    assert.equal(((resumes()[0].args.message as JsonRecord).params as JsonRecord).threadId, 'selected');
+    assert.equal(f.element<HTMLTextAreaElement>('prompt').value, 'Keep this draft');
+    assert.equal(f.calls.some(call => call.command === 'write_codex' && ['thread/start', 'turn/start'].includes(String((call.args.message as JsonRecord).method))), false);
+    if (fails) {
+      assert.match(f.element('session-notices').textContent!, /No rollout found/);
+      f.openPalette();
+      f.element<HTMLDialogElement>('command-palette').close();
+      await f.tick(); await f.tick();
+      assert.equal(resumes().length, 1, 'routine controls and rendering updates never retry');
+      f.rows()[0].click(); await f.tick(); await f.tick();
+      assert.equal(resumes().length, 2, 'explicit reselection can retry the same identity');
+    }
+  } finally { release(); f.win.close(); }
+});
+
+test('mounting a filtered-out saved session does not connect or report a connection attempt failure', async () => {
   const scope = 'codex:"waiting"';
   const f = await fixture(undefined, { windowWorkspace: '/project', appState: {
+    'nimrod.sidebar.view:/project': 'unread',
     'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
   } });
   try {
@@ -809,7 +866,7 @@ test('mounting an explicitly disconnected saved session does not report a connec
 
 test('Close consumes a disconnected Codex lifecycle without connecting or requiring saved-history confirmation', async () => {
   const scope = 'codex:"waiting"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
+  const f = await fixture(undefined, { windowWorkspace: '/project', runtimeAvailable: harness => harness !== 'codex', nativeDrafts: { [scope]: { draft: 'Keep my local draft', recovered: [] } }, appState: {
     'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope },
   } });
   try {
@@ -827,15 +884,17 @@ test('Close consumes a disconnected Codex lifecycle without connecting or requir
 
 test('disconnected Codex Delete uses the independent catalog and shared review without conversation Resume', async () => {
   const scope = 'codex:"waiting"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', nativeDrafts: { [scope]: { draft: 'Keep until deletion confirms', recovered: [] } },
     codexHistory: [{ id: 'waiting', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Waiting Codex' }],
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'waiting', name: 'Waiting Codex' }], active: scope } },
   });
-  const conversationWrites = () => f.calls.filter(call => call.command === 'write_codex')
+  let callsStart = 0;
+  const conversationWrites = () => f.calls.slice(callsStart).filter(call => call.command === 'write_codex')
     .map(call => call.args.message as JsonRecord)
     .filter(request => ['thread/start', 'thread/resume', 'turn/start'].includes(String(request.method)));
   try {
-    assert.equal(f.calls.some(call => call.command === 'start_codex'), false);
+    assert.equal(conversationWrites().filter(request => request.method === 'thread/resume').length, 1, 'startup tried the exact saved identity once');
+    callsStart = f.calls.length;
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     const menu = await f.rowMenu(f.rows()[0]); assert.equal(menu.delete.disabled, false);
     menu.delete.click(); await f.tick(); await f.tick();
@@ -849,7 +908,7 @@ test('disconnected Codex Delete uses the independent catalog and shared review w
     assert.equal(f.rows().length, 0);
     assert.equal(f.saved().drafts[scope], undefined);
     assert.equal(conversationWrites().length, 0);
-    assert.ok(f.calls.filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
+    assert.ok(f.calls.slice(callsStart).filter(call => call.command === 'start_codex').every(call => (call.args.config as JsonRecord).catalog === true));
     const deletes = f.calls.filter(call => call.command === 'write_codex' && (call.args.message as JsonRecord).method === 'thread/delete');
     assert.equal(deletes.length, 1);
     assert.equal(((deletes[0].args.message as JsonRecord).params as JsonRecord).threadId, 'waiting');
@@ -863,6 +922,7 @@ test('Delete removes a natively absent Codex session and draft without native de
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'never-saved', name: 'Never saved' }], active: scope } },
   });
   try {
+    const callsStart = f.calls.length; // Only deletion effects, not the failed startup reconnect.
     assert.equal(f.element<HTMLButtonElement>('delete-session').disabled, false);
     f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
     assert.equal(f.element('deletion-title').textContent, 'Delete Codex session');
@@ -870,7 +930,7 @@ test('Delete removes a natively absent Codex session and draft without native de
     assert.equal(f.rows().length, 1); assert.equal(f.saved().drafts[scope].draft, 'Orphan draft is not deletion evidence');
     f.element<HTMLButtonElement>('delete-session').click(); await f.tick(); await f.tick();
     f.element<HTMLButtonElement>('deletion-confirm').click(); await f.tick(); await f.tick();
-    const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
+    const requests = f.calls.slice(callsStart).filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
     assert.equal(requests.some(request => ['thread/delete', 'thread/start', 'thread/resume', 'turn/start'].includes(String(request.method))), false);
     assert.equal(f.rows().length, 0); assert.equal(f.saved().drafts[scope], undefined);
     const fences = f.calls.filter(call => call.command === 'reserve_codex_deletion');
@@ -882,7 +942,7 @@ test('Delete removes a natively absent Codex session and draft without native de
 
 test('Delete retains the Codex row and draft when native absence cannot be established', async () => {
   const scope = 'codex:"lookup-denied"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', codexHistory: [], codexReadError: 'Permission denied while reading saved history',
     nativeDrafts: { [scope]: { draft: 'Keep unknown history draft', recovered: [] } },
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'lookup-denied', name: 'Unknown history' }], active: scope } },
   });
@@ -897,7 +957,7 @@ test('Delete retains the Codex row and draft when native absence cannot be estab
 
 test('a saved named-empty Codex root omitted by listing still receives native deletion review', async () => {
   const scope = 'codex:"named-empty"';
-  const f = await fixture(undefined, { windowWorkspace: '/project', codexHistory: [],
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, harnessResumeError: 'Fixture saved thread is unavailable', codexHistory: [],
     codexSavedThread: { id: 'named-empty', cwd: '/project', ephemeral: false, parentThreadId: null, forkedFromId: null, turns: [], status: { type: 'notLoaded' }, name: 'Named empty' },
     appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'codex', sessionId: 'named-empty', name: 'Named empty' }], active: scope } },
   });

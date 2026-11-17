@@ -56,7 +56,7 @@ test('registration alone connects an unknown harness through real input, draft, 
   const prepared = await project.saved.prepare(saved, { title: saved.name, lastUsed: saved.lastUsed }, true);
   const restored = harnessHostFixture(library, 'restored'); restored.host.drafts.select(scope);
   const reopened = registry.create(project, restored.host, prepared.request);
-  assert.equal(reopened.selection.deferRestored, true); assert.equal(reopened.lifecycle.connection, 'disconnected');
+  assert.equal(reopened.lifecycle.connection, 'disconnected');
   assert.deepEqual(restored.host.drafts.read(), { draft: 'Preserved before identity exists' });
   assert.equal(restored.publications.length, 0, 'restoration alone never connects or prompts');
   const messages = session.conversation.state?.messages;
@@ -160,7 +160,7 @@ class PrototypeSession implements HarnessSession {
   get actions() { return this.inner.actions; } get reload() { return this.inner.reload; }
   get deletion() { return this.inner.deletion; } get commands() { return this.inner.commands; }
   get close() { return this.inner.close; } get drafts() { return this.inner.drafts; }
-  get selection() { return this.inner.selection; } get interactions() { return this.inner.interactions; }
+  get interactions() { return this.inner.interactions; }
   get references() { return this.inner.references; } get naming() { return this.inner.naming; }
 }
 test('class/prototype implementations retain their live ports across registry binding', async () => {

@@ -601,7 +601,6 @@ async function enterWorkspace(path: string): Promise<void> {
       const prepared = await project.saved.prepare(entry, { title: entry.name, lastUsed: entry.lastUsed, pinned: entry.pinned }, true);
       if (unloading) return;
       const tab = createTab(prepared.request, project, prepared.title, prepared.lastUsed, prepared.pinned);
-      tab.awaitingSelection = tab.integration.selection.deferRestored;
       tab.receive?.({ type: 'sessionReset', composerState: tab.drafts.read() });
     } catch (failure) { if (!project.saved.removed(key)) persistenceError(failure); }
   }
@@ -970,7 +969,9 @@ function activate(tab: Tab, intent: SelectionIntent = 'explicit'): void {
   if (!ready) return;
   const plan = navigation.selection(tab, navigationSnapshot(), intent);
   if (!plan) return;
-  if (tab.integration.selection.releasesDeferral(intent)) tab.awaitingSelection = false;
+  // Selection policy belongs to the application, not individual harnesses.
+  // Only deletion teardown sets this guard; startup must not release it.
+  if (intent !== 'startup') tab.awaitingSelection = false;
   notificationNavigation++;
   if (plan.view !== sidebarView) {
     sidebarView = plan.view;

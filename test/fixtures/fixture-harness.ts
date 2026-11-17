@@ -1,6 +1,6 @@
 import { unsupportedCommands } from '../../src/session-commands';
 import { defineHarness } from '../../src/harness-registry';
-import { explicitSelection, noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, displayUnsupportedInteraction } from '../../src/harness-defaults';
+import { noConfiguration, noInteractions, noReferences, savedClose, taggedSavedSessions, displayUnsupportedInteraction } from '../../src/harness-defaults';
 import { genericInteraction } from '../../src/harness-defaults';
 import { genericCards } from '../../src/card-renderers';
 import { savedDraftScope } from '../../src/draft-scope';
@@ -96,7 +96,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
         await lifecycle.connect({ acceptedAction: true });
       },
     },
-    close: savedClose, selection: explicitSelection,
+    close: savedClose,
     interactions: noInteractions, references: noReferences, drafts: { durability: 'persistent' },
   };
 }

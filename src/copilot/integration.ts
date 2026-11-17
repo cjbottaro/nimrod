@@ -10,7 +10,7 @@ import { copilotIntegrationUi } from './integration-ui';
 import { bundledCopilotPlugin } from './card-plugins';
 import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
-import { configurationActions, noProjectActions, noReferences, ordinarySelection, savedClose, taggedSavedSessions } from '../harness-defaults';
+import { configurationActions, noProjectActions, noReferences, savedClose, taggedSavedSessions } from '../harness-defaults';
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { ownedProcessStop } from '../session-lifecycle';
@@ -169,7 +169,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
         await lifecycle.connect({ acceptedAction: true });
       },
     },
-    selection: ordinarySelection, references: noReferences,
+    references: noReferences,
     interactions: { setActive(active) { if (!active) backend.session?.cancelCommands(); ui.setActive(active); }, dispose: ui.dispose },
   };
 }

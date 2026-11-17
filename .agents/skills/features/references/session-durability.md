@@ -86,8 +86,10 @@ post-stop materialization are covered by concrete history/deletion fixtures.
 ## Reopening and replacement rules
 
 1. Restore persistent local membership and drafts without sending a message.
-   Connection remains subject to the existing selection/activation policy; do not
-   eagerly launch background sessions merely to make them persistent.
+   The [shared selection/activation policy](session-navigation.md#contracts)
+   reconnects the visible restored selection for every harness; adapters cannot
+   require a second explicit selection. Do not eagerly launch background sessions
+   merely to make them persistent.
 2. A local session without any native identity can create one on its permitted
    initial connection. Once a native ID is assigned, reconnect targets that exact
    identity. Do not silently substitute a fresh thread, even when Nimrod recorded
