@@ -126,7 +126,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Text selection uses a shared contrast policy across all themes, including imports: subdued highlights are strengthened and unreadable text colors repaired against content, input, code and widget backings. Highlights remain solid under window translucency; source palettes and selected-row colors are unchanged.
+- Text selection uses a shared contrast policy across all themes, including imports: subdued highlights are strengthened and unreadable text colors repaired against content, input, code and widget backings. A WebKit-safe, near-opaque highlight prevents colors disappearing against dark Linux surfaces, including Sweet Dracula. General text-selection colors take precedence over editor-specific colors; missing colors use a subdued accent rather than a full-strength focus fill. Window translucency does not fade highlights; source palettes and selected-row colors are unchanged.
 
 - Reopening a project now reconnects its selected Codex session automatically, like Pi and Copilot, without an extra sidebar click or sending a prompt. Background restored sessions stay disconnected. Startup selection policy is application-owned rather than adapter-configurable, so future harness integrations inherit the same behavior.
 

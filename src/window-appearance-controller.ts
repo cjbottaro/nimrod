@@ -47,13 +47,13 @@ export function installWindowAppearance(window: Window, root: HTMLElement, host:
     const secondaryPair = primaryButtonSurfaces(color('button-secondaryForeground'), color('button-secondaryBackground'), color('button-secondaryHoverBackground'));
     secondary = secondaryPair.normal; secondaryHover = secondaryPair.hover;
     danger = buttonSurface(background, color('errorForeground'));
-    const selection = color('editor-selectionBackground') || color('selection-background') || color('focusBorder') || foreground;
+    const selection = color('selection-background') || color('editor-selectionBackground');
     const selectionText = color('editor-selectionForeground') || foreground;
     for (const [role, backing] of [
       ['content', background], ['input', color('input-background') || background],
       ['code', color('textCodeBlock-background') || background], ['widget', color('editorWidget-background') || background],
     ]) {
-      const pair = textSelectionSurface(backing, selection, selectionText);
+      const pair = textSelectionSurface(backing, selection, selectionText, color('focusBorder') || foreground);
       root.style.setProperty(`--nimrod-${role}-text-selection-background`, pair.background);
       root.style.setProperty(`--nimrod-${role}-text-selection-foreground`, pair.foreground);
     }

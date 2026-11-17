@@ -49,9 +49,9 @@ Filled buttons use a shared readability policy across every palette, including i
 
 ## Text selection
 
-Every theme—including imports—uses the same text-selection readability policy in the composer, transcript, Settings and pop-outs. Nimrod preserves usable theme selection colors, strengthens highlights that blend into their backing, and chooses contrasting selected-text colors when necessary. These adjustments do not change the saved theme or selected-row colors.
+Every theme—including imports—uses the same text-selection readability policy in the composer, transcript, Settings and pop-outs. Nimrod prefers the theme's general text-selection color, strengthens highlights that blend into their backing, and chooses contrasting selected-text colors when necessary. Themes without a selection color start from a subdued accent rather than a full-strength focus highlight. These adjustments do not change the saved theme or selected-row colors.
 
-Text highlights stay solid even when the window is translucent, so the selected text remains readable. Visibility against desktop content can still vary through transparent surroundings. System high-contrast color overrides use the system selection colors.
+Text highlights remain nearly opaque even when the window is translucent, so the selected text remains readable. Visibility against desktop content can still vary through transparent surroundings. System high-contrast color overrides use the system selection colors.
 
 ## Import a theme
 

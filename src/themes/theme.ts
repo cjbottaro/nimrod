@@ -136,7 +136,7 @@ export function themeProperties(theme: ColorTheme): Record<string, string> {
   const muted = c.descriptionForeground || mix(bg, fg, .65);
   const surface = c['editorWidget.background'] || mix(bg, fg, .035);
   const selection = c['list.focusBackground'] || c['editor.selectionBackground'] || c['selection.background'] || mix(bg, fg, .18);
-  const textSelection = c['editor.selectionBackground'] || c['selection.background'] || mix(bg, fg, .18);
+  const textSelection = c['selection.background'] || c['editor.selectionBackground'] || mix(bg, accent, .35);
   const button = c['button.background'] || selection;
   const error = c.errorForeground || c['editorError.foreground'] || c['terminal.ansiRed'] || (theme.mode === 'dark' ? '#ff9d9d' : '#a32d38');
   const success = c['testing.iconPassed'] || c['terminal.ansiGreen'] || (theme.mode === 'dark' ? '#77d8bd' : '#287c69');

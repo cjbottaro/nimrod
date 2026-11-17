@@ -143,7 +143,7 @@ test('text selection follows palette preview/reset without touching drafts, focu
     palette('#292e42');
     assert.equal(f.root.style.getPropertyValue(property), first);
     f.setTheme(null);
-    assert.match(f.root.style.getPropertyValue(property), /^#[a-f\d]{6}$/);
+    assert.match(f.root.style.getPropertyValue(property), /^#[a-f\d]{6}fe$/);
     assert.equal(f.root.querySelector('textarea'), prompt);
     assert.equal(prompt.value, 'draft');
     assert.equal(f.dom.window.document.activeElement, prompt);

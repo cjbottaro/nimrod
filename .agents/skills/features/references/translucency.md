@@ -50,7 +50,7 @@ Linux has the same layer-boundary problem: compositor blur can sample windows be
 
 ## Filled-control contrast
 
-Text-selection highlights are a separate opaque presentation role, not the alpha-scaled selected-row fills described here. Their shared palette/backing contrast policy and transparent-desktop limitation are owned by [Themes](themes.md#text-selection-contrast).
+Text-selection highlights are a separate near-opaque presentation role (fixed WebKit-safe alpha), not the alpha-scaled selected-row fills described here. Their shared palette/backing contrast policy and transparent-desktop limitation are owned by [Themes](themes.md#text-selection-contrast).
 
 `src/button-surfaces.ts` owns palette-independent pairing for primary, secondary and danger buttons (including hover). Preserve the supplied text colour if it has at least 4.5:1 contrast against the solid fill; otherwise use a readable neutral. Button-specific colour roles are opaque RGB, even if the source palette supplies alpha. Never rewrite `--vscode-*` tokens or branch on theme IDs. Incompatible hover hues use the normal hue and stronger hover density so the same text remains readable. Secondary control hover retains its normal hue rather than interpolating unrelated fill colours.
 

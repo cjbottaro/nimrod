@@ -3,7 +3,7 @@ import { buttonContrast } from '../../src/button-surfaces';
 import { demoFixture, visible } from './demo-fixture';
 
 // Offline computed-style coverage, not native selection-paint acceptance.
-test('text highlights use opaque contrast-protected roles across themes, surfaces and opacity', async ({ page }) => {
+test('text highlights use contrast-protected roles across themes, surfaces and opacity', async ({ page }) => {
   const fixture = await demoFixture(page);
   try {
     const prompt = page.locator(visible('prompt'));
@@ -16,7 +16,7 @@ test('text highlights use opaque contrast-protected roles across themes, surface
     });
     for (const scheme of ['dark', 'light'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
-      for (const theme of ['nimrod', 'tokyo-night', 'dracula', 'catalog-atom-one-light-vscode-atom-one-light']) {
+      for (const theme of ['nimrod', 'tokyo-night', 'dracula', 'catalog-ovsx-proxzima-sweetdracula-626c68bb-theme-sweetdracula-color-theme-json-e4b58042', 'catalog-atom-one-light-vscode-atom-one-light']) {
         for (const opacity of [0, 65, 100]) {
           await fixture.editPreferences(JSON.stringify({ 'appearance.theme': theme, 'appearance.backgroundOpacity': opacity }));
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -43,7 +43,7 @@ test('text highlights use opaque contrast-protected roles across themes, surface
               };
             }, { role, backing });
             expect(colors.fill).toEqual(colors.expected);
-            expect(colors.fill.alpha).toBe(255); expect(colors.text.alpha).toBe(255);
+            expect(colors.fill.alpha).toBe(254); expect(colors.text.alpha).toBe(255);
             expect(buttonContrast(colors.text.hex, colors.fill.hex, 1)).toBeGreaterThanOrEqual(4.5);
             expect(buttonContrast(colors.fill.hex, colors.backing.hex, 1)).toBeGreaterThanOrEqual(3);
           }
