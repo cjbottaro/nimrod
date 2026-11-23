@@ -11,7 +11,7 @@ function fixture() {
   const interaction = new CodexApprovalInteraction({
     document, canPresent: () => active,
     start: dismiss => { dismissed = dismiss; current = true; return {
-      show: next => { page = next; shown++; }, remaining() {}, focus() {}, isCurrent: () => current,
+      show: next => { page = next; shown++; }, query: () => '', remaining() {}, focus() {}, isCurrent: () => current,
       cancel: () => { current = false; dismiss(); },
     }; },
     changed: delta => { inputs += delta; }, banner: pending => { count = pending; },
