@@ -502,8 +502,9 @@ upstream documentation lists `.claude/settings.json` in the shared repository
 plugin-settings subset. The new trust UI, bridge, native-boundary and shell
 fixtures are authored **unrun**. No real session was created/resumed, trust state
 changed, plugin installed, model prompt sent, app built/launched or browser used
-for this task. Mandatory post-merge compilation is recorded separately; it is not
-behavioral acceptance. Installed CLI 1.0.113 plugin activation after a grant,
+for this task. Required post-merge `mise run check` passed on `main` (TypeScript
+and Rust compilation only); it is not behavioral acceptance. Installed CLI
+1.0.113 plugin activation after a grant,
 trust interoperability with the CLI, managed policy, reload side effects and
 native macOS/Linux modal/focus/dismissal remain user acceptance work.
 [Copilot folder trust](copilot-sdk.md#native-folder-trust-and-plugin-configuration)
