@@ -79,6 +79,7 @@ test('retained selections update one open shell, retain context on count changes
     } }] }, context);
     page.remaining('2 more');
     f.query('Allow'); const row = f.list().firstElementChild;
+    assert.equal(page.query(), 'Allow');
     page.remaining('3 more');
     assert.equal(f.input.value, 'Allow'); assert.equal(f.list().firstElementChild, row); assert.equal(context.open, true);
     f.key('Enter'); assert.equal(f.dialog.open, true); assert.equal(opens, 1); assert.equal(closes, 0); assert.equal(selections, 1);
@@ -86,7 +87,26 @@ test('retained selections update one open shell, retain context on count changes
     const stale = f.list().firstElementChild as HTMLElement;
     f.key('Escape'); assert.equal(dismissed, 1); assert.equal(closes, 1); assert.equal(page.isCurrent(), false);
     stale.click(); page.show({ items: [] }, context); assert.equal(selections, 1); assert.equal(f.dialog.open, false);
+    assert.equal(page.query(), '', 'dismissed pages cannot read a newer query');
     assert.equal(f.win.document.querySelector('#palette-context')!.hasAttribute('hidden'), true);
+  } finally { f.dispose(); }
+});
+
+test('retained alternative actions remain available when no choices match the query', () => {
+  const f = fixture();
+  try {
+    const page = f.palette.startRetainedSelection('Question', () => {})!;
+    const context = f.win.document.createElement('div');
+    let answer: string | undefined;
+    page.show({ items: [
+      { id: 'choice', label: 'Default', run() {} },
+      { id: 'custom', label: 'Enter your own answer…', alwaysVisible: true, run() { answer = page.query(); } },
+    ] }, context);
+    f.query('/work/my-repository');
+    assert.equal(f.list().children.length, 1);
+    assert.equal(f.list().firstElementChild!.getAttribute('data-key'), 'custom');
+    f.key('Enter');
+    assert.equal(answer, '/work/my-repository'); assert.equal(f.dialog.open, true);
   } finally { f.dispose(); }
 });
 

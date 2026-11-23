@@ -35,7 +35,7 @@ Command-list sorting and accepted-command history are independent of page lifecy
 [agent questions](copilot-sdk.md#questions-and-custom-answers).
 It refuses to replace an already-open dialog; its standalone page hides
 application Back/Retry and does not enter command rankings. `show` supplies
-operation context and choices, `remaining` patches only header text, and `focus`
+operation context and choices, `query` reads the current page's exact filter text (empty after invalidation), `remaining` patches only header text, and `focus`
 restores the filter only when no child/higher-priority dialog is open. Choosing
 runs the guarded page action without closing the shell; the concrete owner
 advances it or explicitly cancels it when empty.
@@ -52,7 +52,9 @@ Existing one-shot selections and post-close application actions are unchanged.
 
 ### Question row presentation
 
-The shared `src/question-interaction.ts` marks offered answers with a typographic bullet, **Enter your own answer…** with a pencil, and the adapter-opted-in **Ignore question** with a circle-slash. All use the same muted 14px leading gutter; selected markers inherit the selection foreground. Offered answers and utility actions have distinct `PaletteItem.group` values. `command-palette.ts` computes spacing between adjacent visible groups after filtering, so utility-only/free-text-only lists have no leading gap and Ignore does not acquire a second divider when custom input is filtered out. No headings, extra listbox options, destructive colors or numeric shortcuts are added.
+The shared `src/question-interaction.ts` marks offered answers with a typographic bullet, **Enter your own answer…** with a pencil, and the adapter-opted-in **Ignore question** with a circle-slash. All use the same muted 14px leading gutter; selected markers inherit the selection foreground. Offered answers and utility actions have distinct `PaletteItem.group` values. `command-palette.ts` computes spacing between adjacent visible groups after filtering, so utility-only/free-text-only lists have no leading gap and Ignore does not acquire a second divider. No headings, extra listbox options, destructive colors or numeric shortcuts are added.
+
+When the adapter allows freeform input, the custom-answer action opts into `PaletteItem.alwaysVisible`: filtering never removes it, even with no offered choices or no matching choices. Activating it opens the existing nested input prefilled with the exact query; it does not submit until **Submit answer** (or Enter in the input). Cancelling retains the parent query and pending request. Literal choices still filter normally, and adapters that forbid freeform do not gain it. Copilot and Codex integration UI forward the prefill to `Dialogs.input`; response semantics remain adapter-owned.
 
 `PaletteItem.marker` is opt-in decorative presentation rendered by `src/palette-item-marker.ts`: markers are aria-hidden, SVGs are non-focusable, and labels, native answer payloads, search text and existing model/current markers remain unchanged. Copilot and both Codex question paths share this presentation; Ignore availability stays adapter-owned. Existing retained page, nested input, focus, dismissal and count-only update behavior is unchanged. `test/copilot-questions.test.ts` and `test/codex-questions.test.ts` cover markers, literal answers, filtering/group boundaries and conditional Ignore. [Verification](verification.md#shared-question-picker-presentation) owns execution and visual acceptance status.
 

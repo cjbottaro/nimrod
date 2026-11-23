@@ -12,7 +12,7 @@ export function codexIntegrationUi(host: HarnessSessionHost) {
     const owner = `${host.id}:codex-question-input`;
     questions ??= new CodexQuestionInteraction({ document: ui.document, canPresent,
       start: dismiss => canPresent() ? ui.palette.startRetainedSelection('Codex question', dismiss) : undefined,
-      input: question => ui.dialogs.input(question, undefined, owner, 'Submit answer'), cancelInput: () => ui.dialogs.cancel(owner),
+      input: (question, value) => ui.dialogs.input(question, value, owner, 'Submit answer'), cancelInput: () => ui.dialogs.cancel(owner),
       changed: effects.input,
       banner: (count, review) => {
         if (!count) { effects.resolve('codex-question'); return; }

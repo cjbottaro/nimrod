@@ -130,6 +130,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
+- Agent Question pickers no longer hide **Enter your own answer…** when typing text that matches no offered choices. Free-form answers remain reachable even for questions without choices, and text typed in the picker carries into the custom-answer modal for submission. Harness restrictions on custom answers remain respected.
+
 - Copilot's context-window picker no longer marks Default context as selected when the tier is unknown. Both tier details use prompt budgets consistent with the Status area, rather than a combined maximum context size. Reported limits override only the model/tier they belong to; unknown-tier measurements cannot be cached as Default context.
 
 - Copilot now bundles Microsoft Copilot SDK 2.0.0 with protocol-4 support (declared CLI compatibility: 1.0.113), resolving the earlier SDK protocol mismatch with protocol-4 CLIs. Nimrod preserves explicit spawned-CLI ownership, streaming, approvals and exact-ID Resume through the SDK's new configuration API. Protocol-3 CLIs, including 1.0.112 pinned for the earlier workaround, must be updated or replaced in Runtime settings. Installed-CLI/native acceptance remains pending.

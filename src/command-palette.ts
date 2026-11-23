@@ -22,6 +22,8 @@ export interface PaletteItem {
   inspection?: { fields: [string, string][]; text?: string };
   shortcut?: string;
   keywords?: string;
+  /** Keep an alternative action available even when the query matches no choices. */
+  alwaysVisible?: boolean;
   run(): void | Promise<void>;
   next?: boolean;
 }
@@ -52,6 +54,7 @@ export interface InspectionRequest {
 /** Explicitly retained interaction: selection updates its page instead of closing the shell. */
 export interface RetainedSelectionRequest {
   show(page: PalettePage, context: HTMLElement): void;
+  query(): string;
   remaining(text: string): void;
   focus(): void;
   isCurrent(): boolean;
@@ -171,7 +174,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   function validName(): boolean { return !!input.value.trim() && !/[\r\n\0]/.test(input.value) && !!matches[selected]; }
   function filterItems(values: PaletteItem[]): PaletteItem[] {
     const words = input.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-    return values.filter(item => words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
+    return values.filter(item => item.alwaysVisible || words.every(word => `${item.label} ${item.badge || ''} ${item.detail || ''} ${item.sessionRow ? sessionStatusPresentation(item.sessionRow.status).label : ''} ${item.sessionRow?.harnessLabel || ''} ${item.sessionRow?.open ? 'Open' : ''} ${item.projectOpen ? 'Open' : ''} ${item.keywords || ''}`.toLocaleLowerCase().includes(word)));
   }
   function draw(preserveScroll = false, preferredId = matches[selected]?.id): void {
     const oldRows = [...list.children] as HTMLElement[];
@@ -433,6 +436,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
         draw();
         if (!anotherDialog()) input.focus({ preventScroll: true });
       },
+      query() { return current() ? input.value : ''; },
       remaining(text) { if (current()) { remaining.textContent = text; remaining.hidden = !text; } },
       focus() { if (current() && !anotherDialog()) input.focus({ preventScroll: true }); },
       cancel() { if (current()) closeInteraction(); },

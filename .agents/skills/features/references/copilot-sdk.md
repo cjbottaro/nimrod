@@ -310,6 +310,7 @@ composer. The question is the context above searchable literal SDK choices;
 choosing one returns `{answer: choice, wasFreeform:false}` without rewriting it. Visual markers/grouping follow the shared [question row presentation](command-interactions.md#question-row-presentation); Ignore is not contributed by Copilot.
 When `allowFreeform !== false`, **Enter your own answer…** opens `Dialogs.input`
 above the unchanged picker, with the question as title and **Submit answer**.
+The shared [question row presentation](command-interactions.md#question-row-presentation) keeps that action available during filtering and carries typed text into the input, including when SDK choices are omitted or empty.
 Submitting non-whitespace text returns the exact input with `wasFreeform:true`.
 Blank input reports a session-owned notice and keeps the question pending.
 Cancel/Escape in the child returns to the same picker/filter without answering.

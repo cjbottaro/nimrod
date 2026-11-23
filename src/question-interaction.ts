@@ -5,7 +5,7 @@ export interface QuestionUi {
   document: Document;
   canPresent(): boolean;
   start(dismiss: () => void): RetainedSelectionRequest | undefined;
-  input(question: string): Promise<string | undefined>;
+  input(question: string, value?: string): Promise<string | undefined>;
   cancelInput(): void;
   changed(delta: number): void;
   banner(count: number, review: () => void): void;
@@ -100,7 +100,7 @@ export class QuestionInteraction {
     page.show({ items: [
       ...entry.choices.map((choice, index): PaletteItem => ({ id: String(index), label: choice.label, marker: 'bullet', group: 'answers', ...(choice.detail === undefined ? {} : { detail: choice.detail }),
         run: () => { if (this.canChoose(entry)) entry.finish({ answer: choice.label, wasFreeform: false }); } })),
-      ...(entry.freeform ? [{ id: 'freeform', label: 'Enter your own answer…', marker: 'pencil' as const, group: 'actions', run: () => this.enterAnswer(entry) }] : []),
+      ...(entry.freeform ? [{ id: 'freeform', label: 'Enter your own answer…', marker: 'pencil' as const, group: 'actions', alwaysVisible: true, run: () => this.enterAnswer(entry) }] : []),
       ...(entry.allowIgnore ? [{ id: 'ignore', label: 'Ignore question', marker: 'circle-slash' as const, group: 'actions', run: () => { if (this.canChoose(entry)) entry.finish(); } }] : []),
     ] }, entry.preview);
   }
@@ -109,7 +109,7 @@ export class QuestionInteraction {
     this.inputActive = true;
     const generation = ++this.inputGeneration;
     try {
-      const answer = await this.ui.input(entry.question);
+      const answer = await this.ui.input(entry.question, this.page?.query());
       if (generation !== this.inputGeneration) return;
       this.inputActive = false;
       if (!this.canChoose(entry)) return;

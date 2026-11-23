@@ -22,7 +22,7 @@ function fixture() {
   const interaction = new CodexQuestionInteraction({
     document, canPresent: () => selected && !document.querySelector('dialog[open]:not(#command-palette)'),
     start: dismiss => palette.startRetainedSelection('Codex question', dismiss),
-    input: () => new Promise(resolve => { child.returnValue = ''; answer.value = ''; child.addEventListener('close', () => resolve(child.returnValue === 'ok' ? answer.value : undefined), { once: true }); child.showModal(); answer.focus(); }),
+    input: (_question, value) => new Promise(resolve => { child.returnValue = ''; answer.value = value ?? ''; child.addEventListener('close', () => resolve(child.returnValue === 'ok' ? answer.value : undefined), { once: true }); child.showModal(); answer.focus(); }),
     cancelInput: () => { if (child.open) child.close('cancel'); }, changed: delta => { inputs += delta; },
     banner: (pending, reopen) => { count = pending; review = reopen; }, error: message => errors.push(message),
   });
@@ -52,7 +52,9 @@ test('Codex options constrain custom answers; free text uses the shared nested i
   const f = fixture(), owner = new AbortController();
   try {
     const pending = f.interaction.request(request([question('text', null)]), owner.signal);
+    f.input.value = '/work/repository'; f.input.dispatchEvent(new f.document.defaultView!.Event('input'));
     f.click('Enter your own answer…'); assert.equal(f.child.open, true); assert.equal(f.dialog.open, true);
+    assert.equal(f.answer.value, '/work/repository');
     f.child.close('cancel'); await tick(); assert.equal(f.count(), 1);
     f.click('Enter your own answer…'); f.answer.value = ' '; f.child.close('ok'); await tick(); assert.match(f.errors.at(-1)!, /non-empty/);
     f.click('Enter your own answer…'); f.answer.value = 'x'.repeat(CODEX_ANSWER_LIMIT + 1); f.child.close('ok'); await tick(); assert.match(f.errors.at(-1)!, /at most/);
@@ -106,8 +108,9 @@ test('Codex async questions distinguish choices, custom answers and Ignore witho
     assert.equal(rows[3].querySelector('svg circle')?.getAttribute('r'), '9');
     assert.equal(rows[3].querySelector('.palette-item-label')!.textContent, 'Ignore question');
     f.input.value = 'Ignore'; f.input.dispatchEvent(new win.Event('input'));
-    assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 2);
-    assert.equal(f.document.querySelector('#palette-list > [role=option]:last-child')!.classList.contains('palette-group-start'), true);
+    assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 3);
+    assert.equal(f.document.querySelector('#palette-list > [data-key=freeform]')!.classList.contains('palette-group-start'), true);
+    assert.equal(f.document.querySelector('#palette-list > [role=option]:last-child')!.classList.contains('palette-group-start'), false);
     f.input.value = 'Ignore question'; f.input.dispatchEvent(new win.Event('input'));
     assert.equal(f.document.querySelectorAll('.palette-group-start').length, 0);
     f.click('Ignore question'); assert.equal(await pending, undefined);

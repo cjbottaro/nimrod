@@ -41,6 +41,8 @@ Nested dialogs are different: a key recorder, Pi dialog or deletion review owns 
 
 [Copilot](copilot.md#answer-agent-questions) and [Codex](codex.md#structured-questions-and-experimental-protocol) share the same visual distinction: offered answers have **•** bullets, **Enter your own answer…** has a pencil icon, and supported **Ignore question** actions have a circle-slash icon. Utility actions are spaced slightly apart from the offered answers. These are visual markers, not keyboard shortcuts; filtering and arrows/Enter work as usual. Escape hides a pending question without answering it; its session banner lets you reopen it.
 
+When custom answers are allowed, **Enter your own answer…** stays available even if your text matches no offered answers or the question has no choices. You can type your answer into the picker, choose that action (or press Enter when it is the only result), then confirm the prefilled text with **Submit answer**.
+
 Custom-answer and other text-input dialogs start at one line and grow as you type, scrolling for longer text. **Enter** submits; **Shift+Enter** inserts a newline. **Cancel** or **Escape** closes the input without submitting; a nested custom answer returns to its Question picker.
 
 ## Ordering

@@ -40,7 +40,7 @@ export function copilotIntegrationUi(host: HarnessSessionHost) {
       const owner = `${host.id}:question-input`;
       questions ??= new CopilotQuestionInteraction({ document: ui.document, canPresent,
         start: dismiss => canPresent() ? ui.palette.startRetainedSelection('Copilot question', dismiss) : undefined,
-        input: question => ui.dialogs.input(question, undefined, owner, 'Submit answer'), cancelInput: () => ui.dialogs.cancel(owner),
+        input: (question, value) => ui.dialogs.input(question, value, owner, 'Submit answer'), cancelInput: () => ui.dialogs.cancel(owner),
         changed: effects.input, banner: (count, review) => banner('question', count, review), error: message => error('Answer question', message) });
       const choice = questions.request(request, signal); attention(signal); return choice;
     }

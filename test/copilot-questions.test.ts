@@ -26,8 +26,8 @@ function fixture() {
   const interaction = new CopilotQuestionInteraction({
     document, canPresent: () => selected && !document.querySelector('dialog[open]:not(#command-palette)'),
     start: dismiss => palette.startRetainedSelection('Copilot question', dismiss),
-    input: () => new Promise(resolve => {
-      child.returnValue = ''; answer.value = '';
+    input: (_question, value) => new Promise(resolve => {
+      child.returnValue = ''; answer.value = value ?? '';
       child.addEventListener('close', () => resolve(child.returnValue === 'ok' ? answer.value : undefined), { once: true });
       child.showModal(); answer.focus();
     }),
@@ -42,6 +42,7 @@ function fixture() {
       assert.ok(row, label); row.click();
     },
     query(value: string) { input.value = value; input.dispatchEvent(new win.Event('input')); },
+    enter() { input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); },
     escape() { input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); },
     nativeCancel() { dialog.dispatchEvent(new win.Event('cancel', { cancelable: true })); },
     reviewBanner() { assert.ok(reviewBanner, 'pending banner has a reopen action'); reviewBanner(); },
@@ -65,6 +66,38 @@ test('Copilot questions share decorative choice bullets and a separated custom-a
     f.query('Conversation'); f.click('Conversation only');
     assert.deepEqual(await pending, { answer: 'Conversation only', wasFreeform: false });
     assert.equal(f.draft.value, 'keep draft');
+  } finally { owner.abort(); f.dispose(); }
+});
+
+for (const choices of [undefined, [], ['Default repository']]) test(`typed custom answers stay available with ${choices === undefined ? 'omitted' : choices.length ? 'offered' : 'empty'} choices`, async () => {
+  const f = fixture(), owner = new AbortController();
+  const path = '  /Users/example/Work/awardmanagement-plans  ';
+  try {
+    const pending = f.interaction.request({ question: 'What is the local repository path?', ...(choices === undefined ? {} : { choices }) }, owner.signal);
+    f.query(path);
+    assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 1);
+    assert.equal(f.document.querySelector('#palette-list .palette-item-label')!.textContent, 'Enter your own answer…');
+    assert.doesNotMatch(f.document.querySelector('#palette-status')!.textContent!, /No matching/);
+    f.enter();
+    assert.equal(f.child.open, true); assert.equal(f.answer.value, path);
+    f.child.close('cancel'); await tick();
+    assert.equal(f.input.value, path); assert.equal(f.interaction.pendingCount, 1);
+    f.enter(); assert.equal(f.answer.value, path);
+    f.child.close('ok');
+    assert.deepEqual(await pending, { answer: path, wasFreeform: true });
+    assert.equal(f.draft.value, 'keep draft');
+  } finally { owner.abort(); f.dispose(); }
+});
+
+test('questions that forbid freeform never offer a custom answer for unmatched text', async () => {
+  const f = fixture(), owner = new AbortController();
+  try {
+    const pending = f.interaction.request({ question: 'Choose scope', choices: ['Default'], allowFreeform: false }, owner.signal);
+    f.query('/some/path'); f.enter();
+    assert.equal(f.child.open, false); assert.equal(f.interaction.pendingCount, 1);
+    assert.equal(f.document.querySelectorAll('#palette-list > [role=option]').length, 0);
+    f.query('Default'); f.enter();
+    assert.deepEqual(await pending, { answer: 'Default', wasFreeform: false });
   } finally { owner.abort(); f.dispose(); }
 });
 
