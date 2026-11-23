@@ -34,6 +34,7 @@ interface ShellOptions {
   acpCleanupError?: string;
   copilotStartError?: string;
   copilotLoadGate?: Promise<void>;
+  copilotTrustRequired?: boolean;
   copilotListError?: string;
   copilotListGate?: Promise<void>;
   copilotDeleteError?: string;
@@ -143,7 +144,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
   let activeConfig: JsonRecord = {};
   const sessions = new Map<string, { channel: typeof channel; config: JsonRecord; file: string; name?: string }>();
   const acpSessions = new Map<string, { channel: typeof channel; promptId?: unknown; sessionId?: string }>();
-  const sdkSessions = new Map<string, { channel: typeof channel; sessionId?: string }>();
+  const sdkSessions = new Map<string, { channel: typeof channel; sessionId?: string; resumed?: boolean }>();
   const codexSessions = new Map<string, { channel: typeof channel }>();
   let workspace = options.windowWorkspace;
   let selectedModel: JsonRecord | null = null;
@@ -373,12 +374,18 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           await options.copilotDeleteGate;
           if (options.copilotDeleteError) { send({ kind: 'result', id: request.id, error: options.copilotDeleteError }); return; }
           options.copilotHistory = options.copilotHistory?.filter(session => session.sessionId !== request.sessionId);
-        } else if (request.method === 'connect') {
-          await options.copilotLoadGate;
-          if (request.sessionId && options.harnessResumeError) { send({ kind: 'result', id: request.id, error: options.harnessResumeError }); return; }
-          target.sessionId = String(request.sessionId ?? 'sdk-fixture');
+        } else if (request.method === 'connect' || request.method === 'folder-trust') {
+          if (request.method === 'connect') {
+            await options.copilotLoadGate;
+            if (request.sessionId && options.harnessResumeError) { send({ kind: 'result', id: request.id, error: options.harnessResumeError }); return; }
+            target.sessionId = String(request.sessionId ?? 'sdk-fixture'); target.resumed = !!request.sessionId;
+            if (options.copilotTrustRequired) {
+              send({ kind: 'identified', sessionId: target.sessionId });
+              send({ kind: 'result', id: request.id, result: { trustRequired: true } }); return;
+            }
+          }
           send({ kind: 'connected', sessionId: target.sessionId, model: { modelId: 'fixture' }, models: [],
-            events: request.sessionId ? [
+            events: target.resumed ? [
               { id: 'saved-user', type: 'user.message', data: { content: 'Saved Copilot question' } },
               { id: 'saved-assistant', type: 'assistant.message', data: { messageId: 'saved-assistant', content: 'Saved Copilot answer' } },
             ] : [] });
@@ -2072,6 +2079,36 @@ test('SDK transcript logging uses the global setting and native append bridge fo
     assert.equal(f.calls.filter(call => call.command === 'start_copilot').length, starts);
     assert.equal(f.calls.some(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'prompt'), false);
     f.preferences.external('{}'); await f.tick();
+  } finally { f.win.close(); }
+});
+
+for (const trust of [false, true]) test(`restored Copilot prompts for native folder trust on project open without sending work (${trust})`, async () => {
+  const scope = copilotSdkScope('selected');
+  const f = await fixture(undefined, { windowWorkspace: '/project', copilotTrustRequired: true,
+    nativeDrafts: { [scope]: { draft: 'Restored trust draft', recovered: [] } },
+    appState: { 'nimrod.tabs.v1:/project': { tabs: [{ kind: 'copilot-sdk', sessionId: 'selected', name: 'Selected' }], active: scope } } });
+  try {
+    await f.tick(); await f.tick();
+    const picker = f.element<HTMLDialogElement>('command-palette');
+    const draft = f.element<HTMLTextAreaElement>('prompt'), host = draft.closest('.session-view')!;
+    const writes = () => f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
+    assert.equal(picker.open, true); assert.equal(f.element('palette-title').textContent, 'Copilot folder trust');
+    assert.match(f.element('palette-context').textContent!, /\/project/);
+    assert.equal(draft.value, 'Restored trust draft');
+    assert.match(host.querySelector('.notice-pending')!.textContent!, /Waiting for folder trust.*Review folder trust/s);
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, true);
+    f.element('palette-input').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(picker.open, false); assert.equal(writes().some(message => message.method === 'folder-trust'), false);
+    host.querySelector<HTMLButtonElement>('.notice-pending button')!.click(); await f.tick();
+    const label = trust ? 'Trust for this and future sessions' : 'Continue without trust';
+    const row = [...f.element('palette-list').querySelectorAll<HTMLElement>('[role=option]')].find(row => row.querySelector('.palette-item-label')?.textContent === label);
+    assert.ok(row); row.click(); await f.tick(); await f.tick();
+    assert.deepEqual(writes().filter(message => message.method === 'folder-trust').map(message => message.trust), [trust]);
+    assert.deepEqual(writes().filter(message => message.method === 'connect').map(message => message.sessionId), ['selected']);
+    assert.equal(writes().some(message => ['prompt', 'command', 'configure'].includes(String(message.method))), false);
+    assert.equal(picker.open, false); assert.equal(draft.value, 'Restored trust draft');
+    assert.equal(f.element<HTMLButtonElement>('send').disabled, false);
+    assert.equal(host.querySelector('.notice-pending > .application-notice'), null);
   } finally { f.win.close(); }
 });
 

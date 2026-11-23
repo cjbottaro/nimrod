@@ -268,6 +268,7 @@ fn validate_message(value: &Value) -> Result<(), String> {
             }) && value.get("input").is_none_or(|input| input.is_string()) => {}
         Some("rename") if value["name"].as_str().is_some_and(|name|
             !name.trim().is_empty() && name.trim().chars().count() <= 100 && !name.chars().any(char::is_control)) => {}
+        Some("folder-trust") if value["trust"].is_boolean() => {}
         Some("prompt") => validate_prompt(value)?,
         Some("configure")
             if matches!(

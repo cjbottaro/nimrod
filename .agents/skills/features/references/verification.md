@@ -494,6 +494,21 @@ SQL card visual polish adds compact write-report and sanitized highlighted-query
 
 Read-only, user-authorized inspection of the October 18, 2026 CLI 1.0.98 transcript logs found the screenshot's built-in `sql` start/completion pair and surrounding task creation/final SELECT. This verifies the input/result/telemetry shapes and task bookkeeping in that conversation, not the new UI. A scrubbed pair is retained in `test/fixtures/copilot/sql/`; new `test/copilot-sql-cards.test.ts` DOM fixtures are authored **unrun**. No test suite, live prompt, SQL execution, app build/launch or session/log mutation was performed for this implementation. The mandatory post-merge TypeScript/Rust compile check is separate from automated-test/native acceptance. The [cookbook](../../../../docs/builtin-card-cookbook.md) supplies manual recipes; none was executed here. Native macOS/Linux visual/focus/scroll acceptance and recipe/tool availability remain unverified. [SQL contract](card-plugins.md#copilot-sql-cards).
 
+## Copilot folder trust
+
+Source review of the pinned SDK 2.0.0 public declarations establishes session-scoped
+`permissions.folderTrust.isTrusted/addTrusted` and `customizations.reload`;
+upstream documentation lists `.claude/settings.json` in the shared repository
+plugin-settings subset. The new trust UI, bridge, native-boundary and shell
+fixtures are authored **unrun**. No real session was created/resumed, trust state
+changed, plugin installed, model prompt sent, app built/launched or browser used
+for this task. Mandatory post-merge compilation is recorded separately; it is not
+behavioral acceptance. Installed CLI 1.0.113 plugin activation after a grant,
+trust interoperability with the CLI, managed policy, reload side effects and
+native macOS/Linux modal/focus/dismissal remain user acceptance work.
+[Copilot folder trust](copilot-sdk.md#native-folder-trust-and-plugin-configuration)
+owns the contract and fixture map.
+
 ## Current automated validation
 
 Copilot context-picker alignment: unknown current tiers now stay undefined in the

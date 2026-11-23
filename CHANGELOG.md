@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Copilot asks whether to trust an untrusted project folder before the session becomes ready, including a restored session on project open. **Trust for this and future sessions** saves Copilot's native folder trust and reloads its configuration/plugins, including supported `.claude/settings.json` plugin defaults; **Continue without trust** leaves trust unchanged. Escape preserves the pending choice behind **Review folder trust**. Existing CLI trust is respected; no blanket tool approval is granted. Installed-runtime/native acceptance remains pending.
+
 - **Diagnostic logs** in global Settings → Diagnostics provides an independent, opt-in metadata-only trace of Copilot startup/Resume, runtime identity, public model snapshots, context reads and Nimrod's context-window display decision. Correlated local files reuse bounded nonblocking logging and rotation without recording prompts, reasoning, tool contents or credentials, fetching extra metadata or persisting session state.
 
 - **Customize Nimrod…** lets a connected session's agent customize the UI from any project, without a Nimrod checkout or repository skills. A separate modal previews installed-app authoring guidance and submits it with the user's request as one ordinary message, preserving the existing Composer draft and normal harness permissions. Bundled guides/defaults/public card examples use resolved installation paths; the supplied brief stays collapsed in the Transcript and reconstructs from history. The action is bindable with no default shortcut; native and packaging acceptance remain pending.

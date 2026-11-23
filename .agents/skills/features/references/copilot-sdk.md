@@ -79,6 +79,67 @@ reapplies current user defaults. Authored bridge/configuration fixtures cover
 manual/assisted/allow-all/unset, rejection, mismatched confirmation and Resume;
 installed-runtime/native acceptance remains pending.
 
+### Native folder trust and plugin configuration
+
+`enabledPlugins` and `extraKnownMarketplaces` belong to Copilot's native supported
+cross-tool repository settings, including `.claude/settings.json` and
+`.claude/settings.local.json`. See the upstream [configuration reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference)
+and SDK [2.0.0 runtime release notes](https://github.com/microsoft/copilot-sdk/releases/tag/v2.0.0).
+Configuration discovery is not a directory-trust grant. Nimrod neither parses
+these files nor copies project plugin choices into global settings or injects
+plugin roots.
+
+The bridge opens the **actual intended** new/exact resumed session with the
+existing discovery/recovery options and publishes `identified` immediately.
+The pinned SDK exposes trust lookup/mutation on a session, not a sessionless
+client. Before `connected`, it calls
+`session.rpc.permissions.folderTrust.isTrusted({path:cwd})`. An already-trusted
+folder follows normal setup; an untrusted folder returns `{trustRequired:true}`
+from `connect` without publishing readiness. No throwaway session, model request,
+CLI config-file parsing or Nimrod trust database is introduced. History-only
+clients never create sessions or ask for trust.
+
+`CopilotSession.initialize` awaits the retained UI outside any outstanding RPC
+request/deadline. `src/copilot/folder-trust.ts` maps a concrete persistent-trust
+choice onto the shared `QuestionInteraction` presentation, without inventing an
+agent question event or transcript answer card. `integration-ui.ts` owns the
+**Copilot folder trust** picker and session-local **Waiting for folder trust** /
+**Review folder trust** banner. Escape dismisses presentation only; background
+navigation, higher-priority dialogs, owner abort and disposal use the existing
+retained-modal guards. No draft/navigation effects repeat on acceptance.
+
+The explicit `folder-trust` bridge operation accepts only a boolean; its native
+permission target is always the bridge's canonical cwd, never a renderer path.
+**Trust for this and future sessions** calls
+`permissions.folderTrust.addTrusted({path:cwd})`, checks `success` and a fresh
+`isTrusted`, then calls `session.rpc.customizations.reload()` to reconcile native
+instructions/plugins/skills/agents/hooks/MCP/extensions under the new trust
+state. Returned component failures/errors block readiness, warnings use session
+notices without clearing commands, and skipped components are not claimed loaded.
+**Continue without trust** does not write trust or reload; normal native untrusted
+behavior remains. Tool approvals and independent repository-hook opt-ins are not
+changed by this feature. The SDK's `filesystem.trustWorkingDirectory:'session'`
+is create-only and unavailable on Resume; this post-open flow does not offer a
+session-only grant it cannot honor.
+
+While unready, bridge conversation operations are rejected; only the one pending
+folder-trust choice may finish setup. The identity survives lookup/grant/reload
+failure; disconnect/Close retires the picker and rejects stale consent. There is
+no automatic retry, new-session replacement, prompt replay or global trust write
+without explicit choice. Startup restoration may therefore ask for trust in its
+selected Copilot session; opening a Pi-only or empty project does not start
+Copilot or ask for its trust. Readiness is an authorization/native-configuration
+boundary, not a general RPC-success UI gate.
+
+Fixtures: `test/copilot-folder-trust.test.ts` (retained UI, explicit choices,
+background/dismiss/reopen/abort and no human-interaction RPC timeout),
+`test/copilot-bridge.test.ts` / `test/fixtures/copilot-sdk.mjs` (new/Resume trusted
+and untrusted setup, native grant confirmation, post-grant plugin discovery,
+failures and no work/replacement), `test/shell.test.ts` (restored project-open
+prompt/banner/draft/ready routing), and `src-tauri/src/copilot_tests.rs` (explicit
+boolean validation). [Verification](verification.md#copilot-folder-trust) owns
+execution evidence and installed-runtime/native acceptance gaps.
+
 ## Distribution and native ownership
 
 - `copilot/bridge.mjs` imports the bundled official SDK, its concrete

@@ -82,6 +82,8 @@ class Session {
   mode = process.env.NIMROD_FIXTURE_COPILOT_MODE || 'interactive';
   configured = false;
   permissionMode = 'manual';
+  trusted = (process.env.NIMROD_FIXTURE_COPILOT_TRUST || 'trusted') === 'trusted';
+  trustGranted = false;
   totalNanoAiu = 0;
   commandCatalog = [
     // Captured CLI metadata; the extra alias is synthetic alias-routing coverage.
@@ -94,7 +96,33 @@ class Session {
       set: async ({ name }) => { this.sessionName = name; this.emit('session.title_changed', { title: name }); },
       get: async () => ({ name: this.sessionName }),
     },
+    customizations: { reload: async () => {
+      assert.equal(this.trustGranted, true, 'reload only follows an explicit confirmed persistent grant');
+      const state = process.env.NIMROD_FIXTURE_COPILOT_TRUST;
+      if (state === 'reload-error') throw new Error('Fixture reload unavailable');
+      if (state === 'reload-invalid') return {};
+      if (state === 'reload-failed') return { errors: [], warnings: [], outcomes: [{ subsystem: 'plugins', status: 'failed', detail: 'Fixture plugins failed' }] };
+      this.commandCatalog.push({ name: 'trusted-plugin', description: 'Fixture trusted folder plugin', kind: 'prompt', allowDuringAgentExecution: false });
+      this.emit('session.info', { infoType: 'fixture', message: 'Fixture trusted configuration reloaded' });
+      return { errors: [], warnings: [], outcomes: [{ subsystem: 'plugins', status: 'reloaded' }] };
+    } },
     permissions: {
+      folderTrust: {
+        isTrusted: async ({ path }) => {
+          assert.equal(path, this.config.workingDirectory);
+          if (process.env.NIMROD_FIXTURE_COPILOT_TRUST === 'malformed') return {};
+          if (process.env.NIMROD_FIXTURE_COPILOT_TRUST === 'check-error') throw new Error('Fixture trust lookup unavailable');
+          return { trusted: this.trusted };
+        },
+        addTrusted: async ({ path }) => {
+          assert.equal(path, this.config.workingDirectory);
+          assert.equal(this.trustGranted, false, 'never retry a trust mutation');
+          this.trustGranted = true;
+          if (process.env.NIMROD_FIXTURE_COPILOT_TRUST === 'rejected') return { success: false };
+          if (process.env.NIMROD_FIXTURE_COPILOT_TRUST !== 'unconfirmed') this.trusted = true;
+          return { success: true };
+        },
+      },
       getMode: async () => ({ mode: this.permissionMode }),
       setMode: async ({ mode, source }) => {
         assert.equal(this.saved, false, 'Resume must never reapply permission defaults');

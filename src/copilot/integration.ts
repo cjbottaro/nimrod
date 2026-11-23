@@ -101,6 +101,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       },
       notice: message => { if (valid() && !lifetime.closing()) effects.notice({ id: `copilot:${++sequence}`, operation: 'Copilot', message }); },
       decision: (kind, request, signal) => valid() ? ui.decision(kind, request, signal) : Promise.resolve(undefined),
+      trustFolder: signal => valid() ? ui.trustFolder(signal) : Promise.resolve(undefined),
       commandChoice: (title, choices, signal) => valid() ? ui.commandChoice(title, choices, signal) : Promise.resolve(undefined),
       commandInput: (title, signal) => valid() ? ui.commandInput(title, signal) : Promise.resolve(undefined),
       disconnected: message => {

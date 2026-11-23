@@ -6,8 +6,8 @@ import { CopilotSession } from '../src/copilot/session';
 import { createTranscriptLog } from '../src/transcript-logs';
 import { createDiagnosticLog } from '../src/diagnostic-logs';
 
-function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete', contextState = 'default') {
-  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState, NIMROD_FIXTURE_COPILOT_CONTEXT_STATE: contextState } });
+function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) => void, modelState = 'resolved', defaults: Record<string, unknown> = { model: 'small', effortLevel: 'low' }, usageState = 'complete', contextState = 'default', trustState = 'trusted') {
+  const child = spawn(process.execPath, ['--import', './test/fixtures/copilot-sdk-register.mjs', 'copilot/bridge.mjs', '/fixture/copilot', '/fixture/project'], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NIMROD_FIXTURE_COPILOT_MODE: mode, NIMROD_FIXTURE_COPILOT_MODEL_STATE: modelState, NIMROD_FIXTURE_COPILOT_DEFAULTS: JSON.stringify(defaults), NIMROD_FIXTURE_COPILOT_USAGE_STATE: usageState, NIMROD_FIXTURE_COPILOT_CONTEXT_STATE: contextState, NIMROD_FIXTURE_COPILOT_TRUST: trustState } });
   const packets: Record<string, any>[] = [], pending = new Map<string, { resolve(value: any): void; reject(error: Error): void }>();
   const waiting = new Set<{ predicate(packet: Record<string, any>): boolean; resolve(packet: Record<string, any>): void; reject(error: Error): void }>();
   let stderr = '', sequence = 0;
@@ -46,6 +46,53 @@ function bridge(mode = 'interactive', receive?: (packet: Record<string, any>) =>
     },
   };
 }
+for (const resumed of [false, true]) for (const trust of [false, true])
+  test(`Copilot folder trust gates ${resumed ? 'Resume' : 'creation'} readiness and reloads native plugins only on consent (${trust})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, 'resolved', undefined, 'complete', 'default', 'untrusted');
+    try {
+      await f.request('initialize');
+      await assert.rejects(f.request('folder-trust', { trust: true }), /No Copilot folder-trust/);
+      assert.deepEqual(await f.request('connect', resumed ? { sessionId: 'fixture-sdk' } : {}), { trustRequired: true });
+      assert.equal(f.packets.filter(packet => packet.kind === 'identified').length, 1);
+      assert.equal(f.packets.some(packet => packet.kind === 'connected'), false);
+      await assert.rejects(f.request('prompt', { text: 'must not run' }), /still connecting/);
+      await assert.rejects(f.request('command', { name: 'permissions', input: 'allow-all' }), /still connecting/);
+      await assert.rejects(f.request('connect'), /already owns/);
+      await assert.rejects(f.request('folder-trust', { trust: 'user' }), /explicit folder-trust choice/);
+      await f.request('folder-trust', { trust });
+      assert.equal(f.packets.filter(packet => packet.kind === 'connected').length, 1);
+      assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.data?.message === 'Fixture trusted configuration reloaded'), trust);
+      assert.equal(f.packets.some(packet => packet.kind === 'commands' && packet.commands.some((command: any) => command.name === 'trusted-plugin')), trust);
+      assert.equal(f.packets.some(packet => packet.kind === 'event' && packet.event.type === 'user.message'), false);
+      await assert.rejects(f.request('folder-trust', { trust: true }), /No Copilot folder-trust/);
+    } finally { await f.close(); }
+  });
+
+for (const state of ['malformed', 'check-error', 'rejected', 'unconfirmed', 'reload-error', 'reload-failed', 'reload-invalid'])
+  test(`Copilot trust setup fails closed without replacement or a prompt (${state})`, { timeout: 5000 }, async () => {
+    const f = bridge('interactive', undefined, 'resolved', undefined, 'complete', 'default', state);
+    try {
+      await f.request('initialize');
+      if (state === 'malformed' || state === 'check-error') await assert.rejects(f.request('connect'), /trust/);
+      else {
+        assert.deepEqual(await f.request('connect'), { trustRequired: true });
+        await assert.rejects(f.request('folder-trust', { trust: true }), /trust|reload|plugins/);
+      }
+      assert.equal(f.packets.filter(packet => packet.kind === 'identified').length, 1);
+      assert.equal(f.packets.some(packet => packet.kind === 'connected' || packet.kind === 'event' && packet.event.type === 'user.message'), false);
+      await assert.rejects(f.request('prompt', { text: 'must not run' }), /still connecting/);
+    } finally { await f.close(); }
+  });
+
+test('already trusted Copilot folders connect without a trust decision or reload', { timeout: 5000 }, async () => {
+  const f = bridge();
+  try {
+    await f.request('initialize'); assert.equal(await f.request('connect'), null);
+    assert.equal(f.packets.filter(packet => packet.kind === 'connected').length, 1);
+    await assert.rejects(f.request('folder-trust', { trust: true }), /No Copilot folder-trust/);
+  } finally { await f.close(); }
+});
+
 test('Copilot diagnostic metadata captures exact Resume configuration separately and stays off by default', { timeout: 5000 }, async () => {
   const off = bridge();
   try {

@@ -3,6 +3,7 @@ import { commandInteraction } from '../command-interaction';
 import { CopilotPermissionInteraction } from './permission-interaction';
 import { CopilotQuestionInteraction } from './question-interaction';
 import { CopilotPlanInteraction } from './plan-interaction';
+import { CopilotFolderTrust } from './folder-trust';
 import type { CopilotDecision } from './session';
 import type { HarnessSessionHost } from '../harness-host';
 
@@ -52,12 +53,28 @@ export function copilotIntegrationUi(host: HarnessSessionHost) {
       changed: effects.input, banner: (count, review) => banner('plan', count, review), error: message => error('Plan feedback', message) });
     const choice = plans.request(request, signal); attention(signal); return choice;
   }
+  const folderTrust = new CopilotFolderTrust(host.project, {
+    document: ui.document, canPresent,
+    start: dismiss => canPresent() ? ui.palette.startRetainedSelection('Copilot folder trust', dismiss) : undefined,
+    input: async () => undefined, cancelInput() {}, changed: effects.input,
+    banner(count, review) {
+      if (!count) { effects.resolve('folder-trust-required'); return; }
+      effects.notice({ id: 'folder-trust-required', operation: 'Copilot folder trust', message: 'Waiting for folder trust',
+        presentation: 'pending-action', severity: 'info', dismissible: false,
+        actions: [{ label: 'Review folder trust', enabled: canPresent, run: review }] });
+    },
+    error: message => error('Copilot folder trust', message),
+  });
   const commands = commandInteraction(host);
   return {
     decision,
+    async trustFolder(signal: AbortSignal) {
+      if (signal.aborted || !valid()) return;
+      const choice = folderTrust.request(signal); attention(signal); return await choice;
+    },
     commandChoice: commands.choice,
     commandInput: commands.input,
-    setActive(active: boolean) { permissions?.setActive(active); questions?.setActive(active); plans?.setActive(active); },
-    dispose() { permissions?.dispose(); questions?.dispose(); plans?.dispose(); },
+    setActive(active: boolean) { folderTrust.setActive(active); permissions?.setActive(active); questions?.setActive(active); plans?.setActive(active); },
+    dispose() { folderTrust.dispose(); permissions?.dispose(); questions?.dispose(); plans?.dispose(); },
   };
 }

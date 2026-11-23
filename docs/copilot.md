@@ -31,10 +31,42 @@ fix the executable/authentication issue, then reconnect explicitly.
 ## Configuration discovery
 
 New and resumed sessions explicitly enable Copilot's native configuration
-discovery, including skills. Copilot decides which configuration sources are
-supported and how they are combined; Nimrod does not maintain a separate skill
-search path. Use `/skills list` to inspect the connected session's catalog.
-Discovery parity with the interactive CLI still needs native verification.
+discovery, including skills and plugins. Copilot decides which configuration
+sources are supported and how they are combined; Nimrod does not maintain a
+separate search path or interpret Claude settings itself. Copilot supports the
+cross-tool `enabledPlugins` and `extraKnownMarketplaces` settings in a project's
+`.claude/settings.json` and `.claude/settings.local.json`, subject to its own
+trust and managed policy. Use `/skills list` to inspect the connected session's
+skill catalog. Discovery parity with the interactive CLI still needs native
+verification.
+
+### Folder trust
+
+When a Copilot session connects to an untrusted folder, Nimrod shows **Trust this
+folder for Copilot?** before making the session ready. This also applies when
+opening a project restores its selected Copilot session. Merely opening a project
+without connecting Copilot does not ask for Copilot trust.
+
+- **Trust for this and future sessions** saves the folder grant in Copilot's own
+  trust state, shared with its CLI, then reloads Copilot's configuration and
+  plugins. Folder configuration and plugins may execute code; this is not blanket
+  approval for tool requests.
+- **Continue without trust** connects without granting trust. Folder-controlled
+  configuration/plugins may remain unavailable. A later reconnect checks again.
+- **Escape** hides the picker without deciding. **Waiting for folder trust →
+  Review folder trust** reopens it; the session remains unready and your draft
+  stays intact. Background sessions never open a trust modal over another session.
+
+Already-trusted folders do not prompt again. Nimrod does not keep a separate
+trusted-folder list or copy Claude plugin enablement into global Copilot settings.
+The SDK's post-connection trust API supports persistent grants, so this picker
+has no session-only trust option. It checks the actual intended session—there
+is no throwaway conversation or model request. If saving trust or reloading
+configuration fails, Nimrod keeps the saved identity and draft and reports the
+failure; it does not send anything or substitute a new session.
+
+Installed-CLI plugin activation and native macOS/Linux modal acceptance remain
+pending.
 
 ## Permissions and questions
 

@@ -49,6 +49,7 @@ export interface CopilotSessionUi {
   completed(failed: boolean, response?: string): void;
   notice(message: string): void;
   decision(kind: 'permission' | 'input' | 'plan', request: Record<string, unknown>, signal: AbortSignal): Promise<CopilotDecision | undefined>;
+  trustFolder?(signal: AbortSignal): Promise<boolean | undefined>;
   commandChoice?(title: string, choices: readonly CommandChoice[], signal: AbortSignal): Promise<string | undefined>;
   commandInput?(title: string, signal: AbortSignal): Promise<string | undefined>;
   transcriptLog?: TranscriptLogSink;
@@ -189,7 +190,19 @@ export class CopilotSession {
     this.initialUsage = initialCopilotUsage(sessionId === undefined);
     const status = await this.connection.request('initialize');
     if (record(status) && typeof status.version === 'string') this.runtimeVersion = status.version;
-    await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
+    const result = await this.connection.request('connect', sessionId === undefined ? {} : { sessionId });
+    if (record(result) && result.trustRequired === true) {
+      const signal = this.decisions.signal;
+      if (this.ended || signal.aborted) throw new Error('Copilot disconnected during folder-trust setup.');
+      if (!this.ui.trustFolder) throw new Error('Copilot requires a folder-trust choice, but its picker is unavailable.');
+      this.state = { ...this.state, status: 'Waiting for folder trust…' }; this.publish([]);
+      // Human interaction has no transport deadline. Dismissal stays pending;
+      // disconnect/owner disposal aborts without granting or sending anything.
+      const trust = await this.ui.trustFolder(signal);
+      if (this.ended || signal.aborted || trust === undefined) throw new Error('Copilot folder-trust setup was interrupted.');
+      this.state = { ...this.state, status: 'Connecting Copilot…' }; this.publish([]);
+      await this.connection.request('folder-trust', { trust });
+    }
     if (this.state.sessionUnavailable) throw new Error('Copilot did not publish a connected session');
   }
   readonly messageInput: SessionMessageInput = {
@@ -498,6 +511,8 @@ export class CopilotSession {
       this.commands = copilotCommands(packet.commands); this.publish([]);
     } else if (packet.kind === 'command-error') {
       this.commands = []; this.publish([]); this.ui.notice(String(packet.error));
+    } else if (packet.kind === 'configuration-warning') {
+      this.ui.notice(String(packet.message));
     } else if (packet.kind === 'event') this.event(packet.event);
     else if (packet.kind === 'permission' || packet.kind === 'input' || packet.kind === 'plan') {
       if (typeof packet.id !== 'string' || !record(packet.request)) throw new Error('Invalid Copilot decision request');

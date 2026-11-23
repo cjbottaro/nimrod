@@ -24,6 +24,17 @@ fn diagnostics_flag_is_optional_and_boolean_without_adding_a_harness_operation()
 }
 
 #[test]
+fn folder_trust_requires_an_explicit_boolean_choice() {
+    for trust in [true, false] {
+        assert!(validate_message(&json!({"id":"trust","method":"folder-trust","trust":trust})).is_ok());
+    }
+    for trust in [json!(null), json!("user"), json!(1), json!({})] {
+        assert!(validate_message(&json!({"id":"trust","method":"folder-trust","trust":trust})).is_err());
+    }
+    assert!(validate_message(&json!({"id":"trust","method":"folder-trust"})).is_err());
+}
+
+#[test]
 fn rename_validates_the_sdk_name_limits() {
     assert!(validate_message(&json!({"id":"one","method":"rename","name":"Friendly name"})).is_ok());
     for name in ["".to_string(), " ".into(), "two\nlines".into(), "x".repeat(101)] {

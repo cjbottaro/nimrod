@@ -25,7 +25,8 @@ function observeDiagnostic(event, metadata) {
     if (data !== undefined) send({ kind: 'diagnostic', event, data });
   } catch { /* Optional metadata capture never changes the SDK operation. */ }
 }
-let session, connecting = false, closing = false, initialized = false;
+let session, pendingConnection, connecting = false, closing = false, initialized = false;
+let sessionReady = false;
 let checkingHealth = false;
 let replaying = false, buffered = [];
 let commandRefresh;
@@ -103,6 +104,40 @@ async function membership(id) {
   if (await retention(id) !== 'saved')
     throw new Error('This exact saved session is not listed in this project. Nothing was loaded or deleted.');
 }
+async function folderTrusted() {
+  const result = await session.rpc.permissions.folderTrust.isTrusted({ path: cwd });
+  if (typeof result?.trusted !== 'boolean') throw new Error('Copilot did not confirm this folder’s trust state.');
+  return result.trusted;
+}
+async function finishConnection({ defaults, permissionMode }) {
+  if (closing) throw new Error('Copilot connection closed during setup.');
+  if (defaults !== undefined) await configuration.initializePermissions(session, permissionMode);
+  const mode = await session.rpc.mode.get();
+  const events = await session.getEvents();
+  const model = await configuration.snapshot(session, defaults);
+  const models = await client.listModels();
+  if (closing) throw new Error('Copilot connection closed during setup.');
+  observeDiagnostic('model.catalog', models.find(item => item.id === model.modelId));
+  // Publish history first in this ordered channel; no work is sent during setup.
+  send({ kind: 'connected', sessionId: session.sessionId, events, model, mode, models });
+  const seen = new Set(events.map(item => item.id));
+  for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
+  buffered = []; replaying = false; sessionReady = true;
+  try { await refreshCommands(); }
+  catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
+}
+async function trustFolder() {
+  // The target is always this bridge's canonical project, never a renderer path.
+  const result = await session.rpc.permissions.folderTrust.addTrusted({ path: cwd });
+  if (result?.success !== true || !await folderTrusted()) throw new Error('Copilot did not confirm folder trust.');
+  const reload = await session.rpc.customizations.reload();
+  if (!reload || !Array.isArray(reload.errors) || !Array.isArray(reload.warnings) || !Array.isArray(reload.outcomes)
+    || reload.outcomes.some(item => !item || !['reloaded', 'skipped', 'failed'].includes(item.status)))
+    throw new Error('Copilot returned an invalid configuration reload result after trusting this folder.');
+  const failures = [...reload.errors, ...reload.outcomes.filter(item => item.status === 'failed').map(item => item.detail || 'A configuration component failed to reload.')];
+  if (failures.length) throw new Error(`Folder trust was saved, but Copilot could not reload its configuration: ${failures.join('; ')}`);
+  for (const warning of reload.warnings) send({ kind: 'configuration-warning', message: String(warning) });
+}
 function promptImages(value) {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 8) throw new Error('Invalid image attachments');
@@ -152,7 +187,20 @@ async function dispatch(message) {
     return status;
   }
   if (!initialized) throw new Error('Copilot bridge is not initialized');
+  if (session && !sessionReady && !['connect', 'folder-trust'].includes(message.method))
+    throw new Error('Copilot is still connecting; resolve folder trust before using this session.');
   switch (message.method) {
+    case 'folder-trust': {
+      if (!session || !pendingConnection || connecting) throw new Error('No Copilot folder-trust decision is pending.');
+      if (typeof message.trust !== 'boolean') throw new Error('An explicit folder-trust choice is required.');
+      connecting = true;
+      const pending = pendingConnection; pendingConnection = undefined;
+      try {
+        if (message.trust) await trustFolder();
+        await finishConnection(pending);
+      } finally { connecting = false; }
+      return;
+    }
     case 'retention': return await retention(message.sessionId);
     case 'list': return (await client.listSessions({ workingDirectory: cwd })).filter(item => !item.isRemote && item.context?.workingDirectory === cwd);
     case 'delete':
@@ -182,23 +230,15 @@ async function dispatch(message) {
         observeDiagnostic('session.connect.completed', { ...attempt, returnedSessionId: session.sessionId });
         if (message.sessionId !== undefined && session.sessionId !== message.sessionId) throw new Error('Copilot resumed a different session');
         send({ kind: 'identified', sessionId: session.sessionId });
-        if (message.sessionId === undefined) await configuration.initializePermissions(session, permissionMode);
-        const mode = await session.rpc.mode.get();
-        const events = await session.getEvents();
-        // Use honored creation inputs only while the initial SDK snapshot omits
-        // them. Later root events/configuration results remain authoritative.
-        const model = await configuration.snapshot(session, defaults);
-        const models = await client.listModels();
-        observeDiagnostic('model.catalog', models.find(item => item.id === model.modelId));
-        // History and streamed events share IDs. Publish replay first, synchronously
-        // in this channel, before any events received while getEvents was in flight.
-        send({ kind: 'connected', sessionId: session.sessionId, events, model, mode, models });
-        const seen = new Set(events.map(item => item.id));
-        for (const item of buffered) if (!seen.has(item.id)) eventAfterReplay(item);
-        buffered = []; replaying = false;
-        // Command discovery is optional: failure must not disable ordinary chat.
-        try { await refreshCommands(); }
-        catch (error) { send({ kind: 'command-error', error: `Command discovery failed: ${failure(error)}` }); }
+        const pending = { defaults, permissionMode };
+        if (!await folderTrusted()) {
+          pendingConnection = pending;
+          // Return before human interaction: the ordinary RPC deadline must not
+          // time out a dismissed/background trust picker. Keep the actual exact
+          // session identity, but do not publish readiness or accept user work.
+          return { trustRequired: true };
+        }
+        await finishConnection(pending);
         return;
       } finally { connecting = false; }
     }
