@@ -97,6 +97,7 @@ function createAcpSession(host: HarnessSessionHost, _request: SessionRequest, pr
       async control(id) { const option = backend.session?.controlOption(id); if (!option) throw new Error('This ACP option is no longer available'); await pick(option); } },
     presentation: { snapshot: () => ({ harnessLabel: `${profile.name} ACP`, badge: `${profile.name} · ACP POC`, badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.client.phase === 'working', compacting: false, queuePending: false, destructiveBusy: backend.session?.state.busy === true }) },
+    mcp: undefined,
     commands: bindSessionCommands(() => backend.session?.slashCommands, () => lifetime.current() && !owner.starting && !owner.ended && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()),
     naming: { async rename() { throw new Error('Rename session is not supported by this ACP integration.'); } },
     // This dormant adapter has no saved-identity/Resume implementation.

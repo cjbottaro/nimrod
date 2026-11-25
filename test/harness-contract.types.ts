@@ -36,6 +36,10 @@ function compileAssertions(session: HarnessSession, project: HarnessProject, reg
   // @ts-expect-error Discovery alone cannot stand in for invocation/lifetime handling.
   const incompleteCommands: HarnessSession['commands'] = { catalog: commands.catalog };
   void incompleteCommands;
+  const { mcp, ...withoutMcp } = session;
+  // @ts-expect-error Sessions must explicitly supply MCP inspection or declare it unsupported.
+  defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutMcp }) });
+  void mcp;
   const { naming, ...withoutNaming } = session;
   // @ts-expect-error Every factory must supply an executable naming consumer port.
   defineHarness({ ...registration, create: () => ({ ...project, create: () => withoutNaming }) });

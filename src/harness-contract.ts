@@ -61,8 +61,8 @@ export interface HarnessSession {
   readonly reload: SessionReload;
   readonly naming: SessionNaming;
   readonly commands: import('./session-commands').SessionCommands;
-  /** Read-only MCP inspection for sessions whose integration supplies a catalog. */
-  readonly mcp?: import('./mcp-inspector').SessionMcpInspector;
+  /** Read-only MCP inspection; integrations without a catalog explicitly return undefined. */
+  readonly mcp: import('./mcp-inspector').SessionMcpInspector | undefined;
   /** Live integration-owned removal candidate, independent of conversation connection
    * or a local saved-history flag. The catalog/source validates native scope.
    * Undefined explicitly means unsupported, not merely disconnected.

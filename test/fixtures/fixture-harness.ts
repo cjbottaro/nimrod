@@ -79,6 +79,7 @@ function session(host: HarnessSessionHost, request: SessionRequest, remember: (r
       } }, async handle(message) { if (message.type !== 'stop') throw new Error('Unsupported fixture operation'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Fixture', badge: 'Fixture', badgeTitle: '', busy: false, working: false, pending: false, compacting: false, queuePending: false, destructiveBusy: false }) },
     configuration: noConfiguration,
+    mcp: undefined,
     commands: unsupportedCommands('The fixture has no command catalog.'),
     actions: { current: () => [{ id: 'harness-fixture-question', label: 'Display fixture question', detail: 'Display-only unsupported interaction', async run() {
       displayUnsupportedInteraction(host, { id: 'fixture-question', title: 'Fixture question', text: 'Which option should the agent use?', raw: { choices: ['A', 'B'] } });
