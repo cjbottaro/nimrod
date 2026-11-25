@@ -207,7 +207,7 @@ interface Tab {
   inputCount: number; unread: boolean; failed: boolean; focus?: HTMLElement; notice: HTMLElement;
   notices: ReturnType<typeof installApplicationNotices>;
   cancelPreference?: () => void;
-  closeButton: HTMLButtonElement; pinButton: HTMLButtonElement;
+  closeButton: HTMLButtonElement; pinButton: HTMLButtonElement; mcpButton: HTMLButtonElement;
   row: HTMLButtonElement; rowLabel: HTMLElement; rowIndicator: HTMLElement; rowTime: HTMLTimeElement; rowHarness: HTMLElement; rowNode: HTMLElement;
 }
 function stored(key: string): unknown {
@@ -872,6 +872,11 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
   // Retain stable semantic hooks for CSS and root-scoped lookup, with unique DOM/ARIA IDs.
   for (const node of root.querySelectorAll<HTMLElement>('[id]')) { node.dataset.piId = node.id; node.id = `${id}-${node.id}`; }
   const notice = document.createElement('div'); notice.className = 'tab-notice'; notice.hidden = true; root.append(notice);
+  const mcpButton = button(actionDefinition('mcp').label, () => {
+    if (presentation.current === tab) void runSessionAction(tab, 'mcp');
+  });
+  mcpButton.className = 'ghost-button mcp-inspector-action'; mcpButton.hidden = true;
+  root.querySelector('[data-pi-id="activity"]')!.append(mcpButton);
   conversation.append(root);
   const sessionNotices = installApplicationNotices(window, notices.store, { owner: id, container: root });
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
@@ -903,7 +908,7 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
     get token() { return owner.token; }, set token(value) { owner.token = value; },
     get starting() { return owner.starting; }, set starting(value) { owner.starting = value; },
     get ended() { return owner.ended; }, set ended(value) { owner.ended = value; },
-    lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
+    lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, mcpButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
     drafts: drafts.fork(), closing: false, reloading: false, deleting: false, deletionExecuting: false,
     awaitingSelection: false, inputCount: 0, unread: false, failed: false,
     view: { userTextLifetime: {}, validateUserText: () => 'Session view is not ready', submitUserText() { throw new Error('Session view is not ready'); },
@@ -1007,7 +1012,6 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
         else if (typeof message.id === 'string') void integration.actions.control(message.id).catch(error => { if (tabs.includes(tab)) notices.report({ id: `${tab.id}:control:${++noticeSequence}`, owner: tab.id, operation: 'Session control', message: String(error) }); });
         return;
       }
-      if (message.type === 'inspectMcp') { void runSessionAction(tab, 'mcp'); return; }
       void integration.conversation.handle(message).catch(error => showNotice(tab, String(error)));
     },
   }, root);
@@ -1062,6 +1066,8 @@ function updateTabPresentation(tab: Tab): void {
   tab.root.setAttribute('aria-busy', String(tab.integration.conversation.state?.busy === true));
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
+  tab.mcpButton.hidden = !isConnected(tab) || !tab.integration.actions.current().some(action => action.id === 'mcp');
+  tab.mcpButton.disabled = locked(tab);
   tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading;
   tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
   tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));

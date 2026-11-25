@@ -153,7 +153,7 @@ work; it does not mean Codex lacks an API. Nothing below authorizes live probes.
 | `/statusline` | Terminal-only | TUI status-line setup, not Nimrod's Status area. |
 | `/theme` | Terminal-only | TUI syntax theme picker, not Nimrod Appearance. |
 | `/pets` (`/pet`) | Terminal-only | TUI pet/visibility behavior; do not imply portable desktop parity. |
-| `/mcp` | Partial | Thread-scoped paginated tools/auth report and `verbose` implemented; OAuth `login` is explicitly rejected. Discovery may contact configured MCP servers. |
+| `/mcp` | Excluded | Thread-scoped paginated inspection is exposed through [MCP servers…](../../features/references/mcp-inspector.md), not the composer. |
 | `/apps` | Candidate, feature/account gated | Native app catalog/management, not just a list; discovery/account/configuration effects require bounded review. |
 | `/plugins` | Candidate, feature/account gated | Native plugin browsing/install/marketplaces; distinguish remote discovery from persistent mutations. |
 | `/logout` | Deliberately excluded | Account-wide credential mutation outside the current desktop authentication boundary. |

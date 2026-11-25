@@ -358,6 +358,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           const params = request.params as JsonRecord;
           send({ id: request.id, result: { cwd: workspace, thread: { id: params.threadId ?? 'codex-fixture', cwd: workspace,
             ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture', reasoningEffort: 'low' } });
+        } else if (options.codexConversation && request.method === 'mcpServerStatus/list') {
+          send({ id: request.id, result: { data: [{ name: 'fixture-mcp', authStatus: 'oAuth', runtimeStatus: 'connected',
+            tools: { query: { description: 'Find entries' } }, resources: [{ name: 'Fixture index', uri: 'fixture://index' }], resourceTemplates: [] }], nextCursor: null } });
         } else if (options.codexConversation && ['model/list', 'thread/turns/list'].includes(String(request.method))) {
           send({ id: request.id, result: { data: [], nextCursor: null } });
         } else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
@@ -5646,7 +5649,7 @@ test('Copilot native skills work in the shared browser and composer slash comple
   } finally { f.win.close(); }
 });
 
-test('MCP inspector routes palette and composer entries to the same session without status notices', async () => {
+test('MCP inspector routes palette and Status area entries to the same session without invoking slash text', async () => {
   const f = await fixture(undefined, { mcpReport: 'ado: connected, 40 tools (codemode)\nplaywright: failed (codemode)\n    spawn playwright ENOENT' });
   try {
     f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
@@ -5664,17 +5667,41 @@ test('MCP inspector routes palette and composer entries to the same session with
     assert.equal(f.element('session-notices').hidden, true);
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.win.document.activeElement, prompt);
-    prompt.value = '/mcp'; prompt.dispatchEvent(new f.win.Event('input'));
-    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    await f.tick(); await f.tick(); // An exact command submits on the first Enter.
-    assert.equal(prompt.value, '');
+    const button = f.element('activity').querySelector<HTMLButtonElement>('.mcp-inspector-action')!;
+    assert.equal(button.hidden, false); button.click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
-    assert.equal(f.element('session-notices').hidden, true);
+    assert.equal(String(prompt.value), 'Keep this draft');
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+    prompt.focus(); prompt.value = '/mcp'; prompt.dispatchEvent(new f.win.Event('input'));
+    assert.equal(f.element('slash-suggestions').hidden, true);
+    prompt.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick();
+    assert.equal(String(prompt.value), '/mcp');
+    assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+    assert.match(f.element('session-notices').textContent!, /MCP slash commands are unavailable/);
     const prompts = f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt');
-    assert.equal(prompts.length, 2);
+    assert.equal(prompts.length, 2, 'only inspector actions issue Pi’s internal status request');
     assert.ok(prompts.every(call => (call.args.message as JsonRecord).message === '/mcp'));
     f.disconnect(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
+  } finally { f.win.close(); }
+});
+
+test('Codex MCP action uses the connected thread and shows reported tools and auth without sending', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
+  try {
+    const input = f.element<HTMLInputElement>('palette-input');
+    f.openPalette(); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="codex"]')!.click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.value = 'Unsent'; prompt.dispatchEvent(new f.win.Event('input'));
+    const button = f.element('activity').querySelector<HTMLButtonElement>('.mcp-inspector-action')!;
+    assert.equal(button.hidden, false); button.click(); await f.tick(); await f.tick();
+    assert.equal(f.element('palette-title').textContent, 'MCP servers');
+    assert.match(f.element('palette-inspection').textContent!, /Auth: oAuth.*query: Find entries.*fixture:\/\/index/s);
+    const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
+    assert.deepEqual(requests.find(request => request.method === 'mcpServerStatus/list')?.params, { threadId: 'codex-fixture', detail: 'full', limit: 100 });
+    assert.equal(requests.some(request => request.method === 'turn/start' || request.method === 'turn/steer'), false);
+    assert.equal(prompt.value, 'Unsent');
   } finally { f.win.close(); }
 });
 

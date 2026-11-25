@@ -7,9 +7,9 @@ import { skillUserText } from '../skill-invocation';
 import { slashCommands } from './slash-completion';
 import type { PiViewState } from './view-state';
 import type { HarnessActionContribution as SessionAction } from '../harness-contract';
+import { mcpSlashUnavailable } from '../mcp-inspector';
 
 export const piSessionActions: readonly SessionAction[] = [
-  { id: 'mcp', label: 'MCP servers…', detail: 'Inspect this Pi session’s MCP connections, exposure and reported errors' },
   { id: 'model', label: 'Select model…', detail: 'Choose the model for this session' },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', detail: 'Choose the thinking level for this session' },
 ];
@@ -26,7 +26,7 @@ export const piInteraction: ConversationInteraction = {
     const compact = /^\/compact(?:\s+([\s\S]*))?$/.exec(text);
     if (/^\/(?:resume|delete|new|fork|clone|tree|reload|quit)(?:\s|$)/.test(text)) return { kind: 'reject', error: 'Use the project session controls for session management. This slash operation is not supported; nothing was sent.' };
     if (compact && (state.sessionUnavailable || state.busy || state.inputLocked)) return { kind: 'reject', error: 'Manual compaction is available only while Pi is idle. Your draft was kept.' };
-    if (text === '/mcp') return { kind: 'local', message: { type: 'inspectMcp' } };
+    if (/^\/mcp(?:\s|$)/i.test(text)) return { kind: 'reject', error: mcpSlashUnavailable };
     if (compact) return { kind: 'request', message: { type: 'compact', customInstructions: compact[1]?.trim() || undefined }, preview: false, navigate: false };
     return { kind: 'request', message: { type: 'prompt' }, preview: !text.startsWith('/'), navigate: !/^\/name(?:\s|$)/.test(text) };
   },

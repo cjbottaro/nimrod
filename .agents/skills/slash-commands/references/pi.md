@@ -29,8 +29,7 @@ than an ordinary Send lifecycle. Unknown/unadvertised commands reject locally.
 | --- | --- | --- | --- | --- | --- |
 | `/name [name]` | Nimrod completion entry; Pi command semantics | Pi naming RPC; bare command collects a name | Authoritative rename updates session title/history; no Send navigation | Pi-specific presentation/submission handling; not a Nimrod Rename action | Source/fixtures; native acceptance follows general Pi status |
 | `/compact [focus]` | Nimrod completion entry | Intercepted to Pi's supported compact RPC at authoritative idle | Compaction activity/input lock, context/history changes and Status-area updates | Concrete Pi adapter required because compaction has lifecycle beyond ordinary prompt submission | Source/fixtures; live compaction requires explicit authorization |
-| Bare `/mcp` | Pi reports builtin; Nimrod recognizes exact builtin identity | Read-only Pi RPC report, not prompt submission | Opens Nimrod MCP inspector; no model turn, recency or transcript navigation | Documented Pi-specific adapter | Source/offline fixtures; native acceptance pending |
-| `/mcp <subcommand>` | Pi-reported | Normal Pi command submission | Harness-defined output/effects | Generic Pi submission; never redirected to MCP inspector | Source/fixtures |
+| `/mcp` and subcommands | Omitted | Rejected locally | Draft retained; use **MCP servers…** for inspection | No composer dispatch; Pi’s internal status query is inspector-owned | Source/fixtures |
 | Extension command | Pi-reported dynamic catalog | Normal Pi command submission | Unknown until extension behavior/events are observed | Advertised-only native command dispatch; RPC UI compatibility is extension-dependent | Catalog/source only; audit per extension when claiming support |
 | Prompt template | Pi-reported dynamic catalog | Normal Pi command submission | Usually expands/sends harness work | Generic pass-through | Catalog/source; concrete templates vary |
 | Skill command | Pi-reported dynamic catalog | Normal Pi command submission | Skill disclosure/turn presentation when Pi reports invocation | Generic pass-through plus Pi skill presentation | Source/fixtures; installed skills vary |
@@ -44,6 +43,6 @@ than an ordinary Send lifecycle. Unknown/unadvertised commands reject locally.
 - Verify commands that mutate title, model, thinking, context, queue or
   extensions through authoritative Pi snapshots/events.
 - Do not infer an extension command's semantics from its name or description.
-- Keep `/name`, `/compact` and bare `/mcp` concrete behavior distinct from
-  similarly named Nimrod actions.
+- Keep `/name` and `/compact` behavior distinct from similarly named Nimrod
+  actions.
 

@@ -13,7 +13,8 @@ import type { ConversationState } from './types';
 import type { SessionFile } from './session-file';
 import { PiSessionHistory } from './session-history';
 import { piSessionDeletion } from './session-deletion';
-import { piInspection } from './integration-inspection';
+import { piMcpPage } from './integration-inspection';
+import { createMcpInspector, mcpAction } from '../mcp-inspector';
 import type { SessionDeletion, DeletionSnapshot, DeletionEvent } from '../session-deletion';
 import { bundledToolRenderer } from './card-plugins/registry';
 import { startupAvailability } from '../harness-availability';
@@ -117,7 +118,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   };
   const backend: { session?: PiSession } = {}, projection = createPiViewProjection();
   const stopToken = ownedProcessStop(token => invoke('stop_pi', { token }));
-  const inspection = piInspection(host, () => backend.session);
+  const inspection = createMcpInspector(host, () => backend.session, piMcpPage);
   let sequence = 0, initialName = request.mode !== 'resume' ? request.initialName : undefined;
   const lifecycle = piSessionLifecycle(() => owner, backend, { connect, stop: stopToken,
     gate: () => saved.blocked(owner.file?.path) ? 'unavailable' : saved.locked(owner.file?.path) || lifetime.deleting() || !ready() ? 'blocked' : 'ready' });
@@ -137,7 +138,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       sessionFile: mode === 'resume' ? owner.file?.path : undefined, sessionId: mode === 'resume' ? owner.file?.sessionId || undefined : undefined };
     let launchInfo: PiLaunchInfo, identityGeneration = 0, confirmedRaw: { path: string; sessionId: string } | undefined, shellState: ConversationState | undefined, initialized = false;
     const current = new PiSession(rpc, {
-      transcriptLog: host.transcriptLog, performance: host.performance, active: lifetime.selected, commandInteraction: commandInteraction(host), inspectMcpCommand: inspection.command,
+      transcriptLog: host.transcriptLog, performance: host.performance, active: lifetime.selected, commandInteraction: commandInteraction(host),
       publish: message => { if (currentToken()) publish(message); },
       notice: (message, severity, cause) => { if (currentToken() && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()) effects.notice({ id: `pi:${++sequence}`, cause, operation: 'Pi operation', message, severity }); },
       attention: (kind, response) => { if (currentToken()) effects.attention(kind, token, backend.session?.state.sessionName || 'Session', response); },
@@ -212,7 +213,7 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   };
   return {
     lifecycle, drafts: { durability: request.mode === 'temporary' ? 'memory' : 'persistent' }, conversation: conversationPort(host, readView, piInteraction), presentation: { snapshot }, configuration: { current: () => backend.session?.configuration },
-    actions: { current: () => configurationActions(piSessionActions.map(action => action.id === 'mcp' ? { ...action, run: inspection.run } : action), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
+    actions: { current: () => configurationActions([...piSessionActions, ...(lifecycle.connection === 'connected' ? [{ ...mcpAction, run: inspection.run }] : [])], { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
     deletion: { current: () => {
       const reference = lifecycle.identity;
       return reference ? { kind: 'saved', reference } : { kind: 'close' };
@@ -244,6 +245,6 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
       if (last?.path && last.path === owner.file?.path) project.store.save(lastKey, null);
     } },
     close: request.mode === 'temporary' ? temporaryClose : savedClose,
-    interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
+    interactions: { setActive(active) { if (!active) { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); } }, references: { file: () => owner.mode !== 'temporary' && owner.file?.exists ? { path: owner.file.path, sessionId: owner.file.sessionId } : undefined },
   };
 }

@@ -1011,9 +1011,6 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const submission = host.interaction.prepare(text, displayedState);
     if (submission.kind === 'reject') { updateComposer({ ...composer, lastError: submission.error }); return; }
     if (displayedState.sessionUnavailable || displayedState.inputLocked || (!text && !composer.attachments?.length)) return;
-    if (submission.kind === 'local') {
-      updateComposer(clearDraft(composer)); host.postMessage(submission.message); return;
-    }
     const id = `submission-${Date.now()}-${++nextSubmissionId}`;
     const submittedText = composer.draft;
     const generation = composerGeneration;

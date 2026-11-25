@@ -75,9 +75,9 @@ adapters and authoritative effects remain here. Command output renders inside
 the retained invocation card, and explicit agent-prompt transitions keep that
 card separately from native conversation history. New/updated fixtures are unrun.
 
-This feature applies to **Copilot SDK sessions**. Pi's existing `/name`,
-`/compact` and bare `/mcp` interception remains unchanged; removing it requires a
-separate Pi contract change. Generic ACP keeps advertised-only passthrough; the Copilot ACP integration has been removed.
+This feature applies to **Copilot SDK sessions**. `/mcp` is omitted from the
+composer catalog; see [MCP inspector](mcp-inspector.md). Generic ACP keeps
+advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name
 handlers. This is not universal CLI/TUI parity. Advertised command intent is

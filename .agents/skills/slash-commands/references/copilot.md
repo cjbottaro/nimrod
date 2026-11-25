@@ -37,7 +37,7 @@ Canonical protocol/lifecycle: [Copilot commands](../../features/references/copil
 | `/fleet` | — | Agent orchestration/activity | Unaudited; model-backed |
 | `/init` | — | Repository instructions/files/settings | **Partial/generic observed**: bare returns typed `agent-prompt`; suppress returns text without project/session files; actual model-backed initialization remains unaccepted |
 | `/list-dirs` | — | Transcript permission/path report | **Generic observed**: text output; no state events or adapter |
-| `/mcp` | — | MCP configuration/status | **Partial/generic observed**: `list` and no-server `show` return text with no state events; configured-server show and enable/disable/reload remain unaudited |
+| `/mcp` | — | MCP configuration/status | **Omitted**: prior `list` and no-server `show` returned text with no state events; not a structured inspector source |
 | `/memory` | — | Cross-session memory setting/status | **Generic observed**: show/on/off return Markdown; on/off change isolated user settings, with no Nimrod memory projection |
 | `/model` | `/models` | Model, effort, defaults/Plan model | **Source implemented narrow adapter**: bare picker and exact enabled live-model completion compensate for CLI `completed` gaps; richer syntax passes through; latest native acceptance pending |
 | `/permissions` | — | Permission policy | **Generic observed**: show/default/allow-all and **Set permissions…** use one command owner; advertised live-use controls dispatch and native permission events reconcile state |

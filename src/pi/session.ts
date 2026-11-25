@@ -15,6 +15,7 @@ import { SessionStatsController } from './session-stats-controller';
 import { MODEL_SCOPE_STATUS, parseModelScope, scopedModels, type ModelReference } from './pi-model-scope';
 import { TranscriptUpdates } from './transcript-updates';
 import { isBuiltinMcpCommand, parseMcpStatus, type McpStatusReport } from './mcp-status';
+import { mcpSlashUnavailable } from '../mcp-inspector';
 import type { AgentMessage, ConversationState, JsonRecord } from './types';
 import type { HostMessage } from './webview-client';
 
@@ -25,7 +26,6 @@ export interface PreferencePicker {
 
 export interface SessionUi {
   commandInteraction?: CommandInteraction;
-  inspectMcpCommand?(signal: AbortSignal): Promise<void>;
   transcriptLog?: TranscriptLogSink;
   performance?: PerformanceProbe;
   active?(): boolean;
@@ -131,6 +131,7 @@ export class PiSession {
     if (this.disconnected || this.state.sessionUnavailable) return 'Connect Pi before invoking commands. Your draft was kept.';
     const invocation = parseCommand(text);
     if (!invocation || /^(resume|delete|new|fork|clone|tree|reload|quit)$/i.test(invocation.name)) return 'Use the project session controls for session management. Nothing was invoked; your draft was kept.';
+    if (invocation.name.toLowerCase() === 'mcp') return mcpSlashUnavailable;
     if (!findCommand(this.slashCommands.catalog().commands, invocation.name)) return 'This command is not advertised by Pi. Nothing was invoked; your draft was kept.';
   }
   private async runCommand(id: string, text: string, signal: AbortSignal, dispatched: () => void): Promise<void | boolean> {
@@ -151,11 +152,6 @@ export class PiSession {
       } else if (invocation.name.toLowerCase() === 'compact') {
         if (signal.aborted) return false;
         dispatch(); await this.compact({ id, customInstructions: invocation.input }, true);
-      } else if (invocation.name.toLowerCase() === 'mcp' && !invocation.input?.trim()) {
-        if (signal.aborted) return false;
-        dispatch();
-        if (this.ui.inspectMcpCommand) await this.ui.inspectMcpCommand(signal);
-        else this.commandQueue.output(JSON.stringify(await this.inspectMcp(), null, 2));
       } else {
         // Refresh advertisement before native command dispatch. Pi's command entry
         // point is prompt RPC; this is not an unknown-command chat fallback.

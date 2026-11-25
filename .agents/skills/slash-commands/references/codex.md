@@ -24,7 +24,6 @@ is implied: unsupported native APIs fail explicitly on their Command card.
 | `/model [model-id]` | Connected advertised model catalog; literal ID completion and bare picker | Refresh `model/list`, validate exact ID, `thread/settings/update` through concrete configuration adapter; require acknowledgement plus native effective settings | Model selection only; native combined effort picker/richer syntax remains partial. Live-settings runtime acceptance pending. Outer token whitespace ignored. |
 | `/rename [name]` | Connected-thread entry, bare text input | Nonempty single-line name; exact-thread `thread/name/set`, ordered name reconciliation and requested-name confirmation | Conflicting newer name is not overwritten or claimed as this command's success. No generated-name model request. |
 | `/compact` | No arguments; accepted during work, dispatched at native idle | `thread/compact/start` only acknowledges enqueued work. Wait for the identified native turn, canonical `contextCompaction` item and terminal result; failed/interrupted/missing-marker outcomes are not success | May use the model when explicitly invoked by the user. No `turn/start`, hidden prompt, optional focus grammar, polling or automatic retry. Composer locks during compaction; Stop uses the actual identified turn. |
-| `/mcp [verbose]` | Read-only metadata; native `verbose` literal only | Exact-thread `mcpServerStatus/list`, native `toolsAndAuthOnly` or `full`, complete pagination with cursor-cycle detection | Tools/auth/runtime report; verbose adds descriptions/resources. Discovery can contact configured MCP servers. OAuth `login` is rejected before draft clearing. Not the Pi MCP inspector. |
 | `/status` | No arguments | Metadata-only `thread/read`, exact bound identity/cwd, native model/name/status and last reported usage | Partial native status report: no account quotas, monetary estimate or full permission/configuration parity. Does not hydrate or replace history. |
 | `/pwd` (alias `/cwd`) | No arguments; native enum alias | Same exact-thread metadata-only read, return verified cwd | Never changes the project/window directory. |
 | `/ps` | No arguments | Exact-thread `thread/backgroundTerminals/list`, complete pagination | Read-only process-ID/command/cwd report; no OS scan, termination, or resource-metric parity claim. Native `/stop` is a different background-terminal mutation, not Nimrod Stop. |
@@ -32,6 +31,8 @@ is implied: unsupported native APIs fail explicitly on their Command card.
 | `/hooks` | Explicitly labelled read-only catalog subset | `hooks/list {cwds:[exactProject]}`, matching project entry; show native handler/event/trust/enabled state and diagnostics | Partial: no hook execution, editor or trust/configuration mutation. |
 
 ## Readiness, ownership and outcomes
+
+MCP reports moved to the [MCP inspector action](../../features/references/mcp-inspector.md); `/mcp` is not a composer command.
 
 Model/rename/compact wait for native idle plus configuration readiness. Report
 commands advertise supported live-use, following the native source's busy rules;

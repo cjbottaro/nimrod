@@ -149,7 +149,7 @@ test('Codex command catalog and model picker use native configuration, not promp
   } });
   try {
     await f.session.initialize(cwd);
-    assert.deepEqual(f.session.slashCommands.catalog().commands.map(command => command.name), ['model', 'rename', 'compact', 'mcp', 'status', 'pwd', 'ps', 'skills', 'hooks']);
+    assert.deepEqual(f.session.slashCommands.catalog().commands.map(command => command.name), ['model', 'rename', 'compact', 'status', 'pwd', 'ps', 'skills', 'hooks']);
     const commands = f.session.slashCommands;
     await commands.invoke({ id: 'model', text: '/model' });
     assert.equal(commands.operations.at(-1)?.phase, 'completed');
@@ -201,7 +201,7 @@ test('Codex command disconnect after mutation dispatch reports uncertainty and n
   assert.equal(f.sent.filter(packet => packet.method === 'thread/name/set').length, 1);
 });
 
-for (const command of ['status', 'pwd', 'cwd', 'ps', 'mcp', 'mcp verbose', 'skills', 'hooks']) test(`Codex /${command} uses scoped read-only native APIs and one Command card during work`, async () => {
+for (const command of ['status', 'pwd', 'cwd', 'ps', 'skills', 'hooks']) test(`Codex /${command} uses scoped read-only native APIs and one Command card during work`, async () => {
   const f = fixture();
   try {
     await f.session.initialize(cwd); f.event('turn/started', { turn: turn() });
@@ -221,7 +221,7 @@ test('Codex rejects unsupported report arguments and mutation variants before in
   const f = fixture();
   try {
     await f.session.initialize(cwd); const count = f.sent.length;
-    for (const text of ['/mcp login secret-server', '/skills enable all', '/hooks trust all', '/pwd elsewhere', '/compact focus', '/stop']) {
+    for (const text of ['/mcp', '/mcp verbose', '/mcp login secret-server', '/skills enable all', '/hooks trust all', '/pwd elsewhere', '/compact focus', '/stop']) {
       assert.ok(f.session.slashCommands.validate(text));
       await assert.rejects(f.session.slashCommands.invoke({ id: text, text }));
     }
@@ -234,10 +234,9 @@ test('Codex report pagination rejects repeated cursors rather than settling a pa
     reply({ data: [], nextCursor: 'repeat' }); return true;
   });
   try {
-    await f.session.initialize(cwd); await f.session.slashCommands.invoke({ id: 'mcp', text: '/mcp' });
-    const operation = f.session.slashCommands.operations.at(-1)!;
-    assert.equal(operation.phase, 'failed'); assert.match(operation.inlineError!, /pagination cursor/);
-    assert.equal(operation.commandOutput, undefined);
+    await f.session.initialize(cwd);
+    await assert.rejects(f.session.inspectMcp(() => true), /pagination cursor/);
+    assert.deepEqual(f.session.slashCommands.operations, []);
     assert.equal(f.sent.filter(packet => packet.method === 'mcpServerStatus/list').length, 2);
   } finally { f.session.disconnect('done'); }
 });

@@ -28,6 +28,7 @@ export function copilotCommands(raw: unknown): CopilotCommand[] {
   if (!Array.isArray(raw)) return commands;
   for (const value of raw) {
     if (!record(value) || !name(value.name) || seen.has(value.name.toLowerCase()) || !['builtin', 'skill', 'client'].includes(String(value.kind))) continue;
+    if (value.name.toLowerCase() === 'mcp') continue;
     seen.add(value.name.toLowerCase());
     const input = record(value.input) && typeof value.input.hint === 'string' ? {
       hint: value.input.hint,
@@ -44,7 +45,7 @@ export function copilotCommands(raw: unknown): CopilotCommand[] {
     const configValues = configValueMap(value.configValues);
     commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command',
       source: value.kind === 'skill' ? 'Skill' : 'Agent',
-      kind: value.kind as CopilotCommand['kind'], aliases: Array.isArray(value.aliases) ? value.aliases.filter(name) : [],
+      kind: value.kind as CopilotCommand['kind'], aliases: Array.isArray(value.aliases) ? value.aliases.filter(name).filter(alias => alias.toLowerCase() !== 'mcp') : [],
       allowDuringAgentExecution: value.allowDuringAgentExecution === true, input, configValues });
   }
   return commands;

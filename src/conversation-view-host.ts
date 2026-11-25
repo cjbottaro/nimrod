@@ -21,7 +21,6 @@ export interface ConversationViewState {
 }
 export type PreparedSubmission =
   | { kind: 'reject'; error: string }
-  | { kind: 'local'; message: Record<string, unknown> }
   | { kind: 'request'; message: Record<string, unknown>; preview: boolean; navigate: boolean };
 export interface ConversationInteraction {
   readonly label: string;

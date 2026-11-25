@@ -69,7 +69,7 @@ draft and are not sent as chat. [Codex](codex.md#slash-commands) and
 own catalogs and native execution semantics.
 
 - `/name` names the session.
-- Bare `/mcp` opens the read-only [MCP inspector](mcp.md), without a model request, conversation turn, sidebar-recency bump or transcript navigation. Explicit subcommands still go to Pi.
+- Use **MCP servers…** to open the [MCP inspector](mcp.md); `/mcp` is not a composer command.
 - `/compact` executes at idle and may include optional instructions. If submitted during work, its Command card waits for idle.
 - Automatic and manual compaction are visible and lock the composer until complete.
 - Session-management commands such as `/resume` and Pi's `/reload` are unavailable; use Nimrod's session actions instead. Unsupported commands are rejected rather than silently sent as chat.

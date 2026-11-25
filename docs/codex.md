@@ -104,7 +104,7 @@ Type `/` for the commands supported by the connected Codex integration:
 - `/model` opens the Codex model picker; `/model <model-id>` selects an exact advertised ID.
 - `/rename` asks for a session name; `/rename <name>` renames the connected thread.
 - `/compact` asks Codex to compact the conversation. It may use the model; the card waits for native compaction completion, not just request acknowledgement. There is no optional focus argument. The composer locks while it runs, and Stop targets the identified compaction turn.
-- `/mcp` reports Codex's MCP servers, tools and authentication state; `/mcp verbose` adds descriptions and resources. Discovery may contact configured MCP servers. MCP login/configuration changes are not supported here.
+- Use [**MCP servers…**](mcp.md) to inspect Codex’s MCP servers, tools, resources and authentication state. `/mcp` is not a composer command.
 - `/status` reports thread/model details and last reported token usage—not account quotas or a complete configuration dump.
 - `/pwd` (also `/cwd`) shows the verified thread working directory; it never changes the project.
 - `/ps` lists the thread's background terminals without stopping them or scanning OS processes.
@@ -127,6 +127,6 @@ the draft intact, never submitted as a model prompt.
 
 ## Current differences
 
-Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker, live permission-policy editing and Pi's MCP inspector are not provided by this integration yet. Native compaction and the MCP slash report are available as described above. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
+Codex app-server does not advertise the CLI's complete slash-command catalog. Plan/Autopilot controls, a context-tier picker and live permission-policy editing are not provided by this integration yet. Native compaction and the read-only MCP inspector are available as described above. Unknown native item types keep raw details; command output and file changes have dedicated shared-component presentations.
 
 See [Sessions](sessions.md), [Drafts](drafts.md), [Reading conversations](reading-conversations.md) and [Error messages](error-messages.md) for the shared workspace behavior.

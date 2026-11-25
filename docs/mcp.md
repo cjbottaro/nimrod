@@ -1,22 +1,13 @@
 # MCP inspector
 
-Run **`/mcp`** in the composer, or choose **MCP servers…** in the command palette, to inspect the visible session’s MCP servers. The palette entry leaves your draft untouched; submitting `/mcp` consumes only that command. The action has no default shortcut, but you can assign one in [Keybindings](keybindings.md).
+Choose **MCP servers…** in the command palette or click **MCP servers…** in the Status area of a connected Pi or Codex session. You can assign a shortcut in [Keybindings](keybindings.md); there is no default. `/mcp` is not a Nimrod composer command.
 
-- Search server names, connection states, exposure, or reported diagnostics.
-- Use arrow keys, hover, or click to select a server. Its details appear beneath the list; Enter does not execute an operation or close the inspector.
-- Servers needing attention appear first. Details show the reported connection state, exposure, tool count when available, and complete connection error text supplied by Pi.
-- **Refresh** explicitly requests another snapshot. **Back** returns to commands; **Escape** closes the interaction and restores prior focus.
+- Search the reported servers and select a row to see its details. Selecting a server does not run an operation.
+- **Refresh** requests another snapshot. **Back** returns to commands; **Escape** closes the inspector and restores prior focus.
+- Inspection preserves your draft and works while the agent is working. It does not send a model request, add a turn, change session recency, or navigate the transcript.
 
-Inspection works while the main agent is working. It does not request a model response, add a conversation turn, move the session in the sidebar, or navigate the transcript. Streaming continues underneath the inspector. The report goes into the inspector, not the session-issue list; independent startup warnings and other extension notices remain unchanged.
+Pi’s built-in MCP integration reports connection state, exposure, counts, and diagnostics. It does not report individual tools, and a server’s tool count does not imply all its tools are exposed to the model. Missing counts are shown as unavailable. Replacement Pi MCP extensions are not interpreted or run by the inspector. If Pi’s status delivery becomes uncertain or unrecognized, reload the session before trying again; Nimrod does not replay the request.
 
-## First-version limits
+Codex reports runtime and authentication state separately, plus tools and resources. Inspecting them can contact configured servers. Copilot does not currently offer the inspector.
 
-This is a **read-only snapshot**, not a live MCP manager. It supports Pi’s built-in MCP integration only. Replacement MCP extensions are not interpreted or run by the inspector.
-
-Pi’s RPC `/mcp` report exposes server state, server-level exposure, counts, and diagnostics, but not individual tool descriptions, per-tool exposure overrides, configuration sources, transport details, or stderr beyond what that report includes. A connected server’s tool count does not imply all its tools are declared to the model. A missing count is shown as unavailable, not zero.
-
-There are no reconnect, sign-in, enable/disable, or configuration-editing buttons in this version. Existing explicit `/mcp` subcommands continue through Pi’s normal command path. Inspection itself does not fix connection problems or modify Pi configuration.
-
-If status delivery becomes uncertain or the report format is unrecognized, Nimrod does not automatically replay the request. It reports the failure to the originating session; reload that session before another inspection attempt after an uncertain status request.
-
-Native appearance, focus and installed-Pi behavior still need user validation; Linux behavior is intended, not platform-verified.
+The inspector is read-only. Use the harness TUI for sign-in or reauthentication and the harness’s own tools for configuration changes. Native validation is pending.

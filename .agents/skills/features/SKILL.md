@@ -110,7 +110,7 @@ References own specifications, acceptance criteria, code maps, state/lifecycle, 
 | Global conversation/code font families and sizes, installed-font pickers, previews and content-only reflow | [Typography](references/typography.md) | [Typography settings](../../../docs/settings.md#typography) |
 | Bindable actions, recorder and conflicts | [Keybindings](references/keybindings.md) | [Keybindings](../../../docs/keybindings.md) |
 | Skills browser, read-only discovery and composer staging | [Skills browser](references/composer.md#skills-browser) | [Writing messages](../../../docs/writing-messages.md#slash-commands-and-compaction) |
-| Read-only built-in Pi MCP status inspection | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
+| Read-only Pi/Codex MCP status inspection and session action | [MCP inspector](references/mcp-inspector.md) | [MCP inspector](../../../docs/mcp.md) |
 | Dismiss-and-resume: pending agent decisions, picker dismissal and banner reopening | [Dismiss-and-resume workflow](references/dismiss-and-resume.md) | [Copilot permissions and questions](../../../docs/copilot.md#permissions-and-questions) |
 | Palette page lifecycle and cancellation | [Command interactions](references/command-interactions.md) | [Command palette](../../../docs/command-palette.md) |
 | Palette command ranking and usage storage | [Command ranking](references/command-ranking.md) | [Ordering](../../../docs/command-palette.md#ordering) |

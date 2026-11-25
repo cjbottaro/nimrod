@@ -352,7 +352,7 @@ test('local Send intent covers ordinary, steering and follow-up messages but exc
   } finally { f.dom.window.close(); }
 });
 
-test('/mcp opens inspection without a prompt, turn, recency or transcript navigation', () => {
+test('/mcp retains the draft without a prompt, turn, recency or transcript navigation', () => {
   for (const busy of [false, true]) {
     const f = fixture({ sendAutoFollow: () => 'always' });
     try {
@@ -361,8 +361,7 @@ test('/mcp opens inspection without a prompt, turn, recency or transcript naviga
       scroll.readHistory();
       const top = scroll.pane.scrollTop;
       f.draft('/mcp'); f.send(); f.flush();
-      assert.equal(f.prompt.value, '');
-      assert.equal(f.sent.at(-1)?.type, 'inspectMcp');
+      assert.equal(String(f.prompt.value), '/mcp');
       assert.equal(f.sent.some(message => message.type === 'prompt'), false);
       assert.equal(f.submittedPrompts(), 0);
       assert.equal(scroll.pane.scrollTop, top);

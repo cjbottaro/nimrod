@@ -4,7 +4,8 @@ import type { ConfigurationAdapter, ConfigurationOperation } from '../session-co
 import { CodexAsyncQuestions, codexAsyncReplies, type CodexAsyncQuestion } from './async-questions';
 import type { QuestionAnswer } from '../question-interaction';
 import type { OutgoingMessage } from '../session-message-input';
-import { mcpReport, terminalReport, skillReport, hookReport } from './command-reports';
+import { terminalReport, skillReport, hookReport } from './command-reports';
+import { mcpSlashUnavailable } from '../mcp-inspector';
 import { CodexClient, CodexCompactionUncertain, type CodexClientHooks, type CodexWriter } from './client';
 import { item, nonempty, record, type CodexEvent, type CodexItem } from './protocol';
 import { isRecord, RpcConnectionError, type RpcRecord } from '../json-rpc-connection';
@@ -153,8 +154,6 @@ export class CodexSession {
         input: { hint: 'model', choices: this.models.map(model => ({ name: string(model.model), description: string(model.displayName) })) } }] : []),
       { name: 'rename', description: 'Rename this Codex session', source: 'Agent', input: { hint: 'name' } },
       { name: 'compact', description: 'Compact this conversation using Codex (may use the model)', source: 'Agent' },
-      { name: 'mcp', description: 'Report Codex MCP servers and tools (read-only)', source: 'Agent', allowDuringAgentExecution: true,
-        input: { hint: 'verbose', choices: [{ name: 'verbose', description: 'Include tool descriptions and resources' }] } },
       { name: 'status', description: 'Report Codex thread, model and last reported token usage', source: 'Agent', allowDuringAgentExecution: true },
       { name: 'pwd', aliases: ['cwd'], description: 'Show the Codex thread working directory', source: 'Agent', allowDuringAgentExecution: true },
       { name: 'ps', description: 'List this Codex thread’s background terminals (read-only)', source: 'Agent', allowDuringAgentExecution: true },
@@ -165,12 +164,12 @@ export class CodexSession {
   private validateCommand(text: string): string | undefined {
     if (this.ended || this.hydrating || this.state.sessionUnavailable) return 'Connect Codex before invoking commands. Your draft was kept.';
     const invocation = parseCommand(text), command = invocation && findCommand(this.commandCatalog(), invocation.name);
+    if (invocation?.name.toLowerCase() === 'mcp') return mcpSlashUnavailable;
     if (!command) return 'This command is not supported by the Codex integration. Nothing was invoked; your draft was kept.';
     if (invocation!.input?.trim()) {
       if (command.name === 'model' && !this.models.some(model => model.model === invocation!.input!.trim())) return 'Choose an exact advertised Codex model ID. Your draft was kept.';
       if (command.name === 'rename') { try { sessionName(invocation!.input!); } catch (error) { return String(error); } }
-      if (command.name === 'mcp' && invocation!.input!.trim().toLowerCase() !== 'verbose') return 'Supported Codex syntax: /mcp [verbose]. OAuth/login is not supported here. Your draft was kept.';
-      if (!['model', 'rename', 'mcp'].includes(command.name)) return `/${command.name} does not accept arguments. Your draft was kept.`;
+      if (!['model', 'rename'].includes(command.name)) return `/${command.name} does not accept arguments. Your draft was kept.`;
     }
   }
   private async runCommand(text: string, signal: AbortSignal, dispatched: () => void): Promise<void | boolean> {
@@ -191,12 +190,8 @@ export class CodexSession {
         if (signal.aborted) return false;
         dispatched();
         let output: string;
-        if (command.name === 'mcp') {
-          const verbose = input?.trim().toLowerCase() === 'verbose';
-          const servers = await this.commandPages(cursor => this.client.mcpServers(verbose, cursor), signal);
-          if (!servers) return false; output = mcpReport(servers, verbose);
-        } else if (command.name === 'ps') {
-          const terminals = await this.commandPages(cursor => this.client.backgroundTerminals(cursor), signal);
+        if (command.name === 'ps') {
+          const terminals = await this.reportPages(cursor => this.client.backgroundTerminals(cursor), () => !signal.aborted);
           if (!terminals) return false; output = terminalReport(terminals);
         } else if (command.name === 'skills' || command.name === 'hooks') {
           const entry = await this.client.projectCatalog(command.name);
@@ -239,15 +234,19 @@ export class CodexSession {
       throw error;
     } finally { this.commandRunning = false; this.publish([]); }
   }
-  private async commandPages(read: (cursor?: string) => Promise<{ data: RpcRecord[]; nextCursor: string | null }>, signal: AbortSignal): Promise<RpcRecord[] | undefined> {
+  inspectMcp(current: () => boolean): Promise<RpcRecord[] | undefined> {
+    if (this.ended || this.hydrating || this.state.sessionUnavailable) throw new Error('Connect this session before inspecting MCP servers.');
+    return this.reportPages(cursor => this.client.mcpServers(true, cursor), current);
+  }
+  private async reportPages(read: (cursor?: string) => Promise<{ data: RpcRecord[]; nextCursor: string | null }>, current: () => boolean): Promise<RpcRecord[] | undefined> {
     const result: RpcRecord[] = [], cursors = new Set<string>(); let cursor: string | undefined;
     do {
-      if (signal.aborted || this.ended) return;
+      if (!current() || this.ended) return;
       const page = await read(cursor); result.push(...page.data); cursor = page.nextCursor ?? undefined;
-      if (cursor && cursors.has(cursor)) throw new Error('Codex command report repeated a pagination cursor. No complete report was produced.');
+      if (cursor && cursors.has(cursor)) throw new Error('Codex report repeated a pagination cursor. No complete report was produced.');
       if (cursor) cursors.add(cursor);
     } while (cursor);
-    return signal.aborted || this.ended ? undefined : result;
+    return !current() || this.ended ? undefined : result;
   }
   get hasPendingWork(): boolean {
     return this.state.busy || this.renaming || this.submitting > 0 || this.configuring || this.commandQueue.occupied

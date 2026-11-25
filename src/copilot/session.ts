@@ -1,6 +1,7 @@
 import { copilotSessionName } from './session-name';
 import { copilotDiagnosticMetadata } from '../../copilot/diagnostics.mjs';
 import { commandCatalog, type SessionCommands } from '../session-commands';
+import { mcpSlashUnavailable } from '../mcp-inspector';
 import { validateMessageImages, type SessionMessageInput } from '../session-message-input';
 import type { ImageContent } from '../image-attachments';
 import { copilotImageCapabilities, copilotUserContent, type CopilotImageModel } from './image-input';
@@ -157,6 +158,7 @@ export class CopilotSession {
     if (this.ended || this.state.sessionUnavailable) return 'Connect Copilot before sending. Your draft was kept.';
     if (text.trimStart().startsWith('/')) {
       const invocation = parseCopilotCommand(text);
+      if (invocation?.name.toLowerCase() === 'mcp') return mcpSlashUnavailable;
       const command = invocation && findCopilotCommand(this.commands, invocation.name);
       if (!command) return 'This command is not advertised by Copilot. Nothing was invoked; your draft was kept.';
       if (command.input?.required && !command.input.choices?.length && !invocation?.input?.trim()) return `/${command.name} requires input: ${command.input.hint}. Your draft was kept.`;

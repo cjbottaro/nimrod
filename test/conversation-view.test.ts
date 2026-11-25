@@ -19,7 +19,7 @@ test('interaction policies preserve Pi semantics without imposing them on ACP', 
   assert.equal(acp.keyboardMode(enter, true), 'normal');
   assert.equal(acp.keyboardMode({ ...enter, shiftKey: true }, true), undefined);
   assert.equal(acp.keyboardMode({ ...enter, isComposing: true }, true), undefined);
-  assert.deepEqual(piInteraction.prepare('/mcp', {}), { kind: 'local', message: { type: 'inspectMcp' } });
+  assert.equal(piInteraction.prepare('/mcp', {}).kind, 'reject');
   assert.deepEqual(acp.prepare('/mcp', {}), { kind: 'request', message: { type: 'prompt' }, preview: false, navigate: true });
   assert.equal(piInteraction.prepare('/compact', { busy: true }).kind, 'reject');
   assert.equal(acp.prepare('/compact', {}).kind, 'request');
@@ -59,7 +59,7 @@ test('Pi view projection keeps lazy history and stable content-only UI dependenc
 });
 
 test('session action contributions expose only the owning integration operations', () => {
-  assert.deepEqual(piSessionActions.map(action => action.id), ['mcp', 'model', 'thinking']);
+  assert.deepEqual(piSessionActions.map(action => action.id), ['model', 'thinking']);
   assert.deepEqual(acpSessionActions(undefined), []);
 });
 
@@ -125,7 +125,7 @@ test('separate-input submission preserves busy policy and never turns a slash co
     pi.snapshot({ busy: true, sessionUnavailable: false, messages: [] });
     pi.view.submitUserText('Ordinary steering');
     assert.equal(pi.sent.find(message => message.type === 'prompt')?.mode, 'steer');
-    assert.match(pi.view.validateUserText('/mcp')!, /ordinary text/);
+    assert.match(pi.view.validateUserText('/mcp')!, /MCP slash commands are unavailable/);
   } finally { pi.view.dispose(); pi.dom.window.close(); }
 });
 

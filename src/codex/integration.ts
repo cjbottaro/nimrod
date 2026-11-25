@@ -13,6 +13,8 @@ import { configurationActions, noProjectActions, noReferences, taggedSavedSessio
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { commandInteraction } from '../command-interaction';
+import { createMcpInspector, mcpAction } from '../mcp-inspector';
+import { codexMcpPage } from './integration-inspection';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
 
@@ -60,6 +62,7 @@ function createCodexProject(projectHost: HarnessProjectHost): HarnessProject {
 function createCodexSession(host: HarnessSessionHost, request: SessionRequest, project: HarnessProjectHost, ready: () => boolean, generation: () => string, history: () => CodexSessionHistory | undefined): HarnessSession {
   const backend: import('./connection').CodexBackend = { savedSessionId: request.mode === 'resume' ? request.reference.sessionId : undefined };
   const { lifetime, effects, ownership: owner } = host, ui = codexIntegrationUi(host);
+  const inspection = createMcpInspector(host, () => backend.session, codexMcpPage);
   let signature = '', sequence = 0, retiring = false;
   const lifecycle = createCodexConnection(() => owner, backend, {
     initialName: request.mode === 'saved' ? request.initialName : undefined,
@@ -68,7 +71,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     tearingDown: () => lifetime.closing() || lifetime.deleting() || lifetime.reloading(),
     gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked',
     conflicts: id => lifetime.conflicts({ kind: 'codex', sessionId: id }), drafts: host.drafts,
-    effects: { changed: effects.changed, identified: effects.identified, retire: effects.retire,
+    effects: { changed: effects.changed, identified: effects.identified, retire() { inspection.cancel(); effects.retire(); },
       nameFailed: error => effects.notice({ id: 'rename', operation: 'Name new session',
         message: 'The session was created, but its name could not be confirmed. Use Rename session to try again.', details: String(error) }),
       resolved: issue => effects.resolve(issue === 'cleanup' ? 'codex-cleanup' : 'connection'), hasConnectionOutcome: effects.hasConnectionOutcome,
@@ -107,7 +110,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     }, forget() {} },
     conversation: conversationPort(host, () => backend.session, codexInteraction(text => owner.starting || !backend.session ? 'Codex is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
     configuration: { current: () => backend.session?.configuration },
-    actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
+    actions: { current: () => configurationActions([...codexSessionActions(backend.session), ...(lifecycle.connection === 'connected' ? [{ ...mcpAction, run: inspection.run }] : [])], { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: backend.historyConfirmed ? 'Saved Codex history confirmed' : 'Saved Codex history is not yet confirmed; reconnect may be unavailable', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {
@@ -125,6 +128,7 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       async run() {
         if (!lifecycle.identity || !backend.historyConfirmed) throw new Error('Reload requires confirmed saved Codex history');
         retiring = true;
+        inspection.cancel();
         try {
           await lifecycle.stop();
           effects.retire(); effects.publish({ type: 'sessionDisconnected' });
@@ -139,6 +143,6 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
       await backend.session.rename(name);
     } },
     close: { alwaysConfirm: false, label: 'Close session',
-      message: 'This disconnects Nimrod from this Codex thread without stopping its shared daemon or active work. Saved history and your draft remain; confirmed-unsaved local state is discarded.' }, interactions: { setActive(active) { if (!active) backend.session?.slashCommands.cancel(); ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); ui.dispose(); } }, references: noReferences,
+      message: 'This disconnects Nimrod from this Codex thread without stopping its shared daemon or active work. Saved history and your draft remain; confirmed-unsaved local state is discarded.' }, interactions: { setActive(active) { if (!active) { backend.session?.slashCommands.cancel(); inspection.cancel(); } ui.setActive(active); }, dispose() { backend.session?.slashCommands.cancel(); inspection.cancel(); ui.dispose(); } }, references: noReferences,
   };
 }

@@ -13,7 +13,7 @@ export function slashCommands(raw: unknown): SlashCommand[] {
   if (Array.isArray(raw)) for (const value of raw) {
     if (!value || typeof value !== "object") continue;
     const { name, description, source } = value as Record<string, unknown>;
-    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || /^(resume|delete|new|fork|clone|tree|reload|quit)$/.test(name) || commands.has(name)) continue;
+    if (typeof name !== "string" || !name || /[\s\u0000-\u001f]/.test(name) || name.startsWith("/") || name.toLowerCase() === 'mcp' || /^(resume|delete|new|fork|clone|tree|reload|quit)$/.test(name) || commands.has(name)) continue;
     commands.set(name, { name, description: typeof description === "string" ? description : "Pi command", source: source === "skill" ? "Skill" : source === "prompt" ? "Template" : "Extension" });
   }
   return [...commands.values()];
