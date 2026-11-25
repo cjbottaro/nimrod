@@ -9,31 +9,30 @@ body.code-popout-window { position:relative; display:flex; flex-direction:column
   display:flex; align-items:center; justify-content:flex-end; gap:12px;
   padding:6px 20px; border-bottom:1px solid var(--vscode-panel-border);
 }
-.popout-trim-control { position:relative; flex:1; height:32px; min-width:0; }
+.popout-trim-control { --trim-thumb-size:16px; position:relative; flex:1; height:32px; min-width:0; }
 .popout-trim-rail {
   --trim-inactive:color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent);
-  position:absolute; inset:0 8px; cursor:pointer;
+  position:absolute; inset:0 var(--trim-thumb-size); cursor:pointer;
   background:linear-gradient(to right,
-    var(--trim-inactive) 0 var(--trim-first),
-    var(--vscode-focusBorder) var(--trim-first) var(--trim-last),
-    var(--trim-inactive) var(--trim-last) 100%) center / 100% 4px no-repeat;
+    var(--trim-inactive) 0 var(--trim-start),
+    var(--vscode-focusBorder) var(--trim-start) var(--trim-end),
+    var(--trim-inactive) var(--trim-end) 100%) center / 100% 4px no-repeat;
 }
 .popout-trim-control input[type='range'] {
-  appearance:none; position:absolute; inset:0; width:100%; height:100%;
+  appearance:none; position:absolute; inset-block:0; width:calc(100% - var(--trim-thumb-size)); height:100%;
   margin:0; padding:0; border:0; border-radius:0; background:transparent; pointer-events:none;
 }
+/* Equal input widths, displaced by one thumb diameter: at the same logical cut
+   the inner thumb edges meet on the rail, but each thumb has its own hit area. */
+.popout-trim-start { left:0; }
+.popout-trim-end { right:0; }
 .popout-trim-control input:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:0; z-index:1; }
 .popout-trim-control input::-webkit-slider-thumb {
-  appearance:none; width:16px; height:16px; border:1px solid var(--vscode-focusBorder); border-radius:50%;
+  appearance:none; box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
   background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
 }
 .popout-trim-control input::-moz-range-thumb {
-  box-sizing:border-box; width:16px; height:16px; border:1px solid var(--vscode-focusBorder); border-radius:50%;
+  box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
   background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
 }
-/* Separate the thumb hit areas vertically, including when both select the same block. */
-.popout-trim-first::-webkit-slider-thumb { transform:translateY(-6px); }
-.popout-trim-last::-webkit-slider-thumb { transform:translateY(6px); }
-.popout-trim-first::-moz-range-thumb { transform:translateY(-6px); }
-.popout-trim-last::-moz-range-thumb { transform:translateY(6px); }
 

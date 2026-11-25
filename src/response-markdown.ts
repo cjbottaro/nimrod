@@ -1,8 +1,8 @@
 import { marked, type Token } from 'marked';
 import { MARKDOWN_OPTIONS } from './pi/safe-markdown';
 
-/** Inclusive, zero-based range of top-level rendered Markdown blocks. */
-export interface ResponseTrim { first: number; last: number; }
+/** Half-open range of top-level Markdown blocks; equal boundaries keep nothing. */
+export interface ResponseTrim { start: number; end: number; }
 
 export function responseMarkdown(source: string) {
   const normalized = source.replace(/\r\n?/g, '\n');
@@ -32,21 +32,21 @@ export function responseMarkdown(source: string) {
     cursor = start + token.raw.length;
     if (token.type !== 'space') blocks.push({ tokenIndex, start: originalOffset(start), end: originalOffset(cursor) });
   }
-  if (blocks.length < 2) return undefined;
-  const lastBlock = blocks.length - 1;
-  const full = { first: 0, last: lastBlock };
+  if (!blocks.length) return undefined;
+  const full = { start: 0, end: blocks.length };
   const valid = (trim: ResponseTrim | null | undefined): trim is ResponseTrim => !!trim
-    && Number.isInteger(trim.first) && Number.isInteger(trim.last)
-    && trim.first >= 0 && trim.first <= trim.last && trim.last <= lastBlock;
+    && Number.isInteger(trim.start) && Number.isInteger(trim.end)
+    && trim.start >= 0 && trim.start <= trim.end && trim.end <= full.end;
   return {
     full,
     valid,
-    source({ first, last }: ResponseTrim): string {
-      return source.slice(first === 0 ? 0 : blocks[first].start, last === lastBlock ? source.length : blocks[last].end);
+    source({ start, end }: ResponseTrim): string {
+      if (start === end) return '';
+      return source.slice(start === 0 ? 0 : blocks[start].start, end === full.end ? source.length : blocks[end - 1].end);
     },
-    tokens({ first, last }: ResponseTrim): Token[] {
+    tokens({ start, end }: ResponseTrim): Token[] {
       // Keep the original lexer context for reference links and nested Markdown.
-      return tokens.slice(blocks[first].tokenIndex, blocks[last].tokenIndex + 1);
+      return start === end ? [] : tokens.slice(blocks[start].tokenIndex, blocks[end - 1].tokenIndex + 1);
     },
   };
 }

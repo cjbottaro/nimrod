@@ -7,7 +7,7 @@ import { demoFixture, visible } from './demo-fixture';
 type FixtureWindow = Window & { __popoutTitle?: string; __copiedText?: string; __trimWrites?: unknown[] };
 
 // Real WebKit layout, mocked native boundary. No Pi, user files or external requests.
-async function popoutFixture(page: Page, text: string, language: string, response = false, trim?: { first: number; last: number }) {
+async function popoutFixture(page: Page, text: string, language: string, response = false, trim?: { start: number; end: number }) {
   const bundle = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -111,35 +111,60 @@ test('response Pop-out reveals the inset action on hover and keyboard focus with
 
 test('response toolbar shows the slider next to Copy and can restore a contiguous Markdown range', async ({ page }) => {
   const text = '# Complete response\n\nA middle paragraph.\n\n```ts\nconst value = 1;\n```\n\nLast paragraph.';
-  const errors = await popoutFixture(page, text, 'markdown', true, { first: 1, last: 2 });
+  const errors = await popoutFixture(page, text, 'markdown', true, { start: 1, end: 3 });
   const document = page.locator('.popout-document');
   await expect(page).toHaveTitle('Complete response');
   await expect(document).toContainText('A middle paragraph.');
   await expect(document).not.toContainText('Last paragraph.');
   await expect(document.locator('.code-popout')).toHaveCount(0);
   const toolbar = page.locator('.popout-response-toolbar');
-  const first = toolbar.getByRole('slider', { name: 'First block to keep' });
-  const last = toolbar.getByRole('slider', { name: 'Last block to keep' });
+  const start = toolbar.getByRole('slider', { name: 'Trim start' });
+  const end = toolbar.getByRole('slider', { name: 'Trim end' });
   const copy = toolbar.getByRole('button', { name: 'Copy Markdown source', exact: true });
   await expect(toolbar.getByRole('button')).toHaveCount(1);
   await expect(copy).toBeVisible();
-  const [sliderBounds, copyBounds] = await Promise.all([first.boundingBox(), copy.boundingBox()]);
+  const [sliderBounds, copyBounds] = await Promise.all([end.boundingBox(), copy.boundingBox()]);
   expect(sliderBounds!.x + sliderBounds!.width).toBeLessThan(copyBounds!.x);
   expect(copyBounds!.y + copyBounds!.height / 2).toBeCloseTo(sliderBounds!.y + sliderBounds!.height / 2);
-  await expect(first).toHaveValue('1');
-  await first.press('ArrowRight');
+  await expect(start).toHaveValue('1');
+  await start.press('ArrowRight');
   await expect(document).not.toContainText('A middle paragraph.');
-  await expect(last).toHaveValue('2');
-  await first.press('ArrowRight');
-  await expect(first).toHaveValue('2');
+  await expect(end).toHaveValue('3');
   await copy.click();
-  expect(await page.evaluate(() => (window as FixtureWindow).__copiedText)).toMatch(/^```ts\nconst value = 1;\n```\n*$/);
-  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites)).toEqual([{ first: 2, last: 2 }]);
-  await first.press('ArrowLeft');
-  await first.press('ArrowLeft');
-  await last.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__copiedText)).toMatch(/^```ts\nconst value = 1;\n```\n*$/);
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites)).toEqual([{ start: 2, end: 3 }]);
+  await start.press('ArrowRight');
+  await expect(document).toBeEmpty();
+  await start.press('ArrowRight');
+  await expect(start).toHaveValue('3');
+  await copy.click();
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__copiedText)).toBe('');
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites?.at(-1))).toEqual({ start: 3, end: 3 });
+  for (let i = 0; i < 3; i++) await start.press('ArrowLeft');
+  await end.press('ArrowRight');
   await expect(document).toContainText('Complete response');
   await expect(document).toContainText('Last paragraph.');
   await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites?.at(-1))).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test('touching thumbs can each be grabbed on the same horizontal rail', async ({ page }) => {
+  const errors = await popoutFixture(page, 'Before\n\nAfter', 'markdown', true, { start: 1, end: 1 });
+  const document = page.locator('.popout-document');
+  await expect(document).toBeEmpty();
+  const rail = (await page.locator('.popout-trim-rail').boundingBox())!;
+  const x = rail.x + rail.width / 2, y = rail.y + rail.height / 2;
+  const drag = async (from: number, to: number) => {
+    await page.mouse.move(from, y);
+    await page.mouse.down();
+    await page.mouse.move(to, y, { steps: 8 });
+    await page.mouse.up();
+  };
+  await drag(x - 8, rail.x - 8);
+  await expect(document).toHaveText('Before');
+  await drag(rail.x - 8, x - 8);
+  await expect(document).toBeEmpty();
+  await drag(x + 8, rail.x + rail.width + 8);
+  await expect(document).toHaveText('After');
   expect(errors).toEqual([]);
 });

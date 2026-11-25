@@ -4,7 +4,7 @@ Hover an assistant turn to reveal **Pop out response** in its upper-right corner
 
 ## Trim a response
 
-When there's more than one Markdown block, the trim slider sits next to **Copy source**. Drag either handle, or focus it and use the arrow keys. Each stop is a whole paragraph, heading, list, table, quote, or code block. The preview updates as you move a handle. Move both handles back to the ends to restore the full response.
+The trim slider sits next to **Copy source**. Drag either handle, or focus it and use the arrow keys. Each stop is the boundary of a whole paragraph, heading, list, table, quote, or code block. When the handles touch, the preview is empty. Move them apart to show content again, or move them all the way to the ends to restore the full response.
 
 **Copy source** copies the kept Markdown. Reference-style links still work in the Pop-out, but their definitions aren't copied if they're outside the kept range. Saved Pop-outs remember the trim; it never edits the transcript or discards the rest of the snapshot.
 

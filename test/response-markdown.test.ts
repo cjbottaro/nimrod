@@ -8,22 +8,32 @@ const source = `# Heading\r\n\r\nParagraph\r\n\r\n- one\r\n  - nested\r\n- two\r
 
 test('response trim snaps to complete top-level GFM blocks and copies exact source bytes', () => {
   const markdown = responseMarkdown(source)!;
-  assert.deepEqual(markdown.full, { first: 0, last: 6 });
+  assert.deepEqual(markdown.full, { start: 0, end: 7 });
   assert.equal(markdown.source(markdown.full), source);
   assert.deepEqual(markdown.tokens(markdown.full).filter(token => token.type !== 'space').map(token => token.type),
     ['heading', 'paragraph', 'list', 'code', 'table', 'blockquote', 'paragraph']);
-  const trimmed = markdown.source({ first: 3, last: 3 });
+  const trimmed = markdown.source({ start: 3, end: 4 });
   assert.ok(trimmed.startsWith(code));
   assert.match(trimmed.slice(code.length), /^(?:\r\n)*$/);
-  assert.equal(markdown.valid({ first: 3, last: 2 }), false);
-  assert.equal(markdown.valid({ first: 0, last: 7 }), false);
-  assert.equal(responseMarkdown(code), undefined, 'a single fenced block cannot be trimmed');
+  assert.equal(markdown.valid({ start: 3, end: 2 }), false);
+  assert.equal(markdown.valid({ start: 0, end: 8 }), false);
+});
+
+test('meeting boundaries keep no blocks, including for a single block and at either end', () => {
+  const markdown = responseMarkdown(code)!;
+  assert.deepEqual(markdown.full, { start: 0, end: 1 });
+  for (const cut of [0, 1]) {
+    const trim = { start: cut, end: cut };
+    assert.equal(markdown.valid(trim), true);
+    assert.equal(markdown.source(trim), '');
+    assert.deepEqual(markdown.tokens(trim), []);
+  }
 });
 
 test('references outside the kept range still render as links without polluting copied source', () => {
   const text = '# Heading\n\n[where]: https://example.com/\n\n[Link][where]\n\nLast';
   const markdown = responseMarkdown(text)!;
-  const trim = { first: 1, last: 1 };
+  const trim = { start: 1, end: 2 };
   assert.equal(markdown.source(trim), '[Link][where]');
   assert.equal((markdown.tokens(trim)[0] as Tokens.Paragraph).tokens[0]?.type, 'link');
 });

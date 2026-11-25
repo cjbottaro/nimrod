@@ -22,24 +22,27 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
   const createHandle = (edge: Edge, label: string) => {
     const input = document.createElement('input');
     input.type = 'range';
-    input.min = '0'; input.max = String(full.last); input.step = '1';
+    input.min = '0'; input.max = String(full.end); input.step = '1';
     input.className = `popout-trim-${edge}`;
     input.setAttribute('aria-label', label);
     input.title = label;
     track.append(input);
     return input;
   };
-  const handles = { first: createHandle('first', 'First block to keep'), last: createHandle('last', 'Last block to keep') };
+  const edges = ['start', 'end'] as const;
+  const handles = { start: createHandle('start', 'Trim start'), end: createHandle('end', 'Trim end') };
 
   let range = initial, saved = initial, requested = initial;
-  let reveal: Edge = 'first', frame: number | undefined;
+  let reveal: Edge = 'start', frame: number | undefined;
   let saving = false, disposed = false;
-  const same = (a: ResponseTrim, b: ResponseTrim) => a.first === b.first && a.last === b.last;
+  const same = (a: ResponseTrim, b: ResponseTrim) => a.start === b.start && a.end === b.end;
   function paint() {
-    for (const edge of ['first', 'last'] as const) {
-      handles[edge].value = String(range[edge]);
-      handles[edge].setAttribute('aria-valuetext', `Block ${range[edge] + 1} of ${full.last + 1}`);
-      rail.style.setProperty(`--trim-${edge}`, `${range[edge] / full.last * 100}%`);
+    for (const edge of edges) {
+      const boundary = range[edge];
+      const label = boundary === full.end ? 'After last block' : `Before block ${boundary + 1} of ${full.end}`;
+      handles[edge].value = String(boundary);
+      handles[edge].setAttribute('aria-valuetext', range.start === range.end ? `${label}, no blocks kept` : label);
+      rail.style.setProperty(`--trim-${edge}`, `${boundary / full.end * 100}%`);
     }
   }
   function update(next: ResponseTrim, edge: Edge) {
@@ -51,7 +54,7 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     frame ??= requestAnimationFrame(() => { frame = undefined; preview(range, reveal); });
   }
   function move(edge: Edge, value: number) {
-    const clamped = edge === 'first' ? Math.min(value, range.last) : Math.max(value, range.first);
+    const clamped = edge === 'start' ? Math.min(value, range.end) : Math.max(value, range.start);
     update({ ...range, [edge]: clamped }, edge);
   }
   async function commit() {
@@ -71,17 +74,17 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
       }
     } finally { saving = false; }
   }
-  for (const edge of ['first', 'last'] as const) {
+  for (const edge of edges) {
     handles[edge].addEventListener('input', () => move(edge, handles[edge].valueAsNumber));
     handles[edge].addEventListener('change', () => { void commit(); });
   }
   rail.addEventListener('click', event => {
     const { left, width } = rail.getBoundingClientRect();
     if (!width) return;
-    const value = Math.round(Math.max(0, Math.min(1, (event.clientX - left) / width)) * full.last);
-    const distanceToFirst = Math.abs(value - range.first), distanceToLast = Math.abs(value - range.last);
-    const edge = distanceToFirst === distanceToLast
-      ? (value <= range.first ? 'first' : 'last') : distanceToFirst < distanceToLast ? 'first' : 'last';
+    const value = Math.round(Math.max(0, Math.min(1, (event.clientX - left) / width)) * full.end);
+    const distanceToStart = Math.abs(value - range.start), distanceToEnd = Math.abs(value - range.end);
+    const edge = distanceToStart === distanceToEnd
+      ? (value <= range.start ? 'start' : 'end') : distanceToStart < distanceToEnd ? 'start' : 'end';
     handles[edge].focus({ preventScroll: true });
     move(edge, value);
     void commit();

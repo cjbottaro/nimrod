@@ -101,10 +101,10 @@ export async function mountPopout(): Promise<void> {
           const preview = (range: ResponseTrim, reveal: keyof ResponseTrim) => {
             rendered.innerHTML = renderer.renderTokens(markdown.tokens(range));
             removeNestedPopouts();
-            content.scrollTop = reveal === 'first' ? 0 : content.scrollHeight;
+            content.scrollTop = reveal === 'start' ? 0 : content.scrollHeight;
           };
           const initial = markdown.valid(snapshot.trim) ? snapshot.trim : markdown.full;
-          if (initial !== markdown.full) preview(initial, 'first');
+          if (initial !== markdown.full) preview(initial, 'start');
           const trim = createPopoutTrim({
             initial, full: markdown.full, preview,
             save: trim => invoke('set_response_popout_trim', { trim }),

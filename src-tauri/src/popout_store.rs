@@ -70,14 +70,37 @@ impl CodeSnapshot {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "StoredResponseTrim")]
 pub struct ResponseTrim {
-    pub first: usize,
-    pub last: usize,
+    start: usize,
+    end: usize,
 }
+
+#[derive(Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
+enum StoredResponseTrim {
+    Boundaries { start: usize, end: usize },
+    Inclusive { first: usize, last: usize },
+}
+
+impl TryFrom<StoredResponseTrim> for ResponseTrim {
+    type Error = &'static str;
+
+    fn try_from(stored: StoredResponseTrim) -> Result<Self, Self::Error> {
+        match stored {
+            StoredResponseTrim::Boundaries { start, end } => Ok(Self { start, end }),
+            StoredResponseTrim::Inclusive { first, last } if first <= last => Ok(Self {
+                start: first,
+                end: last.checked_add(1).ok_or("Invalid response trim end")?,
+            }),
+            _ => Err("Invalid response trim range"),
+        }
+    }
+}
+
 impl ResponseTrim {
-    pub fn validate(&self, size: usize) -> Result<(), String> {
-        if self.first > self.last || self.last >= size {
+    fn validate(&self, size: usize) -> Result<(), String> {
+        if self.start > self.end || self.end > size {
             return Err("Invalid response trim range".into());
         }
         Ok(())
@@ -468,11 +491,11 @@ mod tests {
         store.save_new(&saved, &response).unwrap();
         let path = store.path(&saved.id).unwrap();
         let original = fs::read(&path).unwrap();
-        let trim = Some(ResponseTrim { first: 1, last: 2 });
+        let trim = Some(ResponseTrim { start: 1, end: 1 });
         assert!(code.validate_trim(trim).is_err());
         assert!(
             response
-                .validate_trim(Some(ResponseTrim { first: 2, last: 1 }))
+                .validate_trim(Some(ResponseTrim { start: 2, end: 1 }))
                 .is_err()
         );
         saved.trim = trim;
@@ -485,6 +508,16 @@ mod tests {
         assert!(loaded.response);
         assert_eq!(loaded.text, response.text);
         assert_eq!(fs::read(path).unwrap(), original);
+    }
+    #[test]
+    fn legacy_inclusive_response_trims_keep_the_same_blocks() {
+        let trim: ResponseTrim = serde_json::from_str(r#"{"first":1,"last":1}"#).unwrap();
+        assert_eq!(trim, ResponseTrim { start: 1, end: 2 });
+        assert_eq!(
+            serde_json::to_value(trim).unwrap(),
+            serde_json::json!({"start":1,"end":2})
+        );
+        assert!(serde_json::from_str::<ResponseTrim>(r#"{"first":2,"last":1}"#).is_err());
     }
     #[test]
     fn changed_content_and_invalid_references_are_rejected_without_removing_recovery_files() {
