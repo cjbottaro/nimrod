@@ -259,7 +259,10 @@ fn validate_message(value: &Value) -> Result<(), String> {
             | "usage"
             | "context",
         ) => {}
-        Some("mcp-configured") if value.as_object().is_some_and(|record| record.len() == 2) => {}
+        Some("mcp-configured")
+            if value.as_object().is_some_and(|record| {
+                record.keys().all(|key| matches!(key.as_str(), "id" | "method" | "diagnostics"))
+            }) => {}
         Some("command")
             if value["name"].as_str().is_some_and(|name| {
                 !name.is_empty()

@@ -27,7 +27,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 - `mise run setup` installs the pinned toolchain, npm dependencies and the local `nimrod` terminal launcher in one command, without building or launching the app. Existing unrelated commands and shell configuration are left untouched.
 
-- Codex slash commands include `/model`, `/rename`, native `/compact`, `/mcp [verbose]`, `/status`, `/pwd` (alias `/cwd`), `/ps`, and read-only `/skills` and `/hooks` catalogs. Model/name/compaction wait for idle; reports can run during work in accepted FIFO order. Compaction waits for its native item and terminal turn, not an empty acknowledgement. Skill invocation/toggles, hook edits and MCP login remain unsupported; native `/stop` is not aliased to Nimrod Stop. A pinned 65-command source inventory and repeatable upgrade audit track remaining gaps. Pi, Copilot and Codex now share a required command integration interface and retained Command cards: accepted commands preserve drafts/reader intent, output stays in the invocation card, and uncertain delivery never retries. Pi's advertised extension/template/skill commands retain native execution; unsupported commands keep the draft. New fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
+- Codex slash commands include `/model`, `/rename`, native `/compact`, `/status`, `/pwd` (alias `/cwd`), `/ps`, and read-only `/skills` and `/hooks` catalogs. Model/name/compaction wait for idle; reports can run during work in accepted FIFO order. Compaction waits for its native item and terminal turn, not an empty acknowledgement. Skill invocation/toggles, hook edits and MCP login remain unsupported; native `/stop` is not aliased to Nimrod Stop. A pinned 65-command source inventory is available for broader audits. Pi, Copilot and Codex now share a required command integration interface and retained Command cards: accepted commands preserve drafts/reader intent, output stays in the invocation card, and uncertain delivery never retries. Pi's advertised extension/template/skill commands retain native execution; unsupported commands keep the draft. New fixtures are authored but unrun; installed-runtime/native acceptance remains pending.
 
 - **Rename session…** in the command palette and native session-row menu changes connected Pi, Copilot and Codex conversations through their native naming APIs. Its default shortcut is **⌘/Ctrl+Shift+R**, while **⌘/Ctrl+R** remains Reload session; both are configurable in Keybindings. The current name is selected on open so typing replaces it immediately. Background renames preserve selection, recency and drafts; disconnected sessions require Resume, and unsupported runtimes or failures show session-owned errors without prompt fallback. Installed-runtime and native acceptance remain pending.
 
@@ -138,6 +138,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 - GitHub release notes use reviewed changelog entries, with Unreleased snapshots for prereleases.
 
 ### Fixed
+
+- Copilot sessions no longer disconnect on open because the MCP count request includes the standard diagnostics flag.
 
 - Agent Question pickers no longer hide **Enter your own answer…** when typing text that matches no offered choices. Free-form answers remain reachable even for questions without choices, and text typed in the picker carries into the custom-answer modal for submission. Harness restrictions on custom answers remain respected.
 

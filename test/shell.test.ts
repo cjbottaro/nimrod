@@ -5729,7 +5729,12 @@ test('Copilot MCP count comes from the structured catalog and disappears on an e
     f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
     assert.equal(button.hidden, true); assert.equal(button.textContent, '');
     const requests = f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
-    assert.equal(requests.filter(request => request.method === 'mcp-configured').length, 3);
+    const reads = requests.filter(request => request.method === 'mcp-configured');
+    assert.equal(reads.length, 3);
+    for (const read of reads) {
+      assert.deepEqual(Object.keys(read).sort(), ['diagnostics', 'id', 'method']);
+      assert.equal(typeof read.diagnostics, 'boolean');
+    }
     assert.equal(requests.some(request => request.method === 'prompt' || request.method === 'command'), false);
   } finally { f.win.close(); }
 });
