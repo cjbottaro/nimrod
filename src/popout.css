@@ -4,3 +4,35 @@ body.code-popout-window { position:relative; display:flex; flex-direction:column
 .popout-markdown { padding-right:38px; }
 .popout-copy-source { position:absolute; top:12px; right:20px; display:flex; }
 .popout-error { margin:10px 20px; padding-right:38px; color:var(--vscode-errorForeground); }
+
+.popout-response-toolbar { padding:8px 20px; border-bottom:1px solid var(--vscode-panel-border); }
+.popout-response-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.popout-trim:not([hidden]) { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-top:4px; }
+.popout-trim > span { color:var(--vscode-descriptionForeground); font-size:.85rem; font-variant-numeric:tabular-nums; }
+.popout-trim-control { position:relative; flex:1 1 150px; height:32px; min-width:0; }
+.popout-trim-rail {
+  position:absolute; inset:0 8px; cursor:pointer;
+  background:linear-gradient(to right,
+    var(--vscode-panel-border) 0 var(--trim-first),
+    var(--vscode-focusBorder) var(--trim-first) var(--trim-last),
+    var(--vscode-panel-border) var(--trim-last) 100%) center / 100% 4px no-repeat;
+}
+.popout-trim-control input[type='range'] {
+  appearance:none; position:absolute; inset:0; width:100%; height:100%;
+  margin:0; padding:0; border:0; border-radius:0; background:transparent; pointer-events:none;
+}
+.popout-trim-control input:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:0; z-index:1; }
+.popout-trim-control input::-webkit-slider-thumb {
+  appearance:none; width:16px; height:16px; border:1px solid var(--vscode-focusBorder); border-radius:50%;
+  background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
+}
+.popout-trim-control input::-moz-range-thumb {
+  box-sizing:border-box; width:16px; height:16px; border:1px solid var(--vscode-focusBorder); border-radius:50%;
+  background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
+}
+/* Separate the thumb hit areas vertically, including when both select the same block. */
+.popout-trim-first::-webkit-slider-thumb { transform:translateY(-6px); }
+.popout-trim-last::-webkit-slider-thumb { transform:translateY(6px); }
+.popout-trim-first::-moz-range-thumb { transform:translateY(-6px); }
+.popout-trim-last::-moz-range-thumb { transform:translateY(6px); }
+

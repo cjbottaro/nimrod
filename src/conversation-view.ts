@@ -402,6 +402,31 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     container.append(image); return container;
   }
 
+  const responseActions = new WeakMap<HTMLElement, HTMLButtonElement>();
+  const responseSources = new WeakMap<HTMLButtonElement, DisplayMessage['content']>();
+  function renderResponseAction(node: HTMLElement, message: DisplayMessage): void {
+    if (message.role !== 'assistant') return;
+    const source = message.content;
+    const hasText = Array.isArray(source)
+      ? source.some(block => block.type === 'text' && !!safeText(block.text).trim())
+      : !!safeText(source).trim();
+    let button = responseActions.get(node);
+    if (!hasText) { button?.parentElement?.remove(); responseActions.delete(node); return; }
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'response-popout code-action';
+      button.title = 'Pop out response';
+      button.setAttribute('aria-label', button.title);
+      setCodeIcon(button, 'popout');
+      const row = element('div', 'response-actions');
+      row.append(button);
+      node.insertBefore(row, node.firstElementChild?.classList.contains('message-origin') ? node.firstElementChild.nextSibling : node.firstChild);
+      responseActions.set(node, button);
+    }
+    responseSources.set(button, source);
+  }
+
   const messageOrigins = new WeakMap<HTMLElement, HTMLElement>();
   function renderMessageOrigin(node: HTMLElement, message: DisplayMessage): void {
     let label = messageOrigins.get(node);
@@ -430,6 +455,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const role = safeText(message.role);
     const article = element("article", `message ${role}`);
     article.hidden = isEmptyAssistantMessage(message);
+    renderResponseAction(article, message);
     renderMessageOrigin(article, message);
     article.dataset.key = safeText(message.key);
     const presentation = transcriptRolePresentation(role, safeText(message.toolName));
@@ -504,6 +530,7 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
   function patchMessageContent(node: HTMLElement, message: DisplayMessage): boolean {
     if (node.dataset.key !== safeText(message.key) || node.classList.contains(safeText(message.role)) === false) return false;
     node.hidden = isEmptyAssistantMessage(message);
+    renderResponseAction(node, message);
     renderMessageOrigin(node, message);
     node.classList.toggle("error", message.isError === true);
     if (message.role === "user") node.setAttribute("aria-label", message.originLabel ? `${message.originLabel} · User message` : "User message");
@@ -527,11 +554,11 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       return true;
     }
     if (!Array.isArray(message.content)) {
-      if (message.role !== "user" || node.querySelectorAll("[data-block-key]").length !== 1) return false;
+      if ((message.role !== 'user' && message.role !== 'assistant') || node.querySelectorAll('[data-block-key]').length !== 1) return false;
       const previous = node.querySelector<HTMLElement>('[data-block-key="text:0"]') ?? undefined;
       if (!previous) return false;
-      const text = renderUserText(message.content, `${message.key}:skill:0`, previous);
-      text.dataset.blockKey = "text:0";
+      const text = message.role === 'user' ? renderUserText(message.content, `${message.key}:skill:0`, previous) : renderMarkdown(message.content);
+      text.dataset.blockKey = 'text:0';
       reconcileContentBlock(node, previous, text, previous);
       return true;
     }
@@ -1098,6 +1125,16 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     const copy = target?.closest<HTMLButtonElement>("button.code-copy");
     if (copy) {
       void copyCode(copy);
+      return;
+    }
+    const response = target?.closest<HTMLButtonElement>('button.response-popout');
+    if (response) {
+      if (!active || disposed || deletionLocked) return;
+      const source = responseSources.get(response);
+      const text = Array.isArray(source)
+        ? source.flatMap(block => block.type === 'text' && safeText(block.text).trim() ? [safeText(block.text)] : []).join('\n\n')
+        : safeText(source);
+      if (text) post('popOutResponse', { text });
       return;
     }
     const popout = target?.closest<HTMLButtonElement>('button.code-popout');

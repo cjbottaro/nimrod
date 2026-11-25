@@ -572,6 +572,7 @@ fn main() {
             popouts::open_code_popout,
             popouts::sync_popout_sessions,
             popouts::code_popout_snapshot,
+            popouts::set_response_popout_trim,
             popouts::open_popout_link,
             performance_diagnostics::write_performance_report,
             transcript_logs::append_transcript_logs,

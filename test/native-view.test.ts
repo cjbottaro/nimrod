@@ -644,6 +644,32 @@ test('code actions are icon-only; duplicate content sends the same pop-out paylo
   } finally { f.dom.window.close(); }
 });
 
+test('response pop-out captures the latest painted assistant text and code but not tool, reasoning or user content', () => {
+  const f = fixture();
+  try {
+    const first = { type: 'text', text: '  # Context\n' };
+    const code = { type: 'text', text: '```ts\nconst answer = 42;\n```' };
+    const thinking = { type: 'thinking', thinking: 'Not response text' };
+    const tool = { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'private.txt' } };
+    const messages = [
+      { key: 'user', role: 'user', content: 'User prompt' },
+      { key: 'only-reasoning', role: 'assistant', content: [thinking] },
+      { key: 'response', role: 'assistant', content: [first, thinking, tool] },
+    ];
+    f.snapshot({ messages });
+    const button = f.win.document.querySelector<HTMLButtonElement>('.response-popout')!;
+    assert.equal(f.win.document.querySelectorAll('.response-popout').length, 1);
+    button.focus();
+    f.snapshot({ messages: [...messages.slice(0, 2), { ...messages[2], content: [first, thinking, tool, code] }] });
+    assert.equal(f.win.document.activeElement, button);
+    assert.ok(f.win.document.querySelector('.code-popout'));
+    button.click();
+    assert.deepEqual(JSON.parse(JSON.stringify(f.sent.filter(m => m.type === 'popOutResponse'))), [
+      { type: 'popOutResponse', text: `${first.text}\n\n${code.text}` },
+    ]);
+  } finally { f.dom.window.close(); }
+});
+
 test('only unlabeled user code is detected across string, block and pending turns; pop-outs capture its language', () => {
   const f = fixture();
   try {

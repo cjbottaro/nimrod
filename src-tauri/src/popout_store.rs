@@ -27,15 +27,58 @@ pub struct CodeSnapshot {
     pub title: String,
     pub text: String,
     pub language: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub response: bool,
 }
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
 impl CodeSnapshot {
+    pub fn fingerprint(&self) -> String {
+        if self.response {
+            // Separate identical prose from a Markdown-labeled code block, without changing old hashes.
+            let mut digest = Sha256::new();
+            digest.update(b"nimrod.response-popout.v1\0");
+            digest.update(self.text.as_bytes());
+            return format!("{:x}", digest.finalize());
+        }
+        fingerprint(&self.language, &self.text)
+    }
+    pub fn validate_trim(&self, trim: Option<ResponseTrim>) -> Result<(), String> {
+        if let Some(trim) = trim {
+            if !self.response {
+                return Err("This pop-out is not a response".into());
+            }
+            trim.validate(self.text.len())?;
+        }
+        Ok(())
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.text.len() > MAX_TEXT_BYTES
             || self.session.len() > 256
             || self.title.len() > 512
             || self.language.len() > 128
         {
-            return Err("Code pop-out is too large".into());
+            return Err("Pop-out is too large".into());
+        }
+        if self.response && self.language != "markdown" {
+            return Err("Response pop-outs require Markdown".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResponseTrim {
+    pub first: usize,
+    pub last: usize,
+}
+impl ResponseTrim {
+    pub fn validate(&self, size: usize) -> Result<(), String> {
+        if self.first > self.last || self.last >= size {
+            return Err("Invalid response trim range".into());
         }
         Ok(())
     }
@@ -49,6 +92,8 @@ pub struct SavedPopout {
     pub pi: PiSessionRef,
     pub fingerprint: String,
     pub geometry: Option<Geometry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trim: Option<ResponseTrim>,
 }
 impl SavedPopout {
     fn validate(&self) -> Result<(), String> {
@@ -69,6 +114,9 @@ impl SavedPopout {
             .is_some_and(|g| !crate::window_state::valid_for(g, (320.0, 220.0)))
         {
             return Err("Invalid saved pop-out geometry".into());
+        }
+        if let Some(trim) = self.trim {
+            trim.validate(MAX_TEXT_BYTES)?;
         }
         Ok(())
     }
@@ -164,10 +212,10 @@ impl SnapshotStore<'_> {
         }
         let record: FileRecord = serde_json::from_str(&text).map_err(|e| e.to_string())?;
         record.snapshot.validate()?;
+        record.snapshot.validate_trim(reference.trim)?;
         if record.version != 1
             || !record.reference.same_source(reference)
-            || fingerprint(&record.snapshot.language, &record.snapshot.text)
-                != reference.fingerprint
+            || record.snapshot.fingerprint() != reference.fingerprint
         {
             return Err("Snapshot identity/content does not match its state reference".into());
         }
@@ -176,7 +224,8 @@ impl SnapshotStore<'_> {
     pub fn save_new(&self, reference: &SavedPopout, snapshot: &CodeSnapshot) -> Result<(), String> {
         reference.validate()?;
         snapshot.validate()?;
-        if fingerprint(&snapshot.language, &snapshot.text) != reference.fingerprint {
+        snapshot.validate_trim(reference.trim)?;
+        if snapshot.fingerprint() != reference.fingerprint {
             return Err("Invalid snapshot fingerprint".into());
         }
         let path = self.path(&reference.id)?;
@@ -212,7 +261,7 @@ impl SnapshotStore<'_> {
         self.0.update_state(entries)?;
         Ok(())
     }
-    pub fn save_geometry(&self, reference: &SavedPopout) -> Result<(), String> {
+    pub fn update_reference(&self, reference: &SavedPopout) -> Result<(), String> {
         reference.validate()?;
         self.0.update_existing_state(
             format!("{PREFIX}{}", reference.id),
@@ -258,8 +307,9 @@ mod tests {
                 path: cwd.join("pi.jsonl"),
                 session_id: "session-a".into(),
             },
-            fingerprint: fingerprint(&snapshot.language, &snapshot.text),
+            fingerprint: snapshot.fingerprint(),
             geometry: None,
+            trim: None,
         }
     }
     #[test]
@@ -288,6 +338,7 @@ mod tests {
             title: "A".into(),
             text: "# Reference\n".into(),
             language: "markdown".into(),
+            response: false,
         }
     }
     #[test]
@@ -388,7 +439,7 @@ mod tests {
             )
             .unwrap(),
         );
-        store.save_geometry(&saved).unwrap();
+        store.update_reference(&saved).unwrap();
         let reopened = Preferences::isolated(dir.path());
         let reopened = SnapshotStore(&reopened);
         let restored = reopened.references(dir.path(), &saved.pi).0.remove(0);
@@ -396,8 +447,44 @@ mod tests {
         assert_eq!(reopened.load(&restored).unwrap().text, snapshot.text);
         assert_eq!(fs::read(store.path(&saved.id).unwrap()).unwrap(), original);
         store.remove(&saved.id).unwrap();
-        assert!(store.save_geometry(&saved).is_err());
+        assert!(store.update_reference(&saved).is_err());
         assert!(store.references(dir.path(), &saved.pi).0.is_empty());
+    }
+    #[test]
+    fn response_trim_is_separate_from_snapshot_source_and_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let preferences = Preferences::isolated(dir.path());
+        let store = SnapshotStore(&preferences);
+        let code = CodeSnapshot {
+            text: "First\n\nSecond\n\nThird".into(),
+            ..snapshot()
+        };
+        let response = CodeSnapshot {
+            response: true,
+            ..code.clone()
+        };
+        assert_ne!(response.fingerprint(), code.fingerprint());
+        let mut saved = reference(dir.path(), &response);
+        store.save_new(&saved, &response).unwrap();
+        let path = store.path(&saved.id).unwrap();
+        let original = fs::read(&path).unwrap();
+        let trim = Some(ResponseTrim { first: 1, last: 2 });
+        assert!(code.validate_trim(trim).is_err());
+        assert!(
+            response
+                .validate_trim(Some(ResponseTrim { first: 2, last: 1 }))
+                .is_err()
+        );
+        saved.trim = trim;
+        store.update_reference(&saved).unwrap();
+        let reopened = Preferences::isolated(dir.path());
+        let reopened = SnapshotStore(&reopened);
+        let restored = reopened.references(dir.path(), &saved.pi).0.remove(0);
+        assert_eq!(restored.trim, trim);
+        let loaded = reopened.load(&restored).unwrap();
+        assert!(loaded.response);
+        assert_eq!(loaded.text, response.text);
+        assert_eq!(fs::read(path).unwrap(), original);
     }
     #[test]
     fn changed_content_and_invalid_references_are_rejected_without_removing_recovery_files() {

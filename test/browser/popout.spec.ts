@@ -3,10 +3,10 @@ import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-type FixtureWindow = Window & { __popoutTitle?: string; __copiedText?: string };
+type FixtureWindow = Window & { __popoutTitle?: string; __copiedText?: string; __trimWrites?: unknown[] };
 
 // Real WebKit layout, mocked native boundary. No Pi, user files or external requests.
-async function popoutFixture(page: Page, text: string, language: string) {
+async function popoutFixture(page: Page, text: string, language: string, response = false, trim?: { first: number; last: number }) {
   const bundle = await build({ entryPoints: ['src/main.ts'], bundle: true, format: 'iife', platform: 'browser', write: false,
     loader: { '.css': 'empty' }, plugins: [{ name: 'raw', setup(builder) {
       builder.onResolve({ filter: /\.html\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace('?raw', '')), namespace: 'raw' }));
@@ -17,7 +17,7 @@ async function popoutFixture(page: Page, text: string, language: string) {
   const html = readFileSync('index.html', 'utf8').replace('<script type="module" src="/src/main.ts"></script>', '').replace('</head>', `<style>${css}</style></head>`);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(String(error)));
-  await page.addInitScript(({ text, language }) => {
+  await page.addInitScript(({ text, language, response, trim }) => {
     const state = window as FixtureWindow;
     Object.assign(window, { __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener() {} }, __TAURI_INTERNALS__: {
       metadata: { currentWindow: { label: 'popout-fixture' }, currentWebview: { label: 'popout-fixture' } },
@@ -28,14 +28,15 @@ async function popoutFixture(page: Page, text: string, language: string) {
         if (command === 'tint_window_titlebar') return;
         if (command === 'window_appearance_preview_snapshot') return { revision: 0, opacity: null, blur: null };
         if (command === 'window_appearance_capabilities' || command === 'apply_window_appearance') return { platform: 'macos', transparency: true, frost: true, reducedTransparency: false };
-        if (command === 'code_popout_snapshot') return { session: 'fixture', title: 'Unused source session name', text, language };
+        if (command === 'code_popout_snapshot') return { session: 'fixture', title: 'Unused source session name', text, language, response, trim };
+        if (command === 'set_response_popout_trim') { (state.__trimWrites ??= []).push(args.trim); return; }
         if (command === 'plugin:webview|set_webview_zoom') return;
         if (command === 'plugin:window|set_title') { state.__popoutTitle = String(args.value); return; }
         if (command === 'plugin:clipboard-manager|write_text') { state.__copiedText = String(args.text); return; }
         throw new Error(`Unexpected native operation: ${command}`);
       },
     } });
-  }, { text, language });
+  }, { text, language, response, trim });
   await page.route('**/*', route => route.request().url() === 'https://nimrod.test/?popout'
     ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
   await page.goto('https://nimrod.test/?popout');
@@ -77,5 +78,31 @@ test('Markdown Copy stays at the upper-right without a header or obscuring scrol
   await copy.click();
   expect(await page.evaluate(() => (window as FixtureWindow).__copiedText)).toBe(text);
   expect(await page.evaluate(() => (window as FixtureWindow).__popoutTitle)).toBe('A useful reference');
+  expect(errors).toEqual([]);
+});
+
+test('response trim restores, previews, copies and resets a contiguous Markdown range', async ({ page }) => {
+  const text = '# Complete response\n\nA middle paragraph.\n\n```ts\nconst value = 1;\n```\n\nLast paragraph.';
+  const errors = await popoutFixture(page, text, 'markdown', true, { first: 1, last: 2 });
+  const document = page.locator('.popout-document');
+  await expect(page).toHaveTitle('Complete response');
+  await expect(document).toContainText('A middle paragraph.');
+  await expect(document).not.toContainText('Last paragraph.');
+  await expect(document.locator('.code-popout')).toHaveCount(0);
+  await expect(page.getByRole('slider')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Trim', exact: true }).click();
+  const first = page.getByRole('slider', { name: 'First block to keep' });
+  const last = page.getByRole('slider', { name: 'Last block to keep' });
+  await expect(first).toHaveValue('1');
+  await first.press('ArrowRight');
+  await expect(document).not.toContainText('A middle paragraph.');
+  await expect(last).toHaveValue('2');
+  await first.press('ArrowRight');
+  await expect(first).toHaveValue('2');
+  await page.getByRole('button', { name: 'Copy Markdown source', exact: true }).click();
+  expect(await page.evaluate(() => (window as FixtureWindow).__copiedText)).toMatch(/^```ts\nconst value = 1;\n```\n*$/);
+  await page.getByRole('button', { name: 'Reset trim' }).click();
+  await expect(document).toContainText('Last paragraph.');
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites)).toEqual([{ first: 2, last: 2 }, null]);
   expect(errors).toEqual([]);
 });

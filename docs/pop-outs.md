@@ -1,19 +1,23 @@
 # Pop-outs
 
-Keep a code block visible while the conversation continues: click its **Pop out**
-icon, to the left of **Copy**. Copy briefly becomes a checkmark after success.
+Click **Pop out response** at the top of an assistant turn to open its response text, including code blocks, in a separate reference window. Reasoning and tool cards stay in the transcript. To open just one code block, use its **Pop out** icon next to **Copy**.
+
+## Trim a response
+
+In the response Pop-out, click **Trim**. Drag either end of the slider, or focus a handle and use the arrow keys. Each stop is a whole Markdown block: a paragraph, heading, list, table, quote, or code block. The window previews the kept blocks as you move a handle. The trim controls are available when there's more than one block to keep or cut.
+
+**Copy source** copies the kept Markdown. Reference-style links still work in the Pop-out, but their definitions aren't copied if they're outside the kept range. **Reset trim** brings back the full response. Saved Pop-outs remember the trim; it never edits the transcript or discards the rest of the snapshot.
 
 ## What you get
 
 - A separate window containing the captured content. Later agent output does not update it.
 - Global [typography preferences](settings.md#typography) update existing reference windows: conversation fonts for Markdown prose and monospace fonts for code. The captured source stays unchanged.
 - [Syntax highlighting](syntax-highlighting.md) for labeled code, including Elixir, and languages detected from user code; formatted rendering for Markdown. Pop-outs preserve their captured language rather than guessing again.
-- **Copy** copies the original source. Markdown has a small upper-right Copy source
-  icon; nested code blocks have their own Copy buttons.
+- **Copy** copies source rather than rendered text. Markdown has a **Copy source**
+  icon; nested code blocks have their own **Copy** buttons.
 - A short content-based window title, without a redundant session/snapshot header.
 - HTTP(S) links, including the native right-click menu's **Open Link / Open URL**, open your default browser rather than replacing the reference window.
-- Clicking Pop out on identical content and language in the same session focuses
-  the existing window—even if that content appears in another turn.
+- Opening identical responses in the same session focuses the existing window. Code blocks match other code blocks by content and language, not responses.
 
 ## Sessions and persistence
 
@@ -33,8 +37,7 @@ On macOS, ⌘\` cycles project windows, skipping pop-outs. Click a pop-out to fo
 it; ⌘W still closes it. Automatic restoration leaves keyboard focus on the composer
 or active dialog.
 
-Temporary-session pop-outs last only for the current run. New saved sessions gain
-persistent pop-outs after Pi's first verified save. Compaction does not remove
+Pop-outs from temporary sessions and non-Pi sessions last only for the current run. Pi sessions gain persistent Pop-outs after the first verified save. Compaction does not remove
 captured content. Pop-outs do not provide editing or “Show in conversation.”
 
 Snapshots are stored in `~/.local/state/nimrod/popouts/`, with references in app-managed

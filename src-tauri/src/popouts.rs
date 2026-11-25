@@ -1,5 +1,5 @@
 use crate::{
-    popout_store::{CodeSnapshot, PiSessionRef, SavedPopout, SnapshotStore, fingerprint},
+    popout_store::{CodeSnapshot, PiSessionRef, ResponseTrim, SavedPopout, SnapshotStore},
     preferences::Preferences,
     window_state,
 };
@@ -29,6 +29,7 @@ struct PopoutEntry {
     snapshot: Arc<CodeSnapshot>,
     fingerprint: String,
     saved: Option<SavedPopout>,
+    trim: Option<ResponseTrim>,
 }
 #[derive(Default)]
 struct Registry {
@@ -238,7 +239,7 @@ fn save_geometry(app: &tauri::AppHandle, id: &str, capture: bool) -> Result<(), 
             return Ok(());
         }
         saved.geometry = Some(geometry);
-        SnapshotStore(&app.state::<Preferences>()).save_geometry(&saved)?;
+        SnapshotStore(&app.state::<Preferences>()).update_reference(&saved)?;
         if let Some(entry) = state.registry.lock().unwrap().entries.get_mut(id) {
             entry.saved = Some(saved);
         }
@@ -437,6 +438,7 @@ pub async fn sync_popout_sessions(
                 pi,
                 fingerprint: entry.fingerprint.clone(),
                 geometry: window_state::cached(&app, &label(&id)),
+                trim: entry.trim,
             };
             match store.save_new(&saved, &entry.snapshot) {
                 Ok(()) => {
@@ -500,6 +502,7 @@ pub async fn sync_popout_sessions(
                                 cwd: saved.cwd.clone(),
                                 snapshot: Arc::new(snapshot),
                                 fingerprint: saved.fingerprint.clone(),
+                                trim: saved.trim,
                                 saved: Some(saved),
                             };
                             if let Err(e) = create_window(&app, &id, entry).await {
@@ -565,7 +568,7 @@ pub async fn open_code_popout(
     }) {
         return Err("This session is unavailable after deletion".into());
     }
-    let hash = fingerprint(&snapshot.language, &snapshot.text);
+    let hash = snapshot.fingerprint();
     let mut existing = state
         .owned(window.label())
         .into_iter()
@@ -592,6 +595,7 @@ pub async fn open_code_popout(
                     cwd: cwd.clone(),
                     snapshot: Arc::new(restored),
                     fingerprint: hash.clone(),
+                    trim: saved.trim,
                     saved: Some(saved),
                 },
             )
@@ -609,6 +613,7 @@ pub async fn open_code_popout(
             pi,
             fingerprint: hash.clone(),
             geometry: None,
+            trim: None,
         });
         if let Some(saved) = &saved {
             SnapshotStore(&app.state::<Preferences>()).save_new(saved, &snapshot)?;
@@ -620,6 +625,7 @@ pub async fn open_code_popout(
             snapshot: Arc::new(snapshot),
             fingerprint: hash,
             saved,
+            trim: None,
         };
         // If native creation fails, the durable snapshot remains referenced for retry.
         create_window(&app, &id, entry).await?;
@@ -816,14 +822,22 @@ pub async fn open_popout_link(
         .entries
         .get(id)
         .map(|e| e.cwd.clone())
-        .ok_or("This code pop-out is no longer available")?;
+        .ok_or("This pop-out is no longer available")?;
     crate::open_link_at(&href, &cwd).await
 }
+#[derive(Serialize)]
+pub struct PopoutViewSnapshot {
+    #[serde(flatten)]
+    snapshot: CodeSnapshot,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trim: Option<ResponseTrim>,
+}
+
 #[tauri::command]
 pub fn code_popout_snapshot(
     state: tauri::State<'_, Popouts>,
     window: tauri::Window,
-) -> Result<CodeSnapshot, String> {
+) -> Result<PopoutViewSnapshot, String> {
     let id = window
         .label()
         .strip_prefix("popout-")
@@ -834,13 +848,57 @@ pub fn code_popout_snapshot(
         .unwrap()
         .entries
         .get(id)
-        .map(|e| e.snapshot.as_ref().clone())
-        .ok_or_else(|| "This code pop-out is no longer available".into())
+        .map(|e| PopoutViewSnapshot {
+            snapshot: e.snapshot.as_ref().clone(),
+            trim: e.trim,
+        })
+        .ok_or_else(|| "This pop-out is no longer available".into())
+}
+
+#[tauri::command]
+pub async fn set_response_popout_trim(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    trim: Option<ResponseTrim>,
+) -> Result<(), String> {
+    let id = window
+        .label()
+        .strip_prefix("popout-")
+        .ok_or("Not a pop-out window")?;
+    let state = app.state::<Popouts>();
+    // Serialize with geometry updates, first-save promotion and deletion.
+    let _operations = state.operations.lock().await;
+    let entry = state
+        .registry
+        .lock()
+        .unwrap()
+        .entries
+        .get(id)
+        .cloned()
+        .ok_or("This pop-out is no longer available")?;
+    if !entry.snapshot.response {
+        return Err("This pop-out is not a response".into());
+    }
+    entry.snapshot.validate_trim(trim)?;
+    if entry.trim == trim {
+        return Ok(());
+    }
+    let mut saved = entry.saved;
+    if let Some(reference) = saved.as_mut() {
+        reference.trim = trim;
+        SnapshotStore(&app.state::<Preferences>()).update_reference(reference)?;
+    }
+    if let Some(entry) = state.registry.lock().unwrap().entries.get_mut(id) {
+        entry.trim = trim;
+        entry.saved = saved;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::popout_store::fingerprint;
     #[test]
     fn selection_is_window_scoped_and_retirement_invalidates_in_flight_work() {
         let state = Popouts::default();
@@ -889,9 +947,11 @@ mod tests {
                         title: String::new(),
                         text: "reference".into(),
                         language: "text".into(),
+                        response: false,
                     }),
                     fingerprint: fingerprint("text", "reference"),
                     saved: None,
+                    trim: None,
                 },
             );
         }
@@ -985,6 +1045,7 @@ mod tests {
             title: "A".into(),
             text: "same".into(),
             language: "ts".into(),
+            response: false,
         };
         let saved = SavedPopout {
             id: uuid::Uuid::new_v4().to_string(),
@@ -992,6 +1053,7 @@ mod tests {
             pi: pi.clone(),
             fingerprint: fingerprint("ts", "same"),
             geometry: None,
+            trim: None,
         };
         let entry = PopoutEntry {
             owner: "window-a".into(),
@@ -1000,6 +1062,7 @@ mod tests {
             fingerprint: saved.fingerprint.clone(),
             snapshot: Arc::new(snapshot),
             saved: Some(saved),
+            trim: None,
         };
         let binding = SessionBinding {
             runtime_id: "new-runtime".into(),

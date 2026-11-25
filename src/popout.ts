@@ -15,11 +15,14 @@ import { installKeybindingDispatch, readKeyOverrides } from './keybindings';
 import { codeBlockSource, createSafeMarkdownRenderer } from './pi/safe-markdown';
 import { setCodeIcon, showCopyResult } from './pi/code-actions';
 import { isMarkdownLanguage, popoutTitle } from './popout-presentation';
+import { createPopoutTrim } from './popout-trim';
+import { responseMarkdown, type ResponseTrim } from './response-markdown';
+import type { PopoutSnapshot } from './session-popouts';
 import { applyTypography, readTypography } from './typography';
 import './popout.css';
 import './utility-button.css';
 
-interface CodeSnapshot { session: string; title: string; text: string; language: string; }
+interface PopoutViewSnapshot extends PopoutSnapshot { trim?: ResponseTrim; }
 
 export async function mountPopout(): Promise<void> {
   document.body.className = 'code-popout-window';
@@ -71,17 +74,19 @@ export async function mountPopout(): Promise<void> {
     }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
     window.addEventListener('unload', unlistenLinkErrors, { once: true });
     await refreshPreferences();
-    const snapshot = await invoke<CodeSnapshot>('code_popout_snapshot');
+    const snapshot = await invoke<PopoutViewSnapshot>('code_popout_snapshot');
     const renderer = createSafeMarkdownRenderer(window);
     const isMarkdown = isMarkdownLanguage(snapshot.language);
     rendered.innerHTML = isMarkdown ? renderer.render(snapshot.text) : renderer.renderCode(snapshot.text, snapshot.language);
-    rendered.querySelectorAll('.code-popout').forEach(button => button.remove());
+    const removeNestedPopouts = () => rendered.querySelectorAll('.code-popout').forEach(button => button.remove());
+    removeNestedPopouts();
+    let copySource = () => snapshot.text;
     const title = popoutTitle(snapshot.text, snapshot.language, rendered);
     document.title = title;
     void getCurrentWindow().setTitle(title).catch(report);
     if (isMarkdown) {
-      rendered.classList.add('popout-markdown');
-      const actions = document.createElement('div'); actions.className = 'popout-copy-source';
+      const actions = document.createElement('div');
+      actions.className = snapshot.response ? 'popout-response-actions' : 'popout-copy-source';
       const copy = document.createElement('button'); copy.type = 'button';
       copy.className = 'code-copy code-action'; copy.dataset.copySnapshot = 'true';
       copy.title = 'Copy Markdown source to clipboard'; copy.setAttribute('aria-label', 'Copy Markdown source');
@@ -89,7 +94,34 @@ export async function mountPopout(): Promise<void> {
       const status = document.createElement('span'); status.className = 'code-copy-status';
       status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       actions.append(copy, status);
-      document.body.append(actions);
+      if (snapshot.response) {
+        const toolbar = document.createElement('header');
+        toolbar.className = 'popout-response-toolbar';
+        toolbar.append(actions);
+        content.before(toolbar);
+        const markdown = responseMarkdown(snapshot.text);
+        if (markdown) {
+          const preview = (range: ResponseTrim, reveal: keyof ResponseTrim) => {
+            rendered.innerHTML = renderer.renderTokens(markdown.tokens(range));
+            removeNestedPopouts();
+            content.scrollTop = reveal === 'first' ? 0 : content.scrollHeight;
+          };
+          const initial = markdown.valid(snapshot.trim) ? snapshot.trim : markdown.full;
+          if (initial !== markdown.full) preview(initial, 'first');
+          const trim = createPopoutTrim({
+            initial, full: markdown.full, preview,
+            save: trim => invoke('set_response_popout_trim', { trim }),
+            report: error => report(`Could not save response trim: ${String(error)}`),
+          });
+          actions.prepend(trim.toggle);
+          toolbar.append(trim.panel);
+          copySource = () => markdown.source(trim.range());
+          window.addEventListener('unload', trim.dispose, { once: true });
+        }
+      } else {
+        rendered.classList.add('popout-markdown');
+        document.body.append(actions);
+      }
     }
     document.body.addEventListener('click', async event => {
       const target = event.target instanceof Element ? event.target : null;
@@ -97,7 +129,7 @@ export async function mountPopout(): Promise<void> {
       if (copy && !copy.disabled) {
         const status = copy.parentElement?.querySelector<HTMLElement>('.code-copy-status');
         const block = copy.closest('.code-block');
-        const source = copy.dataset.copySnapshot ? snapshot.text : block ? codeBlockSource(block) : undefined;
+        const source = copy.dataset.copySnapshot ? copySource() : block ? codeBlockSource(block) : undefined;
         if (source === undefined || !status) return;
         copy.disabled = true;
         try { await writeText(source); showCopyResult(copy, status, true); }
@@ -119,5 +151,5 @@ export async function mountPopout(): Promise<void> {
         event.preventDefault(); void getCurrentWindow().close().catch(report);
       }
     });
-  } catch (e) { report(`Could not open code snapshot: ${e}`); }
+  } catch (e) { report(`Could not open snapshot: ${e}`); }
 }

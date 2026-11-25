@@ -13,7 +13,7 @@ implementation, storage, invariants, platform workarounds or test coverage.
 
 ## Specification and acceptance criteria
 
-Immutable source captures deduplicate per session/content/language. Saved snapshots survive source Close/quit, explicit reference Close removes them, and automatic visibility preserves focus while explicit opening focuses the reference.
+Immutable source captures deduplicate per session/content/kind (and language for code). Saved snapshots survive source Close/quit, explicit reference Close removes them, and automatic visibility preserves focus while explicit opening focuses the reference.
 
 ## Product boundaries
 
@@ -24,21 +24,18 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
   running agents, but their references are hidden until that project is activated.
 - Copy/Pop out are icon-only, in that left-to-right order: Pop out, Copy. Buttons
   have accessible labels/tooltips; copy success shows a checkmark for 1.2 seconds.
-- Identical content/language anywhere in one session shares a pop-out. This is
-  intentional, including identical content in different turns.
+- Identical content of the same kind anywhere in one session shares a Pop-out, including across assistant turns. Code also matches on language.
 - Switching sessions hides/shows references; closing the source session/project
   preserves saved snapshots. Explicit pop-out Close removes the saved reference
   and file. Confirmed source-session tree deletion removes associated windows, state references and files too, including unmounted projects. Failed/unknown deletions retain them. App Quit preserves snapshots.
-- Temporary/demo and pre-first-save pop-outs are runtime-only. Provisional
-  saved-session snapshots promote after verified Pi persistence, even in background.
+- Temporary/demo, non-Pi and pre-first-save Pop-outs are runtime-only. Provisional snapshots promote after verified Pi persistence, even in background.
 - No original message ID, block ordinal, transcript key or backlink is tracked.
   **Show in conversation is intentionally dropped, not a deferred requirement.**
 - Native title bars/window controls remain. On macOS, pop-outs opt out of native
   window cycling while remaining focusable by click; ⌘W still closes the reference.
   Frameless/custom chrome was discussed and deferred; do not implement it as part
   of unrelated maintenance.
-- Nimrod owns snapshots and window state. Pi owns conversations/session files.
-  Pi is the only implemented harness; do not invent a generic harness protocol.
+- Nimrod owns snapshots and window state. Harnesses own conversations. The shared transcript provides runtime captures; verified Pi session provenance is the current requirement for durable restoration.
 
 ## File map
 
@@ -46,7 +43,8 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
 | --- | --- |
 | `src/pi/safe-markdown.ts` | Sanitized Markdown/highlighting; code-block actions; `renderCode` |
 | `src/pi/code-actions.ts` | SVG icons and timed copy success/failure feedback |
-| `src/pi/webview-client.ts` | Delegated transcript Copy/Pop out clicks; exact source extraction |
+| `src/conversation-view.ts` | Retained response action and delegated transcript Copy/Pop out clicks; source extraction |
+| `src/response-markdown.ts`, `src/popout-trim.ts` | GFM block ranges, original source offsets, live trim controls and serialized commit |
 | `src/main.ts` | Session ownership/selection, native bridge, first-save promotion and errors |
 | `src/session-popouts.ts` | Serialized/coalesced sync/open queue and stale-open guards |
 | `src/popout.ts` | Dedicated window boot, rendering, clipboard, links, appearance, close shortcut |
@@ -67,7 +65,12 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
 2. Delegated transcript clicks use `codeBlockSource`, which reads `pre > code`
    textContent. The renderer posts `popOutCode` with `text` and `language`, not a
    transcript locator. Source bytes include whatever newlines the rendered block
-   contains; do not silently trim or normalize them.
+   contains; do not silently trim or normalize them. The retained **Pop out response**
+   button posts `popOutResponse` with the latest painted response text for its own
+   assistant entry. It joins non-blank text blocks with a blank line without trimming
+   individual blocks, omits thinking/tool cards, and never reads DOM text to recover
+   Markdown. The shell maps this to the same native route with `response: true`
+   and `language: 'markdown'`. Code blocks keep their separate action.
 3. `src/main.ts` adds the mounted session ID and captured session display name,
    then queues the native open. Its guard checks that the session is still selected,
    present and not closing when the queued operation executes.
@@ -94,10 +97,11 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
   Existing snapshots retain their stored language; no fingerprint/storage migration.
 - Remove nested Pop out actions in this window. Nested code Copy still works.
 - There is no in-content session/“Read-only snapshot” header. Code keeps its
-  language/Copy row; Markdown has a floating upper-right Copy source icon.
-- `.popout-markdown` reserves 38 CSS pixels on the right so the source Copy icon
-  never obscures scrolled content. Content otherwise has the standard 20px gutters.
-- Markdown's whole-document Copy returns original source, not rendered text.
+  language/Copy row; Markdown-labeled code keeps the floating upper-right Copy
+  source icon and `.popout-markdown` reserves 38 CSS pixels to keep it clear of
+  content. Responses have a toolbar outside the scroll viewport for Trim and Copy
+  source. The content gutter is 20 CSS pixels.
+- Copy source returns original source for the visible range, not rendered text.
   Nested Copy returns only its own `pre > code` text. The pop-out and Nimrod's injected transcript presentation capability use native clipboard writes. Renderer fixtures/hosts without that capability retain browser clipboard plus the correlated host request/result fallback. Neither path submits prompts or needs a connected Pi child.
 - Title generation reads the first non-empty heading from the sanitized Markdown
   DOM; code uses its first non-empty source line. Empty/heading-free content falls
@@ -114,6 +118,13 @@ Immutable source captures deduplicate per session/content/language. Saved snapsh
 - New/restored references also install the shared [native navigation guard](transcript-interaction.md#native-link-navigation), covering context-menu URL opening and new-window requests that bypass DOM interception. Browser failures target only the originating reference's notice strip; unsupported native navigation cannot replace the snapshot.
 - ⌘W / Ctrl+W calls native Close. Do not replace that with direct `destroy()`, which
   bypasses persistence deletion semantics.
+
+### Response trim
+
+- **Trim** expands inline controls when there are at least two mappable top-level GFM blocks. One shared track has two separately focusable native range inputs. Their inclusive block indices cannot cross; at least one block stays visible. Paragraphs, headings, lists, tables, quotes and code fences remain whole. **Reset trim** clears the retained range.
+- Use the full capture's parsed tokens for preview (including resolved reference links), then the same sanitized renderer and code decoration as ordinary Markdown. Copy slices the exact original string, including its line endings; definitions outside the selected source aren't appended. If token boundaries cannot be mapped safely, show the full capture without Trim.
+- Slider movement updates locally and coalesces preview to at most one render per frame. The moved boundary is revealed in the Pop-out’s viewport only. The title remains derived from the full response. No transcript change, new window, or native write is needed while dragging.
+- Committed changes use `set_response_popout_trim` for the caller's own response window. Native operations serialize trim alongside geometry, promotion and Close. Pending commits coalesce without replacing optimistic local state. Errors use the Pop-out notice strip. Runtime-only references retain trim in the native registry; saved references use the same update-existing index path as geometry. Restore uses a saved range only if it still fits the parsed blocks.
 
 ### Card-plugin presentation capabilities
 
@@ -140,8 +151,7 @@ The fingerprint is SHA-256 over:
 ```
 
 Normalize language by trim/lowercase and map `md`, `mkd`, `mkdown` to `markdown`.
-Do not normalize source whitespace or include titles, window labels, runtime IDs,
-geometry or turn position. A hash/schema change needs explicit compatibility work;
+Response snapshots instead hash `"nimrod.response-popout.v1\\0" + exact_source UTF-8 bytes`, so identical Markdown-labeled code and responses remain distinct. Do not normalize source whitespace or include titles, window labels, runtime IDs, geometry, trim or turn position. A hash/schema change needs explicit compatibility work;
 otherwise existing file validation and content matching will break.
 
 Default storage (XDG overrides follow existing Preferences paths):
@@ -153,9 +163,8 @@ Default storage (XDG overrides follow existing Preferences paths):
   { version: 1, reference: SavedPopout, snapshot: CodeSnapshot }
 ```
 
-`SavedPopout` contains `id`, `cwd`, `pi`, `fingerprint`, `geometry`.
-`CodeSnapshot` contains `session`, `title`, `text`, `language`. Its `session` is a
-captured mounted identity, not the durable ownership key used for restoration.
+`SavedPopout` contains `id`, `cwd`, `pi`, `fingerprint`, `geometry` and optional `trim` (`first`/`last`, inclusive zero-based block indices).
+`CodeSnapshot` contains `session`, `title`, `text`, `language` and optional `response` (omitted for legacy/code captures). Its `session` is a captured mounted identity, not the durable ownership key used for restoration.
 Old snapshot `key` fields are ignored on read and omitted on serialization; no
 migration or user-file rewrite is required.
 
@@ -169,10 +178,8 @@ migration or user-file rewrite is required.
 - `save_new` writes a same-directory temporary file, syncs it, then uses
   `persist_noclobber`. Only afterward does it insert the state reference. A failed
   index write rolls back only that newly created file, never an existing snapshot.
-- Files are immutable after creation. Geometry changes update only the state
-  reference; file/index identity comparison deliberately ignores geometry.
-- Geometry writes use `update_existing_state`, not insert/merge: a late update must
-  not resurrect a pop-out already closed. Unchanged geometry skips persistence.
+- Files are immutable after creation. Geometry and trim changes update only the state reference; file/index identity comparison deliberately ignores both.
+- Metadata writes use `update_existing_state`, not insert/merge: a late update must not resurrect a pop-out already closed. Unchanged metadata skips persistence.
 - Explicit deletion removes the state reference before unlinking the file.
   An unlink failure reports an unreferenced leftover file, rather than leaving a
   reference that reopens after Close. A state-write failure retains the open window
@@ -298,8 +305,8 @@ Close; do not broaden it to project/session process controls.
 
 Relevant tests:
 
-- `test/native-view.test.ts`: action order/icons, exact source, locator-free duplicate
-  payloads, clipboard fallback and feedback, safe code rendering.
+- `test/native-view.test.ts`: action order/icons, exact source, locator-free duplicate payloads, response text isolation and retained action focus, clipboard fallback and feedback, safe code rendering.
+- `test/response-markdown.test.ts`: GFM boundaries, exact source offsets, and reference links across trimmed edges.
 - `test/session-popouts.test.ts`: coalescing, registration/open ordering, stale opens,
   background promotion, errors, disposal.
 - `test/popout-presentation.test.ts`: aliases, sanitized/setext headings, fenced
@@ -308,7 +315,7 @@ Relevant tests:
   runtime IDs, first-save promotion, selection/close, standalone route, copying,
   links/themes/titles and composer/dialog focus during delayed sync.
 - `test/browser/popout.spec.ts`: real WebKit content-first layout, corner Copy
-  clearance while scrolling, source copying and title dispatch with mocked IPC.
+  clearance while scrolling, source copying, title dispatch, and restored response trim/preview/reset with mocked IPC.
 - Rust tests in `popout_store.rs`: disk round-trips without Pi/history, bounds,
   hashing, owner isolation, corrupt/missing files, rollback, geometry/no resurrection,
   legacy metadata compatibility and content larger than global state limits.

@@ -1,6 +1,6 @@
 export interface PiPopoutOwner { path: string; sessionId: string; }
 export interface PopoutSessionBinding { runtimeId: string; pi: PiPopoutOwner | null; }
-export interface PopoutSnapshot { session: string; title: string; text: string; language: string; }
+export interface PopoutSnapshot { session: string; title: string; text: string; language: string; response?: boolean; }
 
 interface PopoutHost {
   sync(sessions: PopoutSessionBinding[], active: string | null): Promise<{ warnings: string[] }>;

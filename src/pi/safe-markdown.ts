@@ -2,11 +2,13 @@ import createDOMPurify, { type WindowLike } from "dompurify";
 import hljs from "highlight.js/lib/common";
 import elixir from "highlight.js/lib/languages/elixir";
 import erlang from "highlight.js/lib/languages/erlang";
-import { marked } from "marked";
+import { marked, type Token } from "marked";
 import { setCodeIcon } from './code-actions';
 
+export const MARKDOWN_OPTIONS = { breaks: true, gfm: true } as const;
 export interface SafeMarkdownRenderer {
   render(markdown: string, options?: { detectUnlabeledCode?: boolean }): string;
+  renderTokens(tokens: Token[]): string;
   renderCode(source: string, language?: string): string;
 }
 
@@ -56,40 +58,47 @@ export function createSafeMarkdownRenderer(window: Window): SafeMarkdownRenderer
       root.querySelector('.code-popout')?.remove();
       return root.innerHTML;
     },
-    render(markdown: string, options = {}): string {
-      const root = window.document.createElement("div");
-      root.innerHTML = purifier.sanitize(marked.parse(markdown || "", { async: false, breaks: true, gfm: true }), SANITIZE_OPTIONS);
-
-      for (const code of root.querySelectorAll("pre > code")) {
-        const source = code.textContent || "";
-        const explicitLanguage = languageFromClass(code.className);
-        let label = explicitLanguage || "plain text";
-        if (explicitLanguage) {
-          // Any explicit label wins, including plain text and unsupported languages.
-          highlightCode(code, source, explicitLanguage);
-        } else if (options.detectUnlabeledCode) {
-          const result = hljs.highlightAuto(source);
-          const runnerUp = result.secondBest?.relevance ?? 0;
-          if (result.language && result.relevance >= AUTO_DETECT_MIN_RELEVANCE
-            && result.relevance - runnerUp >= AUTO_DETECT_MIN_LEAD
-            && result.relevance >= runnerUp * AUTO_DETECT_MIN_RATIO) {
-            code.innerHTML = purifier.sanitize(result.value, SANITIZE_OPTIONS);
-            label = `${result.language} (detected)`;
-          }
-        }
-        decorateCodeBlock(window.document, code, label);
-      }
-
-      for (const link of root.querySelectorAll("a")) {
-        const href = link.getAttribute("href") || "";
-        if (!isSafeLink(href)) link.removeAttribute("href");
-      }
-
-      // Everything derived from Markdown was sanitized before decoration. The header is
-      // constructed with DOM APIs, so it cannot carry raw Markdown attributes or handlers.
-      return root.innerHTML;
+    render(markdown, options): string {
+      return renderHtml(marked.parse(markdown || '', { ...MARKDOWN_OPTIONS, async: false }), options);
+    },
+    renderTokens(tokens): string {
+      return renderHtml(marked.parser(tokens, MARKDOWN_OPTIONS));
     },
   };
+
+  function renderHtml(html: string, options: { detectUnlabeledCode?: boolean } = {}): string {
+    const root = window.document.createElement("div");
+    root.innerHTML = purifier.sanitize(html, SANITIZE_OPTIONS);
+
+    for (const code of root.querySelectorAll("pre > code")) {
+      const source = code.textContent || "";
+      const explicitLanguage = languageFromClass(code.className);
+      let label = explicitLanguage || "plain text";
+      if (explicitLanguage) {
+        // Any explicit label wins, including plain text and unsupported languages.
+        highlightCode(code, source, explicitLanguage);
+      } else if (options.detectUnlabeledCode) {
+        const result = hljs.highlightAuto(source);
+        const runnerUp = result.secondBest?.relevance ?? 0;
+        if (result.language && result.relevance >= AUTO_DETECT_MIN_RELEVANCE
+          && result.relevance - runnerUp >= AUTO_DETECT_MIN_LEAD
+          && result.relevance >= runnerUp * AUTO_DETECT_MIN_RATIO) {
+          code.innerHTML = purifier.sanitize(result.value, SANITIZE_OPTIONS);
+          label = `${result.language} (detected)`;
+        }
+      }
+      decorateCodeBlock(window.document, code, label);
+    }
+
+    for (const link of root.querySelectorAll("a")) {
+      const href = link.getAttribute("href") || "";
+      if (!isSafeLink(href)) link.removeAttribute("href");
+    }
+
+    // Everything derived from Markdown was sanitized before decoration. The header is
+    // constructed with DOM APIs, so it cannot carry raw Markdown attributes or handlers.
+    return root.innerHTML;
+  }
 }
 
 export function isSafeLink(value: string): boolean {

@@ -939,10 +939,12 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
       // The shell supplies its initial snapshot before any controller exists.
       if (message.type === 'ready' || message.type === 'deletionState') return;
       if (tab.deleting) return;
-      if (message.type === 'popOutCode') {
-        if (typeof message.text === 'string' && typeof message.language === 'string') {
-          popouts.open({ session: tab.id, title: tab.title, text: message.text, language: message.language },
-            () => presentation.current === tab && !tab.closing && tabs.includes(tab));
+      if (message.type === 'popOutResponse' || message.type === 'popOutCode') {
+        const response = message.type === 'popOutResponse';
+        const language = response ? 'markdown' : message.language;
+        if (typeof message.text === 'string' && typeof language === 'string') {
+          popouts.open({ session: tab.id, title: tab.title, text: message.text, language, ...(response ? { response } : {}) },
+            () => presentation.current === tab && !tab.closing && !tab.deleting && tabs.includes(tab));
         }
         return;
       }
