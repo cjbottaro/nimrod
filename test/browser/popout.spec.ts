@@ -5,6 +5,11 @@ import path from 'node:path';
 import { demoFixture, visible } from './demo-fixture';
 
 type FixtureWindow = Window & { __popoutTitle?: string; __copiedText?: string; __trimWrites?: unknown[] };
+const trimThumb = (page: Page, edge: 'start' | 'end') => page.locator(`.popout-trim-${edge} .popout-trim-thumb`);
+const thumbFilled = (page: Page, edge: 'start' | 'end') => trimThumb(page, edge).evaluate(el => {
+  const style = getComputedStyle(el);
+  return style.backgroundColor === style.borderTopColor;
+});
 
 // Real WebKit layout, mocked native boundary. No Pi, user files or external requests.
 async function popoutFixture(page: Page, text: string, language: string, response = false, trim?: { start: number; end: number }) {
@@ -153,29 +158,45 @@ test('the filled thumb owns arrow keys after a rail click and Tab', async ({ pag
   const rail = (await page.locator('.popout-trim-rail').boundingBox())!;
   const start = page.getByRole('slider', { name: 'Trim start' });
   const end = page.getByRole('slider', { name: 'Trim end' });
-  const fill = (handle: typeof start) => handle.evaluate(el => {
-    const style = getComputedStyle(el);
-    return style.getPropertyValue('--trim-thumb-fill').trim() === style.getPropertyValue('--vscode-focusBorder').trim();
-  });
+
   await page.mouse.click(rail.x + rail.width / 4, rail.y + rail.height / 2);
   await expect(start).toBeFocused();
   await expect(start).toHaveCSS('outline-style', 'none');
-  expect(await fill(start)).toBe(true);
-  expect(await fill(end)).toBe(false);
+  expect(await thumbFilled(page, 'start')).toBe(true);
+  expect(await thumbFilled(page, 'end')).toBe(false);
   await page.keyboard.press('ArrowRight');
   await expect(start).toHaveValue('2');
   await expect(end).toHaveValue('4');
   await page.keyboard.press('Tab');
   await expect(end).toBeFocused();
-  expect(await fill(start)).toBe(false);
-  expect(await fill(end)).toBe(true);
+  expect(await thumbFilled(page, 'start')).toBe(false);
+  expect(await thumbFilled(page, 'end')).toBe(true);
   await page.keyboard.press('ArrowLeft');
   await expect(start).toHaveValue('2');
   await expect(end).toHaveValue('3');
   expect(errors).toEqual([]);
 });
 
-test('each touching thumb can keep the resize cursor during a drag', async ({ page }) => {
+test('clicking a thumb selects that end without moving either cut', async ({ page }) => {
+  const errors = await popoutFixture(page, 'One\n\nTwo\n\nThree', 'markdown', true, { start: 1, end: 2 });
+  const start = page.getByRole('slider', { name: 'Trim start' });
+  const end = page.getByRole('slider', { name: 'Trim end' });
+  for (const edge of ['start', 'end'] as const) {
+    await trimThumb(page, edge).click();
+    await expect(edge === 'start' ? start : end).toBeFocused();
+    expect(await thumbFilled(page, 'start')).toBe(edge === 'start');
+    expect(await thumbFilled(page, 'end')).toBe(edge === 'end');
+    await expect(start).toHaveValue('1');
+    await expect(end).toHaveValue('2');
+  }
+  expect(await page.evaluate(() => (window as FixtureWindow).__trimWrites)).toBeUndefined();
+  await page.keyboard.press('ArrowRight');
+  await expect(start).toHaveValue('1');
+  await expect(end).toHaveValue('3');
+  expect(errors).toEqual([]);
+});
+
+test('touching thumbs stay selected throughout a drag and after release', async ({ page }) => {
   const errors = await popoutFixture(page, 'Before\n\nAfter', 'markdown', true, { start: 1, end: 1 });
   const document = page.locator('.popout-document');
   await expect(document).toBeEmpty();
@@ -186,10 +207,14 @@ test('each touching thumb can keep the resize cursor during a drag', async ({ pa
     await expect(railLocator).toHaveCSS('cursor', 'pointer');
     await page.mouse.move(from, y);
     await page.mouse.down();
-    await expect(page.getByRole('slider', { name: `Trim ${edge}` })).toBeFocused();
+    const input = page.getByRole('slider', { name: `Trim ${edge}` });
+    await expect(input).toBeFocused();
+    expect(await thumbFilled(page, edge)).toBe(true);
     await page.mouse.move(to, y, { steps: 8 });
     await expect(railLocator).toHaveCSS('cursor', 'ew-resize');
     await page.mouse.up();
+    await expect(input).toBeFocused();
+    expect(await thumbFilled(page, edge)).toBe(true);
     await expect(railLocator).toHaveCSS('cursor', 'pointer');
   };
   await drag(x - 8, rail.x - 8, 'start');
@@ -198,5 +223,6 @@ test('each touching thumb can keep the resize cursor during a drag', async ({ pa
   await expect(document).toBeEmpty();
   await drag(x + 8, rail.x + rail.width + 8, 'end');
   await expect(document).toHaveText('After');
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites?.at(-1))).toEqual({ start: 1, end: 2 });
   expect(errors).toEqual([]);
 });

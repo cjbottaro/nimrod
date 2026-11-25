@@ -13,21 +13,30 @@ interface TrimOptions {
 export function createPopoutTrim({ initial, full, preview, save, report }: TrimOptions) {
   const track = document.createElement('div');
   track.className = 'popout-trim-control';
+  track.dir = 'ltr';
   track.setAttribute('role', 'group');
   track.setAttribute('aria-label', 'Response trim');
   const rail = document.createElement('div');
   rail.className = 'popout-trim-rail';
   rail.setAttribute('aria-hidden', 'true');
-  track.append(rail);
+  const overlay = document.createElement('div');
+  overlay.className = 'popout-trim-handles';
+  track.append(rail, overlay);
   const createHandle = (edge: Edge, label: string) => {
+    const handle = document.createElement('div');
+    handle.className = `popout-trim-handle popout-trim-${edge}`;
     const input = document.createElement('input');
     input.type = 'range';
     input.min = '0'; input.max = String(full.end); input.step = '1';
-    input.className = `popout-trim-${edge}`;
     input.setAttribute('aria-label', label);
-    input.title = label;
-    track.append(input);
-    return input;
+    // Keep native keyboard/AT behavior, but own the pointer target outside the native thumb's shadow DOM.
+    const thumb = document.createElement('span');
+    thumb.className = 'popout-trim-thumb';
+    thumb.setAttribute('aria-hidden', 'true');
+    thumb.title = label;
+    handle.append(input, thumb);
+    overlay.append(handle);
+    return { input, thumb };
   };
   const edges = ['start', 'end'] as const;
   const handles = { start: createHandle('start', 'Trim start'), end: createHandle('end', 'Trim end') };
@@ -40,9 +49,10 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     for (const edge of edges) {
       const boundary = range[edge];
       const label = boundary === full.end ? 'After last block' : `Before block ${boundary + 1} of ${full.end}`;
-      handles[edge].value = String(boundary);
-      handles[edge].setAttribute('aria-valuetext', range.start === range.end ? `${label}, no blocks kept` : label);
-      rail.style.setProperty(`--trim-${edge}`, `${boundary / full.end * 100}%`);
+      const { input } = handles[edge];
+      input.value = String(boundary);
+      input.setAttribute('aria-valuetext', range.start === range.end ? `${label}, no blocks kept` : label);
+      track.style.setProperty(`--trim-${edge}`, `${boundary / full.end * 100}%`);
     }
   }
   function update(next: ResponseTrim, edge: Edge) {
@@ -54,7 +64,7 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     frame ??= requestAnimationFrame(() => { frame = undefined; preview(range, reveal); });
   }
   function move(edge: Edge, value: number) {
-    const clamped = edge === 'start' ? Math.min(value, range.end) : Math.max(value, range.start);
+    const clamped = edge === 'start' ? Math.max(0, Math.min(value, range.end)) : Math.min(full.end, Math.max(value, range.start));
     update({ ...range, [edge]: clamped }, edge);
   }
   async function commit() {
@@ -74,33 +84,42 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
       }
     } finally { saving = false; }
   }
-  let dragListeners: AbortController | undefined;
-  const endDrag = () => {
-    dragListeners?.abort();
-    dragListeners = undefined;
+  let drag: { edge: Edge; pointer: number; x: number; boundary: number; width: number } | undefined;
+  function endDrag() {
+    if (!drag) return;
+    const { edge, pointer } = drag;
+    drag = undefined;
     track.removeAttribute('data-dragging');
-  };
+    const { thumb } = handles[edge];
+    if (thumb.hasPointerCapture(pointer)) thumb.releasePointerCapture(pointer);
+    if (!disposed) void commit();
+  }
+  window.addEventListener('blur', endDrag);
   for (const edge of edges) {
-    const handle = handles[edge];
-    handle.addEventListener('pointerdown', event => {
-      if (!event.isPrimary || event.button !== 0) return;
-      handle.focus({ preventScroll: true });
-      endDrag();
+    const { input, thumb } = handles[edge];
+    const focus = () => input.focus({ preventScroll: true });
+    const owns = (event: PointerEvent) => drag?.pointer === event.pointerId && drag.edge === edge;
+    thumb.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || event.button !== 0 || drag) return;
+      event.preventDefault(); // Suppress pointer focus default so the range keeps focus on release.
+      focus();
+      const { width } = rail.getBoundingClientRect();
+      if (!width) return;
+      thumb.setPointerCapture(event.pointerId);
+      drag = { edge, pointer: event.pointerId, x: event.clientX, boundary: range[edge], width };
       track.setAttribute('data-dragging', '');
-      dragListeners = new AbortController();
-      const options = { capture: true, passive: true, signal: dragListeners.signal };
-      const finish = (up: PointerEvent) => { if (up.pointerId === event.pointerId) endDrag(); };
-      window.addEventListener('pointerup', finish, options);
-      window.addEventListener('pointercancel', finish, options);
-      if (event.pointerType === 'mouse') window.addEventListener('mouseup', up => { if (up.button === 0) endDrag(); }, options);
-      window.addEventListener('pointermove', move => {
-        // Recover if the pointer was released outside the webview.
-        if (move.pointerId === event.pointerId && !move.buttons) endDrag();
-      }, options);
-      window.addEventListener('blur', endDrag, { signal: options.signal });
     });
-    handle.addEventListener('input', () => move(edge, handle.valueAsNumber));
-    handle.addEventListener('change', () => { void commit(); });
+    thumb.addEventListener('pointermove', event => {
+      if (!owns(event) || !drag) return;
+      if (event.pointerType === 'mouse' && !(event.buttons & 1)) { endDrag(); return; }
+      move(edge, drag.boundary + Math.round((event.clientX - drag.x) / drag.width * full.end));
+    });
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+      thumb.addEventListener(event, event => { if (owns(event)) endDrag(); });
+    }
+    thumb.addEventListener('click', focus);
+    input.addEventListener('input', () => move(edge, input.valueAsNumber));
+    input.addEventListener('change', () => { void commit(); });
   }
   rail.addEventListener('click', event => {
     const { left, width } = rail.getBoundingClientRect();
@@ -109,13 +128,14 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     const distanceToStart = Math.abs(value - range.start), distanceToEnd = Math.abs(value - range.end);
     const edge = distanceToStart === distanceToEnd
       ? (value <= range.start ? 'start' : 'end') : distanceToStart < distanceToEnd ? 'start' : 'end';
-    handles[edge].focus({ preventScroll: true });
+    handles[edge].input.focus({ preventScroll: true });
     move(edge, value);
     void commit();
   });
   paint();
   return { track, range: () => range, dispose: () => {
     disposed = true;
+    window.removeEventListener('blur', endDrag);
     endDrag();
     if (frame !== undefined) cancelAnimationFrame(frame);
   } };

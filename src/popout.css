@@ -10,31 +10,31 @@ body.code-popout-window { position:relative; display:flex; flex-direction:column
   padding:6px 20px; border-bottom:1px solid var(--vscode-panel-border);
 }
 .popout-trim-control { --trim-thumb-size:16px; position:relative; flex:1; height:32px; min-width:0; }
+.popout-trim-rail, .popout-trim-handles { position:absolute; inset:0 var(--trim-thumb-size); }
 .popout-trim-rail {
   --trim-inactive:color-mix(in srgb, var(--vscode-descriptionForeground) 35%, transparent);
-  position:absolute; inset:0 var(--trim-thumb-size); cursor:pointer;
+  cursor:pointer;
   background:linear-gradient(to right,
     var(--trim-inactive) 0 var(--trim-start),
     var(--vscode-focusBorder) var(--trim-start) var(--trim-end),
     var(--trim-inactive) var(--trim-end) 100%) center / 100% 4px no-repeat;
 }
-.popout-trim-control input[type='range'] {
-  --trim-thumb-fill:var(--vscode-editor-background);
-  appearance:none; position:absolute; inset-block:0; width:calc(100% - var(--trim-thumb-size)); height:100%;
-  margin:0; padding:0; border:0; border-radius:0; background:transparent; pointer-events:none;
+.popout-trim-handles { pointer-events:none; }
+.popout-trim-handle { position:absolute; top:50%; width:var(--trim-thumb-size); height:var(--trim-thumb-size); }
+/* The inside edges meet at the same cut without overlapping the hit areas. */
+.popout-trim-start { left:var(--trim-start); transform:translate(-100%, -50%); }
+.popout-trim-end { left:var(--trim-end); transform:translateY(-50%); }
+.popout-trim-handle input {
+  position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; pointer-events:none; outline:none;
 }
-/* Equal input widths, displaced by one thumb diameter: at the same logical cut
-   the inner thumb edges meet on the rail, but each thumb has its own hit area. */
-.popout-trim-start { left:0; }
-.popout-trim-end { right:0; }
-.popout-trim-control input:focus { --trim-thumb-fill:var(--vscode-focusBorder); outline:none; z-index:1; }
-.popout-trim-control input::-webkit-slider-thumb {
-  appearance:none; box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
-  background:var(--trim-thumb-fill); cursor:ew-resize; pointer-events:auto;
+.popout-trim-thumb {
+  position:absolute; inset:0; box-sizing:border-box; border:1px solid var(--vscode-focusBorder); border-radius:50%;
+  background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto; touch-action:none;
 }
-.popout-trim-control input::-moz-range-thumb {
-  box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
-  background:var(--trim-thumb-fill); cursor:ew-resize; pointer-events:auto;
+.popout-trim-handle input:focus + .popout-trim-thumb { background:var(--vscode-focusBorder); }
+@media (forced-colors:active) {
+  .popout-trim-thumb { forced-color-adjust:none; border-color:Highlight; background:Canvas; }
+  .popout-trim-handle input:focus + .popout-trim-thumb { background:Highlight; }
 }
 /* Keep the resize cursor when a held thumb crosses the rail or leaves the toolbar. */
 body.code-popout-window:has(.popout-trim-control[data-dragging]),
