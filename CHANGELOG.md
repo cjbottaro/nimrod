@@ -6,7 +6,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
-- **Browse skills…** in the command palette searches skills advertised by the connected Pi session and inserts the selected invocation before the draft text without sending it.
+- **Browse skills…** in the command palette searches invocable skills advertised by the connected Pi or Copilot session and inserts the selected invocation before the draft text without sending it.
 
 - Pop-outs are automatically saved as **session notes** for saved Pi, Copilot, and Codex sessions. Find or delete captures in **Session notes…** from the command palette or session-row menu. Closing a note window keeps the capture and its trim; only windows left open restore automatically. Deleting a session removes its associated notes.
 

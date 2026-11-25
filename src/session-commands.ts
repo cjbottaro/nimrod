@@ -2,7 +2,9 @@ import type { ConfigurationOperation } from './session-configuration';
 
 /** Composer-facing metadata, not a harness wire schema. Arguments remain literal. */
 export interface SlashCommand {
-  name: string; description: string; source: 'GUI' | 'Extension' | 'Template' | 'Skill' | 'Agent';
+  name: string; description: string;
+  /** Skill marks a directly invocable skill, not a command that lists or manages skills. */
+  source: 'GUI' | 'Extension' | 'Template' | 'Skill' | 'Agent';
   aliases?: readonly string[];
   allowDuringAgentExecution?: boolean;
   input?: {
@@ -35,6 +37,10 @@ export function findCommand(commands: readonly SlashCommand[], name: string): Sl
   const key = name.toLowerCase();
   return commands.find(command => command.name.toLowerCase() === key)
     ?? commands.find(command => command.aliases?.some(alias => alias.toLowerCase() === key));
+}
+/** Browse canonical invocations from the same catalog the composer validates. */
+export function invocableSkillCommands(catalog: CommandCatalog): SlashCommand[] {
+  return catalog.commands.filter(command => command.source === 'Skill' && /^[^/\s\u0000-\u001f]+$/.test(command.name));
 }
 export function commandSuggestions(commands: readonly SlashCommand[]): SlashCommand[] {
   const result = [...commands], names = new Set(commands.map(command => command.name.toLowerCase()));

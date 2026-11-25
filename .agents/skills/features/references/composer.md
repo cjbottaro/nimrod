@@ -37,9 +37,11 @@ Image attachment behavior and its text-only queue recovery boundary are covered 
 
 **Browse skills…** is a bindable session action in the command palette, with no
 default shortcut. It appears for a connected session whose command catalog
-advertises invocable `Skill` entries (currently Pi). Use the cached canonical
-names and descriptions, not config files, raw skill bodies, aliases or inferred
-command syntax. A read-only skill report is not an invocation catalog.
+advertises invocable `Skill` entries through the [required command port](session-commands.md)
+(Pi and Copilot). Use the cached canonical names and descriptions, not config
+files, raw skill bodies, aliases or inferred command syntax. A read-only skill
+report, such as Codex `/skills`, is not an invocation catalog. The browser is
+additional to direct composer slash invocation and completion.
 
 The searchable selection page stages the exact advertised slash command plus a
 space before the ordinary draft text, retaining that text as arguments. Selection

@@ -75,11 +75,13 @@ own catalogs and native execution semantics.
 - Session-management commands such as `/resume` and Pi's `/reload` are unavailable; use Nimrod's session actions instead. Unsupported commands are rejected rather than silently sent as chat.
 - Images cannot be combined with slash commands; the draft remains intact.
 
-In a connected Pi session with skills, open **Browse skills…** from the command
-palette. Search by name or description, then choose a skill to insert its
-`/skill:…` invocation before any ordinary draft text. Review or edit the
-arguments in the composer before sending. Escape leaves the draft unchanged;
-existing slash commands and image drafts are not replaced.
+In a connected Pi or Copilot session that advertises invocable skills, open
+**Browse skills…** from the command palette. Search by name or description, then
+choose a skill to insert its native slash invocation before any ordinary draft
+text. Review or edit the arguments in the composer before sending. Escape leaves
+the draft unchanged; existing slash commands and image drafts are not replaced.
+You can also type `/` in the composer to complete and invoke supported commands
+and skills without opening the browser.
 
 Slash commands retain Pi's control/expansion behavior, not necessarily a literal optimistic user turn. Supported Pi extension text widgets, statuses and input/select/confirm/editor dialogs work; TUI-only component widgets do not.
 

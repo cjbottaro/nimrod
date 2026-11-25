@@ -5611,6 +5611,41 @@ test('the skills browser searches advertised skills and stages without sending o
   } finally { f.win.close(); }
 });
 
+test('Copilot native skills work in the shared browser and composer slash completion', async () => {
+  const f = await fixture(undefined, { windowWorkspace: '/project', sdkCommands: [
+    { name: 'review-pr', aliases: ['review'], description: 'Inspect a pull request', kind: 'skill' },
+    { name: 'skills', description: 'List installed skills', kind: 'builtin' },
+  ], sdkCommand: async () => ({ kind: 'text', text: 'Fixture skill result' }) });
+  try {
+    const input = f.element<HTMLInputElement>('palette-input');
+    const set = (field: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      field.value = value; field.setSelectionRange(value.length, value.length); field.dispatchEvent(new f.win.Event('input'));
+    };
+    const key = (field: HTMLElement, key: string) => field.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    f.openPalette(); set(input, 'New session with harness'); key(input, 'Enter'); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt'); prompt.focus(); set(prompt, 'this change');
+    f.openPalette(); set(input, 'Browse skills'); key(input, 'Enter'); await f.tick();
+    assert.equal(f.element('palette-title').textContent, 'Browse skills');
+    assert.deepEqual([...f.element('palette-list').querySelectorAll<HTMLElement>('[data-key]')].map(row => row.dataset.key), ['review-pr']);
+    key(input, 'Enter'); await f.tick();
+    assert.equal(String(prompt.value), '/review-pr this change');
+    const commands = () => f.calls.filter(call => call.command === 'write_copilot' && (call.args.message as JsonRecord).method === 'command');
+    assert.equal(commands().length, 0);
+
+    set(prompt, '/review-p');
+    assert.match(f.element('slash-suggestions').textContent!, /review-pr/);
+    key(prompt, 'Tab');
+    assert.equal(String(prompt.value), '/review-pr ');
+    assert.equal(commands().length, 0, 'completion does not invoke the skill');
+    set(prompt, '/review-pr this change'); key(prompt, 'Enter'); await f.tick(); await f.tick();
+    assert.equal(commands().length, 1);
+    assert.equal((commands()[0].args.message as JsonRecord).name, 'review-pr');
+    assert.equal((commands()[0].args.message as JsonRecord).input, 'this change');
+    assert.match(f.element('messages').textContent!, /Fixture skill result/);
+  } finally { f.win.close(); }
+});
+
 test('MCP inspector routes palette and composer entries to the same session without status notices', async () => {
   const f = await fixture(undefined, { mcpReport: 'ado: connected, 40 tools (codemode)\nplaywright: failed (codemode)\n    spawn playwright ENOENT' });
   try {

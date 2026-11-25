@@ -1,4 +1,4 @@
-import type { SlashCommand } from '../pi/slash-completion';
+import type { SlashCommand } from '../session-commands';
 import { record } from './connection';
 
 export interface CopilotCommand extends SlashCommand {
@@ -42,7 +42,8 @@ export function copilotCommands(raw: unknown): CopilotCommand[] {
           .map(choice => ({ name: String(choice.name), description: typeof choice.description === 'string' ? choice.description : '' }))])) : undefined,
     } : undefined;
     const configValues = configValueMap(value.configValues);
-    commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command', source: 'Agent',
+    commands.push({ name: value.name, description: typeof value.description === 'string' ? value.description : 'Copilot command',
+      source: value.kind === 'skill' ? 'Skill' : 'Agent',
       kind: value.kind as CopilotCommand['kind'], aliases: Array.isArray(value.aliases) ? value.aliases.filter(name) : [],
       allowDuringAgentExecution: value.allowDuringAgentExecution === true, input, configValues });
   }

@@ -28,6 +28,10 @@ Do not satisfy the port with a success-shaped no-op.
   change when metadata changes; aliases are expanded only for suggestions.
   Names, descriptions, source, argument hints/literal choices and advertised
   live-use metadata remain integration-owned. Discovery never executes commands.
+  `source: 'Skill'` marks a directly invocable skill, not a command that reports
+  on or manages skills. The [skills browser](composer.md#skills-browser) projects
+  these canonical entries from the same required catalog used by composer
+  completion, without a separate discovery or execution port.
 - `validate(text)` is synchronous and side-effect-free. Rejection retains the
   draft. After validation, the composer clears only the submitted draft and
   calls `invoke({id,text})`, without an ordinary user preview, Send recency or

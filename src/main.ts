@@ -12,6 +12,7 @@ import type { SessionDeletionOperation, SessionDeletionTarget } from './session-
 import { loadSessionHistory, type SessionHistorySnapshot } from './session-history';
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { availableSessionActions } from './session-actions';
+import { invocableSkillCommands } from './session-commands';
 import { pickConfiguration } from './configuration-picker';
 import { checkSessionRetention, type SessionRetentionState } from './session-retention';
 import { readSavedSidebarSession, type SessionLifecycle, type SessionLifecycleOwner, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
@@ -1143,7 +1144,7 @@ function sessionActions(tab: Tab): readonly SessionAction[] {
   return [...actions, { id: 'browse-skills', label: 'Browse skills…', detail: 'Find a skill and insert it before your draft text', run: () => browseSkills(tab) }];
 }
 function invocableSkills(tab: Tab) {
-  return tab.integration.commands.catalog().commands.filter(command => command.source === 'Skill' && /^[^/\s\u0000-\u001f]+$/.test(command.name));
+  return invocableSkillCommands(tab.integration.commands.catalog());
 }
 async function browseSkills(tab: Tab): Promise<void> {
   const token = tab.token, lifetime = tab.view.userTextLifetime;

@@ -90,6 +90,10 @@ shortcut](live-permissions.md) starts that same advertised command owner.
 
 ## Discovery and autocomplete
 
+Native command entries with `kind: 'skill'` also populate the shared
+[skills browser](composer.md#skills-browser). The separate SDK skill list used
+for `/skills info` does not advertise invocations.
+
 - List commands after connection, after successful invocation, and when a root
   `commands.changed` event arrives. That event's payload lists registered SDK
   commands only, so refresh the full catalog rather than replacing it with the
