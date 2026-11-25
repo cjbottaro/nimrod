@@ -5593,7 +5593,7 @@ test('the skills browser searches advertised skills and stages without sending o
     assert.match(f.element('palette-list').textContent!, /\/skill:review/);
     assert.doesNotMatch(f.element('palette-list').textContent!, /Edit persistent settings/);
     key('Escape'); await f.tick();
-    assert.equal(prompt.value, 'this diff\nand the tests');
+    assert.equal(String(prompt.value), 'this diff\nand the tests');
     assert.equal(f.win.document.activeElement, prompt);
 
     await browse(); set(input, 'Inspect a change');

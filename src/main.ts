@@ -905,7 +905,8 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
     lastUsed: lastUsed(used), root, notice, notices: sessionNotices, closeButton, pinButton, row, rowLabel, rowIndicator, rowTime, rowHarness, rowNode,
     drafts: drafts.fork(), closing: false, reloading: false, deleting: false, deletionExecuting: false,
     awaitingSelection: false, inputCount: 0, unread: false, failed: false,
-    view: { userTextLifetime: {}, validateUserText: () => 'Session view is not ready', submitUserText() { throw new Error('Session view is not ready'); }, setActive() {}, scrollToBottom() {}, dispose() {} } };
+    view: { userTextLifetime: {}, validateUserText: () => 'Session view is not ready', submitUserText() { throw new Error('Session view is not ready'); },
+      stageSlashCommand: () => 'Session view is not ready', setActive() {}, scrollToBottom() {}, dispose() {} } };
   try { integration = harnesses.create(project, sessionHost(tab, owner), request); }
   catch (error) { sessionNotices.dispose(); root.remove(); rowNode.remove(); throw error; }
   tab.failed = blocked(tab);
