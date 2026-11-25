@@ -139,7 +139,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Fixed
 
-- Copilot sessions no longer disconnect on open because the MCP count request includes the standard diagnostics flag.
+- Copilot sessions no longer disconnect on open because the MCP count request includes the standard diagnostics flag. The inspector shows **No live status** instead of labeling enabled servers `not_configured` when the snapshot does not establish their connection state.
 
 - Agent Question pickers no longer hide **Enter your own answer…** when typing text that matches no offered choices. Free-form answers remain reachable even for questions without choices, and text typed in the picker carries into the custom-answer modal for submission. Harness restrictions on custom answers remain respected.
 

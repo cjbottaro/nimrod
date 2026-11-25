@@ -8,6 +8,6 @@ Choose **MCP servers…** in the command palette of a connected Pi, Codex or Cop
 
 Pi’s built-in MCP integration reports connection state, exposure, counts, and diagnostics. It does not report individual tools, and a server’s tool count does not imply all its tools are exposed to the model. Missing counts are shown as unavailable. Replacement Pi MCP extensions are not interpreted or run by the inspector. If Pi’s status delivery becomes uncertain or unrecognized, reload the session before trying again; Nimrod does not replay the request.
 
-Codex reports runtime and authentication state separately, plus tools and resources. Its initial count and explicit inspections may contact configured servers. Copilot reports effective server configuration and any already observed connection state, without starting servers. Available details depend on the harness and installed runtime.
+Codex reports runtime and authentication state separately, plus tools and resources. Its initial count and explicit inspections may contact configured servers. Copilot reports effective server configuration and any already observed connection state, without starting servers. **No live status** means the snapshot does not establish a connection state; it does not mean the server is missing from your configuration. Available details depend on the harness and installed runtime.
 
 The inspector is read-only. Use the harness TUI for sign-in or reauthentication and the harness’s own tools for configuration changes. Native validation is pending.

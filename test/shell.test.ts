@@ -5725,12 +5725,17 @@ test('Copilot MCP count comes from the structured catalog and disappears on an e
     assert.equal(button.hidden, false); assert.equal(String(button.textContent), '1 MCP server');
     button.click(); await f.tick();
     assert.match(f.element('palette-inspection').textContent!, /failed.*workspace.*Offline fixture/s);
+    options.copilotMcp = [{ name: 'fixture', enabled: true, status: 'not_configured', source: 'workspace' }];
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /No live status/);
+    assert.match(f.element('palette-inspection').textContent!, /Enabled.*No live status reported/s);
+    assert.doesNotMatch(f.element('palette-inspection').textContent!, /not_configured/);
     options.copilotMcp = [];
     f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
     assert.equal(button.hidden, true); assert.equal(button.textContent, '');
     const requests = f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
     const reads = requests.filter(request => request.method === 'mcp-configured');
-    assert.equal(reads.length, 3);
+    assert.equal(reads.length, 4);
     for (const read of reads) {
       assert.deepEqual(Object.keys(read).sort(), ['diagnostics', 'id', 'method']);
       assert.equal(typeof read.diagnostics, 'boolean');
