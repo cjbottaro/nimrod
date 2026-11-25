@@ -74,9 +74,33 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
       }
     } finally { saving = false; }
   }
+  let dragListeners: AbortController | undefined;
+  const endDrag = () => {
+    dragListeners?.abort();
+    dragListeners = undefined;
+    track.removeAttribute('data-dragging');
+  };
   for (const edge of edges) {
-    handles[edge].addEventListener('input', () => move(edge, handles[edge].valueAsNumber));
-    handles[edge].addEventListener('change', () => { void commit(); });
+    const handle = handles[edge];
+    handle.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || event.button !== 0) return;
+      handle.focus({ preventScroll: true });
+      endDrag();
+      track.setAttribute('data-dragging', '');
+      dragListeners = new AbortController();
+      const options = { capture: true, passive: true, signal: dragListeners.signal };
+      const finish = (up: PointerEvent) => { if (up.pointerId === event.pointerId) endDrag(); };
+      window.addEventListener('pointerup', finish, options);
+      window.addEventListener('pointercancel', finish, options);
+      if (event.pointerType === 'mouse') window.addEventListener('mouseup', up => { if (up.button === 0) endDrag(); }, options);
+      window.addEventListener('pointermove', move => {
+        // Recover if the pointer was released outside the webview.
+        if (move.pointerId === event.pointerId && !move.buttons) endDrag();
+      }, options);
+      window.addEventListener('blur', endDrag, { signal: options.signal });
+    });
+    handle.addEventListener('input', () => move(edge, handle.valueAsNumber));
+    handle.addEventListener('change', () => { void commit(); });
   }
   rail.addEventListener('click', event => {
     const { left, width } = rail.getBoundingClientRect();
@@ -92,6 +116,7 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
   paint();
   return { track, range: () => range, dispose: () => {
     disposed = true;
+    endDrag();
     if (frame !== undefined) cancelAnimationFrame(frame);
   } };
 }

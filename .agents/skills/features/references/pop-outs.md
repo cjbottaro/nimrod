@@ -124,7 +124,7 @@ Immutable source captures deduplicate per session/content/kind (and language for
 
 ### Response trim
 
-- The trim slider is always visible next to Copy source when there is at least one mappable top-level GFM block. The shared rail has two separately focusable native range inputs, horizontally offset by one thumb diameter so both remain draggable when their inner edges touch. Cut positions are half-open block boundaries and cannot cross. Equal positions preview and copy empty Markdown. Paragraphs, headings, lists, tables, quotes and code fences remain whole. Returning both handles to the ends clears the retained range.
+- The trim slider is always visible next to Copy source when there is at least one mappable top-level GFM block. The shared rail has two separately focusable native range inputs, horizontally offset by one thumb diameter so both remain draggable when their inner edges touch. Cut positions are half-open block boundaries and cannot cross. Equal positions preview and copy empty Markdown. Paragraphs, headings, lists, tables, quotes and code fences remain whole. Returning both handles to the ends clears the retained range. Only the focused thumb is filled; there is no outline around the whole input. Clicking the rail moves and focuses the nearer handle. Grabbing a thumb focuses it and retains the resize cursor until release, cancellation or window blur.
 - Use the full capture's parsed tokens for preview (including resolved reference links), then the same sanitized renderer and code decoration as ordinary Markdown. Copy slices the exact original string, including its line endings; definitions outside the selected source aren't appended. If token boundaries cannot be mapped safely, show the full capture without Trim.
 - Slider movement updates locally and coalesces preview to at most one render per frame. The moved boundary is revealed in the Pop-out’s viewport only. The title remains derived from the full response. No transcript change, new window, or native write is needed while dragging.
 - Committed changes use `set_response_popout_trim` for the caller's own response window. Native operations serialize trim alongside geometry, promotion and Close. Pending commits coalesce without replacing optimistic local state. Errors use the Pop-out notice strip. Runtime-only references retain trim in the native registry; saved references use the same update-existing index path as geometry. Restore uses a saved range only if it still fits the parsed blocks.
@@ -318,7 +318,7 @@ Relevant tests:
   runtime IDs, first-save promotion, selection/close, standalone route, copying,
   links/themes/titles and composer/dialog focus during delayed sync.
 - `test/browser/popout.spec.ts`: real WebKit content-first layout, corner Copy
-  clearance while scrolling, source copying, title dispatch, restored response trim, independently grabbing touching thumbs, and transcript hover/focus without layout shift, with mocked IPC.
+  clearance while scrolling, source copying, title dispatch, restored response trim, thumb-local focus and keyboard targeting, cursor retention when dragging touching thumbs, and transcript hover/focus without layout shift, with mocked IPC.
 - Rust tests in `popout_store.rs`: disk round-trips without Pi/history, bounds,
   hashing, owner isolation, corrupt/missing files, rollback, geometry/no resurrection,
   legacy metadata compatibility and content larger than global state limits.

@@ -148,23 +148,55 @@ test('response toolbar shows the slider next to Copy and can restore a contiguou
   expect(errors).toEqual([]);
 });
 
-test('touching thumbs can each be grabbed on the same horizontal rail', async ({ page }) => {
+test('the filled thumb owns arrow keys after a rail click and Tab', async ({ page }) => {
+  const errors = await popoutFixture(page, 'One\n\nTwo\n\nThree\n\nFour', 'markdown', true);
+  const rail = (await page.locator('.popout-trim-rail').boundingBox())!;
+  const start = page.getByRole('slider', { name: 'Trim start' });
+  const end = page.getByRole('slider', { name: 'Trim end' });
+  const fill = (handle: typeof start) => handle.evaluate(el => {
+    const style = getComputedStyle(el);
+    return style.getPropertyValue('--trim-thumb-fill').trim() === style.getPropertyValue('--vscode-focusBorder').trim();
+  });
+  await page.mouse.click(rail.x + rail.width / 4, rail.y + rail.height / 2);
+  await expect(start).toBeFocused();
+  await expect(start).toHaveCSS('outline-style', 'none');
+  expect(await fill(start)).toBe(true);
+  expect(await fill(end)).toBe(false);
+  await page.keyboard.press('ArrowRight');
+  await expect(start).toHaveValue('2');
+  await expect(end).toHaveValue('4');
+  await page.keyboard.press('Tab');
+  await expect(end).toBeFocused();
+  expect(await fill(start)).toBe(false);
+  expect(await fill(end)).toBe(true);
+  await page.keyboard.press('ArrowLeft');
+  await expect(start).toHaveValue('2');
+  await expect(end).toHaveValue('3');
+  expect(errors).toEqual([]);
+});
+
+test('each touching thumb can keep the resize cursor during a drag', async ({ page }) => {
   const errors = await popoutFixture(page, 'Before\n\nAfter', 'markdown', true, { start: 1, end: 1 });
   const document = page.locator('.popout-document');
   await expect(document).toBeEmpty();
-  const rail = (await page.locator('.popout-trim-rail').boundingBox())!;
+  const railLocator = page.locator('.popout-trim-rail');
+  const rail = (await railLocator.boundingBox())!;
   const x = rail.x + rail.width / 2, y = rail.y + rail.height / 2;
-  const drag = async (from: number, to: number) => {
+  const drag = async (from: number, to: number, edge: 'start' | 'end') => {
+    await expect(railLocator).toHaveCSS('cursor', 'pointer');
     await page.mouse.move(from, y);
     await page.mouse.down();
+    await expect(page.getByRole('slider', { name: `Trim ${edge}` })).toBeFocused();
     await page.mouse.move(to, y, { steps: 8 });
+    await expect(railLocator).toHaveCSS('cursor', 'ew-resize');
     await page.mouse.up();
+    await expect(railLocator).toHaveCSS('cursor', 'pointer');
   };
-  await drag(x - 8, rail.x - 8);
+  await drag(x - 8, rail.x - 8, 'start');
   await expect(document).toHaveText('Before');
-  await drag(rail.x - 8, x - 8);
+  await drag(rail.x - 8, x - 8, 'start');
   await expect(document).toBeEmpty();
-  await drag(x + 8, rail.x + rail.width + 8);
+  await drag(x + 8, rail.x + rail.width + 8, 'end');
   await expect(document).toHaveText('After');
   expect(errors).toEqual([]);
 });

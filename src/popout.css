@@ -19,6 +19,7 @@ body.code-popout-window { position:relative; display:flex; flex-direction:column
     var(--trim-inactive) var(--trim-end) 100%) center / 100% 4px no-repeat;
 }
 .popout-trim-control input[type='range'] {
+  --trim-thumb-fill:var(--vscode-editor-background);
   appearance:none; position:absolute; inset-block:0; width:calc(100% - var(--trim-thumb-size)); height:100%;
   margin:0; padding:0; border:0; border-radius:0; background:transparent; pointer-events:none;
 }
@@ -26,13 +27,16 @@ body.code-popout-window { position:relative; display:flex; flex-direction:column
    the inner thumb edges meet on the rail, but each thumb has its own hit area. */
 .popout-trim-start { left:0; }
 .popout-trim-end { right:0; }
-.popout-trim-control input:focus-visible { outline:2px solid var(--vscode-focusBorder); outline-offset:0; z-index:1; }
+.popout-trim-control input:focus { --trim-thumb-fill:var(--vscode-focusBorder); outline:none; z-index:1; }
 .popout-trim-control input::-webkit-slider-thumb {
   appearance:none; box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
-  background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
+  background:var(--trim-thumb-fill); cursor:ew-resize; pointer-events:auto;
 }
 .popout-trim-control input::-moz-range-thumb {
   box-sizing:border-box; width:var(--trim-thumb-size); height:var(--trim-thumb-size); border:1px solid var(--vscode-focusBorder); border-radius:50%;
-  background:var(--vscode-editor-background); cursor:ew-resize; pointer-events:auto;
+  background:var(--trim-thumb-fill); cursor:ew-resize; pointer-events:auto;
 }
+/* Keep the resize cursor when a held thumb crosses the rail or leaves the toolbar. */
+body.code-popout-window:has(.popout-trim-control[data-dragging]),
+body.code-popout-window:has(.popout-trim-control[data-dragging]) * { cursor:ew-resize; }
 
