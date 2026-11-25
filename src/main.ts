@@ -13,6 +13,7 @@ import { loadSessionHistory, type SessionHistorySnapshot } from './session-histo
 import { savedSessionKey, resolveSessionListEntry, type SessionListEntry } from './session-list';
 import { availableSessionActions } from './session-actions';
 import { invocableSkillCommands } from './session-commands';
+import { mcpAction } from './mcp-inspector';
 import { pickConfiguration } from './configuration-picker';
 import { checkSessionRetention, type SessionRetentionState } from './session-retention';
 import { readSavedSidebarSession, type SessionLifecycle, type SessionLifecycleOwner, type SavedSidebarSession, type SavedSessionIdentity } from './session-lifecycle';
@@ -872,11 +873,13 @@ function createTab(request: SessionRequest, project: HarnessProject, title = req
   // Retain stable semantic hooks for CSS and root-scoped lookup, with unique DOM/ARIA IDs.
   for (const node of root.querySelectorAll<HTMLElement>('[id]')) { node.dataset.piId = node.id; node.id = `${id}-${node.id}`; }
   const notice = document.createElement('div'); notice.className = 'tab-notice'; notice.hidden = true; root.append(notice);
-  const mcpButton = button(actionDefinition('mcp').label, () => {
+  const mcpButton = button('', () => {
     if (presentation.current === tab) void runSessionAction(tab, 'mcp');
   });
   mcpButton.className = 'ghost-button mcp-inspector-action'; mcpButton.hidden = true;
-  root.querySelector('[data-pi-id="activity"]')!.append(mcpButton);
+  mcpButton.title = mcpAction.label;
+  const statusControls = root.querySelector('[data-pi-id="status-controls"]')!;
+  statusControls.before(mcpButton);
   conversation.append(root);
   const sessionNotices = installApplicationNotices(window, notices.store, { owner: id, container: root });
   const rowNode = document.createElement('div'); rowNode.className = 'open-session';
@@ -1066,8 +1069,13 @@ function updateTabPresentation(tab: Tab): void {
   tab.root.setAttribute('aria-busy', String(tab.integration.conversation.state?.busy === true));
   updateSessionRowContent(tab, entry, false);
   tab.row.disabled = !ready;
-  tab.mcpButton.hidden = !isConnected(tab) || !tab.integration.actions.current().some(action => action.id === 'mcp');
+  const mcp = isConnected(tab) ? tab.integration.mcp : undefined;
+  const mcpCount = mcp?.count;
+  const mcpLabel = mcpCount ? `${mcpCount} MCP ${mcpCount === 1 ? 'server' : 'servers'}` : '';
+  if (tab.mcpButton.textContent !== mcpLabel) tab.mcpButton.textContent = mcpLabel;
+  tab.mcpButton.hidden = !mcpLabel;
   tab.mcpButton.disabled = locked(tab);
+  if (presentation.current === tab && !tab.mcpButton.disabled) mcp?.prime();
   tab.closeButton.setAttribute('aria-label', `Close ${name}`); tab.closeButton.disabled = !ready || tab.deleting || locked(tab) || tab.closing || tab.starting || tab.reloading;
   tab.pinButton.setAttribute('aria-label', `${tab.pinned ? 'Unpin' : 'Pin'} ${name}`);
   tab.pinButton.setAttribute('aria-pressed', String(tab.pinned));
@@ -1146,8 +1154,12 @@ function sessionConfiguration(tab: Tab) { return tab.integration.configuration.c
 function sessionActions(tab: Tab): readonly SessionAction[] {
   if (!tab.project.availability.available()) return [];
   const actions = availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
-  if (!isConnected(tab) || !invocableSkills(tab).length) return actions;
-  return [...actions, { id: 'browse-skills', label: 'Browse skills…', detail: 'Find a skill and insert it before your draft text', run: () => browseSkills(tab) }];
+  if (!isConnected(tab)) return actions;
+  const mcp = tab.integration.mcp;
+  return [...actions,
+    ...(mcp && !locked(tab) ? [{ ...mcpAction, run: mcp.run }] : []),
+    ...(invocableSkills(tab).length ? [{ id: 'browse-skills' as const, label: 'Browse skills…', detail: 'Find a skill and insert it before your draft text', run: () => browseSkills(tab) }] : []),
+  ];
 }
 function invocableSkills(tab: Tab) {
   return invocableSkillCommands(tab.integration.commands.catalog());

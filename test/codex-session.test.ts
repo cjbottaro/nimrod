@@ -235,7 +235,7 @@ test('Codex report pagination rejects repeated cursors rather than settling a pa
   });
   try {
     await f.session.initialize(cwd);
-    await assert.rejects(f.session.inspectMcp(() => true), /pagination cursor/);
+    await assert.rejects(f.session.inspectMcp(() => true, true), /pagination cursor/);
     assert.deepEqual(f.session.slashCommands.operations, []);
     assert.equal(f.sent.filter(packet => packet.method === 'mcpServerStatus/list').length, 2);
   } finally { f.session.disconnect('done'); }

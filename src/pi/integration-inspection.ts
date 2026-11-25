@@ -1,10 +1,11 @@
-import type { PalettePage } from '../command-palette';
+import type { McpSnapshot } from '../mcp-inspector';
 import type { PiSession } from './session';
 
-export async function piMcpPage(session: PiSession): Promise<PalettePage> {
+export async function piMcpPage(session: PiSession, current: () => boolean, detail: 'summary' | 'full'): Promise<McpSnapshot | undefined> {
+  if (!current() || detail === 'summary' && !session.advertisesMcpStatus) return;
   const report = await session.inspectMcp();
   const attention = new Set(['failed', 'needs sign-in', 'disconnected']);
-  return { items: [
+  return { count: report.servers.length, items: [
     ...[...report.servers].sort((a, b) => Number(attention.has(b.state)) - Number(attention.has(a.state))).map(server => ({
       id: server.name, label: server.name, badge: server.state,
       detail: `${server.toolCount === undefined ? 'Tool count unavailable' : `${server.toolCount} tools`} · ${server.exposure}`, keywords: server.details,

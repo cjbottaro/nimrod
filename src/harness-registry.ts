@@ -88,6 +88,7 @@ export class HarnessRegistry {
       get reload() { return session.reload; },
       get naming() { return session.naming; },
       get commands() { return session.commands; },
+      get mcp() { return session.mcp; },
       get deletion() { return session.deletion; },
       get close() { return session.close; },
       get drafts() { return session.drafts; },

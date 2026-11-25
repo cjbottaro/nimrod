@@ -72,7 +72,7 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Changed
 
-- Open the read-only **MCP servers…** inspector for Pi and Codex from the command palette, a configurable shortcut or the Status area. `/mcp` is no longer a Nimrod composer command; other slash commands and completion stay available.
+- Open the read-only **MCP servers…** inspector for Pi, Codex and Copilot from the command palette, a configurable shortcut or the inline Status area count. The count is hidden when zero or unknown. `/mcp` is no longer a Nimrod composer command; other slash commands and completion stay available.
 
 - Copilot's context usage line can show a provisional catalog window (for example `0% / ~128k`) before session metadata is initialized. It uses the selected model's advertised budget for the reported tier, or previews the standard-tier budget when the session tier is still unknown. Hover identifies both the catalog source and any tier uncertainty; the actual session limit replaces it immediately. Unknown utilization remains unknown; configuration changes cannot reuse stale capacity. Copilot's `contextTier` default in `~/.copilot/settings.json` is documented for future sessions.
 

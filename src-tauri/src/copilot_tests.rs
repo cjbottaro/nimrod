@@ -71,6 +71,8 @@ fn bridge_records_are_not_acp_or_pi_packets() {
     assert!(validate_message(&json!({"id":"one","method":"connect","sessionId":"exact"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"commands"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"command-skills"})).is_ok());
+    assert!(validate_message(&json!({"id":"one","method":"mcp-configured"})).is_ok());
+    assert!(validate_message(&json!({"id":"one","method":"mcp-configured","sessionId":"other"})).is_err());
     assert!(validate_message(&json!({"id":"one","method":"usage"})).is_ok());
     assert!(validate_message(&json!({"id":"one","method":"context"})).is_ok());
     assert!(

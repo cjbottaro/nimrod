@@ -76,7 +76,8 @@ the retained invocation card, and explicit agent-prompt transitions keep that
 card separately from native conversation history. New/updated fixtures are unrun.
 
 This feature applies to **Copilot SDK sessions**. `/mcp` is omitted from the
-composer catalog; see [MCP inspector](mcp-inspector.md). Generic ACP keeps
+composer catalog; the [MCP inspector](mcp-inspector.md) uses separate structured
+session metadata. Generic ACP keeps
 advertised-only passthrough; the Copilot ACP integration has been removed.
 
 New commands using implemented metadata/result shapes work without command-name

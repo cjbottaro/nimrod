@@ -269,6 +269,15 @@ async function dispatch(message) {
     case 'commands':
       if (!session) throw new Error('No connected Copilot session');
       return await refreshCommands();
+    case 'mcp-configured': {
+      if (!session) throw new Error('No connected Copilot session');
+      const result = await session.rpc.mcp.listConfigured();
+      if (!Array.isArray(result?.servers)) throw new Error('Copilot returned an invalid MCP catalog');
+      return { servers: result.servers.map(server => ({
+        name: server?.name, enabled: server?.enabled, displayName: server?.displayName, source: server?.source,
+        status: server?.live?.status, error: server?.live?.error,
+      })) };
+    }
     case 'command-skills': {
       if (!session) throw new Error('No connected Copilot session');
       const result = await session.rpc.skills.list();

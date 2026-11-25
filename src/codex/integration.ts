@@ -13,7 +13,7 @@ import { configurationActions, noProjectActions, noReferences, taggedSavedSessio
 import { conversationPort } from '../harness-conversation';
 import { bindSessionCommands } from '../session-commands';
 import { commandInteraction } from '../command-interaction';
-import { createMcpInspector, mcpAction } from '../mcp-inspector';
+import { createMcpInspector } from '../mcp-inspector';
 import { codexMcpPage } from './integration-inspection';
 import type { HarnessProject, HarnessSession, SessionRequest } from '../harness-contract';
 import type { HarnessProjectHost, HarnessSessionHost } from '../harness-host';
@@ -110,7 +110,8 @@ function createCodexSession(host: HarnessSessionHost, request: SessionRequest, p
     }, forget() {} },
     conversation: conversationPort(host, () => backend.session, codexInteraction(text => owner.starting || !backend.session ? 'Codex is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
     configuration: { current: () => backend.session?.configuration },
-    actions: { current: () => configurationActions([...codexSessionActions(backend.session), ...(lifecycle.connection === 'connected' ? [{ ...mcpAction, run: inspection.run }] : [])], { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
+    mcp: inspection,
+    actions: { current: () => configurationActions(codexSessionActions(backend.session), { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Codex control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Codex', badge: 'Codex', badgeTitle: backend.historyConfirmed ? 'Saved Codex history confirmed' : 'Saved Codex history is not yet confirmed; reconnect may be unavailable', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: backend.session?.state.compacting === true, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
     deletion: { current: () => {

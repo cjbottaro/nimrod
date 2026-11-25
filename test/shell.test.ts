@@ -75,6 +75,8 @@ interface ShellOptions {
   filePath?: string | null;
   holdPrompts?: boolean;
   mcpReport?: string;
+  codexMcp?: JsonRecord[];
+  copilotMcp?: JsonRecord[];
   piCommands?: JsonRecord[];
   focused?: () => boolean;
   performanceControl?: { after: (() => void)[]; writeError?: string; copyError?: string };
@@ -359,8 +361,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           send({ id: request.id, result: { cwd: workspace, thread: { id: params.threadId ?? 'codex-fixture', cwd: workspace,
             ephemeral: false, parentThreadId: null, turns: [], status: { type: 'idle' } }, model: 'fixture', reasoningEffort: 'low' } });
         } else if (options.codexConversation && request.method === 'mcpServerStatus/list') {
-          send({ id: request.id, result: { data: [{ name: 'fixture-mcp', authStatus: 'oAuth', runtimeStatus: 'connected',
-            tools: { query: { description: 'Find entries' } }, resources: [{ name: 'Fixture index', uri: 'fixture://index' }], resourceTemplates: [] }], nextCursor: null } });
+          send({ id: request.id, result: { data: options.codexMcp ?? [], nextCursor: null } });
         } else if (options.codexConversation && ['model/list', 'thread/turns/list'].includes(String(request.method))) {
           send({ id: request.id, result: { data: [], nextCursor: null } });
         } else assert.equal(request.method, 'initialized', 'history must not create/resume a thread or start a turn');
@@ -404,6 +405,8 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           result = { name: request.name }; event('session.title_changed', { title: request.name });
         } else if (request.method === 'command') {
           result = await options.sdkCommand?.(request);
+        } else if (request.method === 'mcp-configured') {
+          result = { servers: options.copilotMcp ?? [] };
         } else if (request.method === 'prompt') {
           event('user.message', { content: request.text });
           event('assistant.message', { messageId: 'sdk-answer', content: 'SDK fixture response' });
@@ -5668,7 +5671,9 @@ test('MCP inspector routes palette and Status area entries to the same session w
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
     assert.equal(f.win.document.activeElement, prompt);
     const button = f.element('activity').querySelector<HTMLButtonElement>('.mcp-inspector-action')!;
-    assert.equal(button.hidden, false); button.click(); await f.tick(); await f.tick();
+    assert.equal(button.hidden, false); assert.equal(button.textContent, '2 MCP servers');
+    assert.equal(button.parentElement, f.element('main-activity'));
+    button.click(); await f.tick(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, true);
     assert.equal(String(prompt.value), 'Keep this draft');
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
@@ -5679,7 +5684,7 @@ test('MCP inspector routes palette and Status area entries to the same session w
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
     assert.match(f.element('session-notices').textContent!, /MCP slash commands are unavailable/);
     const prompts = f.calls.filter(call => (call.args.message as JsonRecord)?.type === 'prompt');
-    assert.equal(prompts.length, 2, 'only inspector actions issue Pi’s internal status request');
+    assert.equal(prompts.length, 3, 'one initial snapshot and two explicit inspections; retired slash text sends nothing');
     assert.ok(prompts.every(call => (call.args.message as JsonRecord).message === '/mcp'));
     f.disconnect(); await f.tick();
     assert.equal(f.element<HTMLDialogElement>('command-palette').open, false);
@@ -5687,7 +5692,8 @@ test('MCP inspector routes palette and Status area entries to the same session w
 });
 
 test('Codex MCP action uses the connected thread and shows reported tools and auth without sending', async () => {
-  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true });
+  const f = await fixture(undefined, { windowWorkspace: '/project', codexConversation: true, codexMcp: [{ name: 'fixture-mcp', authStatus: 'oAuth', runtimeStatus: 'connected',
+    tools: { query: { description: 'Find entries' } }, resources: [{ name: 'Fixture index', uri: 'fixture://index' }], resourceTemplates: [] }] });
   try {
     const input = f.element<HTMLInputElement>('palette-input');
     f.openPalette(); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
@@ -5699,9 +5705,32 @@ test('Codex MCP action uses the connected thread and shows reported tools and au
     assert.equal(f.element('palette-title').textContent, 'MCP servers');
     assert.match(f.element('palette-inspection').textContent!, /Auth: oAuth.*query: Find entries.*fixture:\/\/index/s);
     const requests = f.calls.filter(call => call.command === 'write_codex').map(call => call.args.message as JsonRecord);
-    assert.deepEqual(requests.find(request => request.method === 'mcpServerStatus/list')?.params, { threadId: 'codex-fixture', detail: 'full', limit: 100 });
+    assert.deepEqual(requests.filter(request => request.method === 'mcpServerStatus/list').map(request => request.params), [
+      { threadId: 'codex-fixture', detail: 'toolsAndAuthOnly', limit: 100 }, { threadId: 'codex-fixture', detail: 'full', limit: 100 },
+    ]);
     assert.equal(requests.some(request => request.method === 'turn/start' || request.method === 'turn/steer'), false);
     assert.equal(prompt.value, 'Unsent');
+  } finally { f.win.close(); }
+});
+
+test('Copilot MCP count comes from the structured catalog and disappears on an empty refresh', async () => {
+  const options: ShellOptions = { windowWorkspace: '/project', copilotMcp: [{ name: 'fixture', enabled: true, status: 'failed', error: 'Offline fixture', source: 'workspace' }] };
+  const f = await fixture(undefined, options);
+  try {
+    const input = f.element<HTMLInputElement>('palette-input');
+    f.openPalette(); input.value = 'New session with harness'; input.dispatchEvent(new f.win.Event('input'));
+    input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await f.tick(); await f.tick();
+    f.element('palette-list').querySelector<HTMLElement>('[data-key="copilot-sdk"]')!.click(); await f.tick(); await f.tick();
+    const button = f.element('main-activity').querySelector<HTMLButtonElement>('.mcp-inspector-action')!;
+    assert.equal(button.hidden, false); assert.equal(String(button.textContent), '1 MCP server');
+    button.click(); await f.tick();
+    assert.match(f.element('palette-inspection').textContent!, /failed.*workspace.*Offline fixture/s);
+    options.copilotMcp = [];
+    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
+    assert.equal(button.hidden, true); assert.equal(button.textContent, '');
+    const requests = f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
+    assert.equal(requests.filter(request => request.method === 'mcp-configured').length, 3);
+    assert.equal(requests.some(request => request.method === 'prompt' || request.method === 'command'), false);
   } finally { f.win.close(); }
 });
 

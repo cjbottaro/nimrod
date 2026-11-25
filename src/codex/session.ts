@@ -234,9 +234,9 @@ export class CodexSession {
       throw error;
     } finally { this.commandRunning = false; this.publish([]); }
   }
-  inspectMcp(current: () => boolean): Promise<RpcRecord[] | undefined> {
+  inspectMcp(current: () => boolean, full: boolean): Promise<RpcRecord[] | undefined> {
     if (this.ended || this.hydrating || this.state.sessionUnavailable) throw new Error('Connect this session before inspecting MCP servers.');
-    return this.reportPages(cursor => this.client.mcpServers(true, cursor), current);
+    return this.reportPages(cursor => this.client.mcpServers(full, cursor), current);
   }
   private async reportPages(read: (cursor?: string) => Promise<{ data: RpcRecord[]; nextCursor: string | null }>, current: () => boolean): Promise<RpcRecord[] | undefined> {
     const result: RpcRecord[] = [], cursors = new Set<string>(); let cursor: string | undefined;

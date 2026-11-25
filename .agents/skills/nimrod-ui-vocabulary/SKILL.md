@@ -102,7 +102,7 @@ A **card** needn't have a visible rectangle. A **disclosure** expands/collapses;
 - **Customize Nimrod…** — session action for agent-assisted Nimrod customization; the [specification](../customize-nimrod/SKILL.md) owns the workflow.
 - **Session-row context menu** — OS-rendered menu opened by right-click/Control-click or Menu key/Shift+F10 on a sidebar row; actions target that row, not necessarily the selected session. **Pinned session** means an open session organized above unpinned rows, not protected from Close/Delete.
 - **Command palette** — modal action selector; subordinate pickers are pages in that interaction.
-- **MCP inspector / MCP servers…** — read-only server inspection page and its session action, available from the command palette, Status area and an optional keybinding. [MCP inspector](../features/references/mcp-inspector.md) owns its contract.
+- **MCP inspector / MCP servers…** — read-only server inspection page and its session action, available from the command palette, inline server count in the Status area and an optional keybinding. [MCP inspector](../features/references/mcp-inspector.md) owns its contract.
 - **Skills browser / Browse skills…** — searchable command-palette page and action for staging an invocable skill in the composer. [Skills browser](../features/references/composer.md#skills-browser) owns its contract.
 - **Model picker / thinking-level picker / mode picker / context-window picker** — session configuration selection pages; “effort” is a thinking-level search alias. Mode and context-window pickers appear only when the selected session contributes those actions.
 - **Activity indicator** — spinner/dot with activity context; specify main agent/subagent/tool/reasoning when ambiguous.

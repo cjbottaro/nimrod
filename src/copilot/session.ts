@@ -166,6 +166,10 @@ export class CopilotSession {
     }
     if (!this.canSubmit) return 'Copilot is not idle or is still connecting. Your draft was kept.';
   }
+  inspectMcp(): Promise<unknown> {
+    if (this.ended || this.state.sessionUnavailable) throw new Error('Connect this session before inspecting MCP servers.');
+    return this.connection.request('mcp-configured', {}, 'reject');
+  }
   cancelCommands(): void { this.commandQueue.cancel(); }
   receive(packet: unknown): void {
     if (record(packet) && !['event', 'connected', 'permission', 'input', 'plan', 'diagnostic'].includes(String(packet.kind)))

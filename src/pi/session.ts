@@ -226,6 +226,8 @@ export class PiSession {
     }
   }
 
+  get advertisesMcpStatus(): boolean { return this.commands.some(isBuiltinMcpCommand); }
+
   /** Read-only built-in command; shared while in flight, never automatically retried. */
   inspectMcp(): Promise<McpStatusReport> {
     if (this.mcpTask) return this.mcpTask;

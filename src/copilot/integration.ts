@@ -7,6 +7,8 @@ import { CopilotSessionHistory, copilotHistoryKey } from './session-history';
 import { copilotSessionDeletion } from './session-deletion';
 import { copilotTransport } from './native';
 import { copilotIntegrationUi } from './integration-ui';
+import { copilotMcpPage } from './integration-inspection';
+import { createMcpInspector } from '../mcp-inspector';
 import { bundledCopilotPlugin } from './card-plugins';
 import { startupAvailability } from '../harness-availability';
 import { defineHarness } from '../harness-registry';
@@ -64,6 +66,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
   const transport = copilotTransport(host.project, project.runtime, generation);
   const stopToken = ownedProcessStop(transport.stop);
   const ui = copilotIntegrationUi(host);
+  const inspection = createMcpInspector(host, () => backend.session, copilotMcpPage);
   let signature = '', sequence = 0, retiring = false;
   let initialName = request.mode === 'saved' && request.initialName !== undefined ? copilotSessionName(request.initialName) : undefined;
   const lifecycle = copilotSessionLifecycle(() => owner, backend, { connect, stop: stopToken, gate: () => ready() && !project.deletionPending() && !lifetime.deleting() ? 'ready' : 'blocked' });
@@ -78,7 +81,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
     try { await lifecycle.stop(); }
     catch (error) { owner.starting = false; effects.connection(`Could not stop the previous Copilot connection: ${String(error)}`, !!savedId); effects.changed(); return; }
     if (!lifetime.current() || lifetime.closing()) { owner.starting = false; return; }
-    effects.retire(); lifecycle.disconnect('Reconnecting Copilot');
+    inspection.cancel(); effects.retire(); lifecycle.disconnect('Reconnecting Copilot');
     const token = crypto.randomUUID(); owner.token = token; owner.ended = false;
     const valid = () => lifetime.current() && owner.token === token;
     let initialized = false;
@@ -106,7 +109,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       commandInput: (title, signal) => valid() ? ui.commandInput(title, signal) : Promise.resolve(undefined),
       disconnected: message => {
         if (!valid()) return;
-        owner.ended = true; effects.retire(); effects.publish({ type: 'sessionDisconnected' });
+        owner.ended = true; inspection.cancel(); effects.retire(); effects.publish({ type: 'sessionDisconnected' });
         if (!retiring && !lifetime.closing() && !lifetime.deleting() && !effects.hasConnectionOutcome()) effects.connection(`${message}. Your draft and any saved identity remain. Nothing was replayed or replaced by a new session.`, !!lifecycle.identity);
         if (initialized && !lifetime.closing() && !lifetime.reloading() && !lifetime.deleting()) void stopToken(token).catch(error => { if (valid()) effects.connection(`Could not stop Copilot: ${String(error)}`, !!lifecycle.identity); });
         effects.changed();
@@ -139,7 +142,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       return await history()?.retention(backend.savedSessionId) ?? 'unknown';
     }, forget() {} },
     conversation: conversationPort(host, () => backend.session, copilotInteraction(text => owner.starting || !backend.session ? 'Copilot is still connecting. Your draft was kept.' : backend.session.validatePrompt(text))),
-    configuration: { current: () => backend.session?.configuration },
+    configuration: { current: () => backend.session?.configuration }, mcp: inspection,
     actions: { current: () => configurationActions(copilotSessionActions(backend.session), { model: 'model', thinking: 'effort', mode: 'mode', 'context-window': 'context-tier' }), async control() { throw new Error('This Copilot control is no longer available'); } },
     presentation: { snapshot: () => ({ harnessLabel: 'Copilot', badge: 'Copilot', badgeTitle: '', busy: backend.session?.state.busy === true,
       working: backend.session?.state.busy === true, pending: backend.session?.state.busy === true, compacting: false, queuePending: false, destructiveBusy: backend.session?.hasPendingWork === true }) },
@@ -162,6 +165,7 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       async run() {
         if (!lifecycle.identity) throw new Error('Reload requires a saved Copilot identity');
         retiring = true;
+        inspection.cancel();
         try {
           await lifecycle.stop();
           effects.retire(); effects.publish({ type: 'sessionDisconnected' });
@@ -171,6 +175,6 @@ function createCopilotSession(host: HarnessSessionHost, request: SessionRequest,
       },
     },
     references: noReferences,
-    interactions: { setActive(active) { if (!active) backend.session?.cancelCommands(); ui.setActive(active); }, dispose: ui.dispose },
+    interactions: { setActive(active) { if (!active) { backend.session?.cancelCommands(); inspection.cancel(); } ui.setActive(active); }, dispose() { inspection.cancel(); ui.dispose(); } },
   };
 }

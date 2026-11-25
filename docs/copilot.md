@@ -265,9 +265,10 @@ native clipboard/history acceptance remain pending.
 
 [Reload session](sessions.md#reload-session) reopens the same saved conversation with a fresh Copilot agent while keeping your draft. Installed-runtime/native reload acceptance remains pending.
 
-Current limits: no steering, queue, Pi MCP inspector
-or in-place harness switching. Slash commands use the SDK's supported interface,
-not full terminal-UI emulation; see below.
+Current limits: no steering, queue or in-place harness switching. Use the
+[MCP inspector](mcp.md) to see configured servers and any already observed
+connection state. Slash commands use the SDK's supported interface, not full
+terminal-UI emulation; see below.
 Interactive, Plan and Autopilot sessions are supported through the SDK. Generic
 agent protocol infrastructure is retained internally, without a separate
 creation action. A mode transition that asks the host for an unsupported extra

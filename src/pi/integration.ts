@@ -14,7 +14,7 @@ import type { SessionFile } from './session-file';
 import { PiSessionHistory } from './session-history';
 import { piSessionDeletion } from './session-deletion';
 import { piMcpPage } from './integration-inspection';
-import { createMcpInspector, mcpAction } from '../mcp-inspector';
+import { createMcpInspector } from '../mcp-inspector';
 import type { SessionDeletion, DeletionSnapshot, DeletionEvent } from '../session-deletion';
 import { bundledToolRenderer } from './card-plugins/registry';
 import { startupAvailability } from '../harness-availability';
@@ -213,7 +213,8 @@ function createPiSession(host: HarnessSessionHost, request: SessionRequest, proj
   };
   return {
     lifecycle, drafts: { durability: request.mode === 'temporary' ? 'memory' : 'persistent' }, conversation: conversationPort(host, readView, piInteraction), presentation: { snapshot }, configuration: { current: () => backend.session?.configuration },
-    actions: { current: () => configurationActions([...piSessionActions, ...(lifecycle.connection === 'connected' ? [{ ...mcpAction, run: inspection.run }] : [])], { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
+    mcp: inspection,
+    actions: { current: () => configurationActions(piSessionActions, { model: 'model', thinking: 'effort' }), async control() { throw new Error('This Pi control is no longer available'); } },
     deletion: { current: () => {
       const reference = lifecycle.identity;
       return reference ? { kind: 'saved', reference } : { kind: 'close' };
