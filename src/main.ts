@@ -52,7 +52,7 @@ import { abbreviateHome, projectPathParts } from './project-path';
 import { installCommandPalette, type PalettePage } from './command-palette';
 import { applicationCommands, isApplicationAction, runApplicationAction, type ApplicationActionId } from './application-actions';
 import { ACTIONS, actionContextAvailable, actionDefinition, bindingsFor, installKeybindingDispatch, isMac, shortcutLabel, type ActionId } from './keybindings';
-import { installSessionPopouts } from './session-popouts';
+import { installSessionPopouts, type SessionNote } from './session-popouts';
 import transcript from './pi/transcript.html?raw';
 import './pi/transcript.css';
 import './acp/session.css';
@@ -189,7 +189,11 @@ const unlistenLinkErrors = await listen<string>('nimrod-link-error', event => {
 }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
 function syncPopouts(): void {
   if (!workspace) return;
-  popouts.sync(tabs.map(tab => ({ runtimeId: tab.id, pi: tab.integration.references.file() ?? null })), presentation.current?.id ?? null);
+  popouts.sync(tabs.map(tab => {
+    const identity = tab.lifecycle.identity;
+    return identity && 'kind' in identity ? { runtimeId: tab.id, pi: null, named: identity }
+      : { runtimeId: tab.id, pi: tab.integration.references.file() ?? null };
+  }), presentation.current?.id ?? null);
 }
 interface Tab {
   readonly project: HarnessProject;
@@ -287,7 +291,10 @@ const deletions = new SessionDeletionCoordinator({
       tab.receive?.({ type: 'sessionDisconnected' });
     },
   })),
-  review: { loadingReview: deletionReview.loading, review: deletionReview.review, progress: deletionReview.progress, closeReview: deletionReview.cancel },
+  review: { loadingReview: deletionReview.loading, review: async data => {
+    const noteCount = data.noteCount ?? await invoke<number>('count_session_notes', { keys: data.sessions.map(session => session.key) }).catch(() => null);
+    return deletionReview.review({ ...data, noteCount });
+  }, progress: deletionReview.progress, closeReview: deletionReview.cancel },
   deleted: removeDeletedSessions,
   changed: () => {
     for (const tab of tabs) updateTab(tab);
@@ -447,6 +454,7 @@ async function showSessionContextMenu(tab: Tab, position: { x: number; y: number
     pin: { label: pinned ? 'Pin session' : 'Unpin session', enabled: canPin(tab), run: () => runSessionRowAction(tab, 'pin', pinned) },
     rename: { label: 'Rename session…', visible: tab.project.availability.available(), enabled: canClose(tab) && !blocked(tab), run: () => runSessionRowAction(tab, 'rename') },
     close: { label: 'Close session', enabled: canClose(tab), run: () => runSessionRowAction(tab, 'close') },
+    notes: { label: 'Session notes…', enabled: canBrowseNotes(tab), run: () => showSessionNotes(tab) },
     delete: { label: tabDeletion(tab)?.label || 'Delete session…', visible: tab.project.availability.available(), enabled: deletable(tab), run: () => runSessionRowAction(tab, 'delete') },
     error: error => notices.report({ id: `session-menu:${++noticeSequence}`, owner: tab.id, operation: 'Session menu', message: String(error) }),
   }, { x: position.x * window.devicePixelRatio, y: position.y * window.devicePixelRatio });
@@ -728,6 +736,7 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ...harnesses.projectActions().filter(action => action.available()).map(action => ({ ...action, run: () => runProjectAction(action.id) })),
     ...(tabs.length ? [{ id: 'switch-session', label: 'Switch session…', detail: 'All open sessions, regardless of sidebar view', next: true, run: () => palette.openSessions() }] : []),
     ...(active ? sessionCommands(active) : []),
+    ...(active && canBrowseNotes(active) ? [{ id: 'session-notes', label: 'Session notes…', detail: 'Find, open or delete captures from this session', next: true, run: () => showSessionNotes(active) }] : []),
     ...(active && !customizationAvailability(active) ? [{ id: 'customize-nimrod', label: 'Customize Nimrod…', detail: 'Ask this agent to customize Nimrod with included authoring instructions', run: () => requestCustomization(active) }] : []),
     ...(active && reloadable(active) ? [
       { id: 'reload', label: 'Reload session', detail: active.integration.reload.detail, run: () => reloadSession(active!) },
@@ -747,6 +756,43 @@ const palette = installCommandPalette(window, required<HTMLDialogElement>('comma
     ].map(item => ({ ...item, shortcut: ACTIONS.some(action => action.id === item.id) ? shortcutHint(item.id as ActionId) : undefined }));
   },
 });
+function canBrowseNotes(tab: Tab): boolean { return canPin(tab) && !settings.isOpen && !blocked(tab); }
+async function showSessionNotes(tab: Tab, refresh = false): Promise<void> {
+  if (!canBrowseNotes(tab)) return;
+  const project = workspace;
+  const valid = () => workspace === project && canBrowseNotes(tab);
+  const browser = palette.startBrowse(`Session notes — ${tab.title}`, () => { void showSessionNotes(tab, true); }, refresh);
+  if (!browser) return;
+  const report = (operation: string, error: unknown) => {
+    if (!unloading && workspace === project) notices.report({ id: `note:${++noticeSequence}`, operation, message: String(error) });
+  };
+  try {
+    await popouts.settled();
+    if (!browser.isCurrent()) return;
+    if (!valid()) { browser.cancel(); return; }
+    const notes = await invoke<SessionNote[]>('list_session_notes', { session: tab.id });
+    if (!valid()) { browser.cancel(); return; }
+    browser.show({
+      notice: notes.length ? undefined : 'No notes yet. Pop out a response or code block to capture one.',
+      items: notes.map(note => ({
+        id: note.id, label: note.title, detail: note.preview, badge: note.open ? 'Open' : undefined,
+        run: async () => {
+          if (!valid()) return;
+          if (presentation.current !== tab) activate(tab);
+          await popouts.settled();
+          if (!valid() || presentation.current !== tab) return;
+          try { await invoke('open_session_note', { session: tab.id, id: note.id }); }
+          catch (error) { report('Open note', error); }
+        },
+        remove: async () => {
+          if (!valid() || !await dialogs.confirm('Delete note?', `Permanently delete “${note.title}”? The source conversation is unchanged.`, tab.id, 'Delete note') || !valid()) return;
+          try { await invoke('delete_session_note', { session: tab.id, id: note.id }); }
+          catch (error) { report('Delete note', error); }
+        },
+      })),
+    });
+  } catch (error) { browser.error(`Could not list notes: ${String(error)}`); }
+}
 const pickTheme = createThemeSelection(palette, preferences, themes);
 settingsSurface.onSelectTheme(pickTheme);
 settingsSurface.onChooseSetting(settingsChoicePage(palette, required<HTMLDialogElement>('settings-page')));
@@ -1251,6 +1297,9 @@ async function deleteSession(tab: Tab): Promise<void> {
 }
 function removeDeletedSessions(targets: readonly SessionDeletionTarget[]): void {
   const keys = targets.map(target => target.key);
+  if (workspace && keys.length) void invoke('purge_session_notes', { keys }).catch(error => {
+    if (!unloading) notices.report({ id: `delete-notes:${++noticeSequence}`, operation: 'Remove deleted session notes', message: String(error) });
+  });
   const deleted = new Set(keys), before = navigationSnapshot(), selected = active;
   if (recency.delete(keys) && workspace) save(recencyKey(), recency.dump());
   const removed = tabs.filter(tab => tab.lifecycle.key !== undefined && deleted.has(tab.lifecycle.key));
@@ -1427,6 +1476,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       for (const action of sessionActions(presentation.current)) contributed.add(action.id);
       contributed.add('close');
       if (canPin(presentation.current)) contributed.add('pin');
+      if (canBrowseNotes(presentation.current)) contributed.add('session-notes');
       if (!customizationAvailability(presentation.current)) contributed.add('customize-nimrod');
       if (presentation.current.project.availability.available() && canClose(presentation.current) && !blocked(presentation.current)) contributed.add('rename');
       if (reloadable(presentation.current)) contributed.add('reload');
@@ -1445,7 +1495,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
     // but an absent live contribution is unavailable, not an enabled no-op.
     if (id.startsWith('harness-') && actionDefinition(id).context === 'project') return false;
     if (id === 'capture-performance') return preferences.performanceEnabled() && !settingsSurface.capturingPerformance;
-    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename'].includes(id)) return !!presentation.current && sessionActions(presentation.current).some(action => action.id === id);
+    if (actionDefinition(id).context === 'session' && !['pin', 'close', 'delete', 'reload', 'rename', 'session-notes'].includes(id)) return !!presentation.current && sessionActions(presentation.current).some(action => action.id === id);
     return true;
   },
   run: (id: ActionId) => {
@@ -1461,6 +1511,7 @@ const keybindingDispatch = installKeybindingDispatch(window, {
       case 'temporary': return newSession('temporary');
       case 'delete': return presentation.current ? runSessionRowAction(presentation.current, 'delete') : undefined;
       case 'rename': return presentation.current ? runSessionRowAction(presentation.current, 'rename') : undefined;
+      case 'session-notes': return presentation.current ? showSessionNotes(presentation.current) : undefined;
       case 'pin': return presentation.current ? runSessionRowAction(presentation.current, 'pin') : undefined;
       case 'delete-sessions': return palette.deleteSessions();
       case 'capture-performance': return capturePerformance(true);

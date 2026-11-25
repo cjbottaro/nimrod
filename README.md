@@ -51,7 +51,7 @@ Without installation, use `./bin/nimrod .`. Directory launches open or focus a p
 - [Reading conversations](docs/reading-conversations.md) — operation cards, tool/reasoning cards, code actions, links and auto-follow.
 - [Paste images](docs/image-paste.md) — image attachments and delivery behavior.
 - [Session configuration](docs/model-thinking.md) — change supported model, thinking, mode and context-window settings during work, plus [Copilot live permission policy](docs/copilot.md#change-permissions-during-work).
-- [Pop-outs](docs/pop-outs.md) — persistent reference windows for code and rendered Markdown.
+- [Pop-outs and session notes](docs/pop-outs.md) — capture, trim and reopen code or Markdown notes by session.
 - [Notifications](docs/notifications.md) — background-session alerts and delivery troubleshooting.
 - [MCP inspector](docs/mcp.md) — read-only session server status, exposure, counts and reported errors.
 - [Command palette](docs/command-palette.md) and [Keybindings](docs/keybindings.md) — searchable commands and customizable shortcuts.

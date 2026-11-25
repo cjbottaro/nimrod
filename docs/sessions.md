@@ -63,7 +63,7 @@ automatically. Installed-runtime and native macOS/Linux acceptance remain pendin
 
 Click its row's **Close** button or use **⌘/Ctrl+W**. Closing waits for the integration to release its connection/resources.
 
-- Saved history, its draft and saved pop-outs remain available when reopened.
+- Saved history, its draft and [session notes](pop-outs.md) remain available when reopened.
 - If the harness confirms there is no saved history after stopping, Close discards the local session entry and its draft/attachments—just like Delete. This includes sessions created without ever sending a message. A connection or history-lookup failure is not proof of absence: Close still removes the row, but preserves the uncertain draft.
 - Temporary state is discarded; temporary or active-work Close asks for confirmation.
 - Cancel or failed shutdown keeps the session and draft available.

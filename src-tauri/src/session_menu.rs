@@ -2,8 +2,8 @@
 //! the captured target and dispatches the existing session actions.
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{
-    menu::{ContextMenu, Menu, MenuItem, PredefinedMenuItem},
     Emitter, Manager,
+    menu::{ContextMenu, Menu, MenuItem, PredefinedMenuItem},
 };
 
 #[derive(Default)]
@@ -17,6 +17,7 @@ pub struct SessionMenuOptions {
     close_enabled: bool,
     rename_enabled: bool,
     rename_visible: bool,
+    notes_enabled: Option<bool>,
     delete_visible: bool,
     delete_label: String,
     delete_enabled: bool,
@@ -40,7 +41,9 @@ pub fn popup_session_menu(
     if !(window.label() == "main" || window.label().starts_with("workspace-"))
         || request.len() > 80
         || request.is_empty()
-        || !request.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || !request
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
         || !options.x.is_finite()
         || !options.y.is_finite()
         || !["Pin session", "Unpin session"].contains(&options.pin_label.as_str())
@@ -79,7 +82,19 @@ pub fn popup_session_menu(
         )?;
         let menu = Menu::new(&window)?;
         menu.append(&pin)?;
-        if options.rename_visible { menu.append(&rename)?; }
+        if options.rename_visible {
+            menu.append(&rename)?;
+        }
+        if let Some(enabled) = options.notes_enabled {
+            let notes = MenuItem::with_id(
+                &window,
+                item_id(window.label(), &request, "notes"),
+                "Session notes…",
+                enabled,
+                None::<&str>,
+            )?;
+            menu.append(&notes)?;
+        }
         menu.append(&close)?;
         if options.delete_visible {
             menu.append(&PredefinedMenuItem::separator(&window)?)?;
@@ -90,14 +105,18 @@ pub fn popup_session_menu(
     let menu = build().map_err(|error| error.to_string())?;
     // Linux popup completion is not a dismissal signal. Keep the menu alive
     // until replacement/window destruction, without a per-popup resource cache.
-    menus.0.lock().unwrap().insert(window.label().into(), menu.clone());
+    menus
+        .0
+        .lock()
+        .unwrap()
+        .insert(window.label().into(), menu.clone());
     menu.popup_at(window, tauri::PhysicalPosition::new(options.x, options.y))
         .map_err(|error| error.to_string())
 }
 
 fn decode(id: &str) -> Option<[String; 3]> {
     let parts: [String; 3] = serde_json::from_str(id.strip_prefix(PREFIX)?).ok()?;
-    if !["pin", "close", "delete", "rename"].contains(&parts[2].as_str()) {
+    if !["pin", "close", "delete", "rename", "notes"].contains(&parts[2].as_str()) {
         return None;
     }
     Some(parts)
@@ -133,7 +152,11 @@ mod tests {
         let id = item_id("workspace-one", "old-request", "delete");
         assert_eq!(
             decode(&id),
-            Some(["workspace-one".into(), "old-request".into(), "delete".into()])
+            Some([
+                "workspace-one".into(),
+                "old-request".into(),
+                "delete".into()
+            ])
         );
         assert_ne!(id, item_id("workspace-two", "old-request", "delete"));
         assert_ne!(id, item_id("workspace-one", "new-request", "delete"));

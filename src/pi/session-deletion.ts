@@ -13,7 +13,7 @@ export function piSessionDeletion(
     deleted: files => context.removed(files.map(target)),
     recovered: context.recovered,
     loadingReview: context.loadingReview,
-    review: (id, sessions) => context.review({ id, sessions: sessions.map(session => ({ key: session.file, title: session.title, parentKey: session.parent, cwd: session.cwd })) }),
+    review: (id, sessions, noteCount) => context.review({ id, noteCount, sessions: sessions.map(session => ({ key: session.file, title: session.title, parentKey: session.parent, cwd: session.cwd })) }),
     cancelReview: context.closeReview,
     progressReview: context.progress,
     error: context.error,

@@ -32,6 +32,8 @@ pub struct DeletionEvent {
     pub message: Option<String>,
     pub pending: bool,
     pub tree: Option<Vec<ReviewSession>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note_count: Option<usize>,
 }
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -117,6 +119,15 @@ impl SessionDeletion {
     pub fn blocked(&self, file: &Path) -> bool {
         self.quarantine.lock().unwrap().contains(file)
     }
+    pub fn removed(&self, file: &Path) -> bool {
+        self.deleted.lock().unwrap().contains(file)
+    }
+    pub fn notes_blocked(&self, file: &Path) -> bool {
+        self.removed(file)
+            || self.blocked(file)
+            || self.running.load(Ordering::SeqCst)
+                && self.files.lock().unwrap().iter().any(|path| path == file)
+    }
     pub fn snapshot(&self) -> DeletionSnapshot {
         // Do not hold quarantine while taking files: recovery checks the active
         // file set before updating quarantine and uses the opposite order.
@@ -180,6 +191,7 @@ impl SessionDeletion {
             message: None,
             pending: true,
             tree: None,
+            note_count: None,
         };
         for window in &participants {
             app.emit_to(window, EVENT, &event)
@@ -414,6 +426,7 @@ pub async fn delete_session_tree(
                 message: None,
                 pending: true,
                 tree: None,
+                note_count: None,
             },
         )
         .map_err(|e| e.to_string())?;
@@ -475,6 +488,11 @@ pub async fn delete_session_tree(
                 message: None,
                 pending: true,
                 tree: Some(tree),
+                note_count: Some(
+                    crate::popout_store::SnapshotStore(&app.state::<Preferences>())
+                        .session_ids(&membership)
+                        .len(),
+                ),
             },
         )
         .map_err(|e| e.to_string())?;
@@ -536,6 +554,7 @@ pub async fn delete_session_tree(
                     message: None,
                     pending: true,
                     tree: None,
+                    note_count: None,
                 },
             )
             .map_err(|e| e.to_string())?;
@@ -586,6 +605,7 @@ pub async fn delete_session_tree(
                 message: None,
                 pending: true,
                 tree: Some(plan.tree()),
+                note_count: None,
             },
         )
         .map_err(|e| e.to_string())?;
@@ -658,6 +678,7 @@ pub async fn delete_session_tree(
         message: error.clone(),
         pending: false,
         tree: None,
+        note_count: None,
     };
     host.end_deletion().await;
     state.files.lock().unwrap().clear();

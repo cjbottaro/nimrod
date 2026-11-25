@@ -13,11 +13,11 @@ implementation, storage, invariants, platform workarounds or test coverage.
 
 ## Specification and acceptance criteria
 
-Immutable source captures deduplicate per session/content/kind (and language for code). Saved snapshots survive source Close/quit, explicit reference Close removes them, and automatic visibility preserves focus while explicit opening focuses the reference.
+Every capture is an immutable session note. Captures deduplicate per session/content/kind (and language for code). The note's lifetime is independent of the window. Explicit window Close clears only restore intent; only Delete note or confirmed session deletion removes the capture. Automatic visibility preserves focus; explicit opening focuses the reference.
 
 ## Product boundaries
 
-- Pop-outs capture immutable, read-only content; they are not editable notes or files.
+- Session notes are capture-only: no blank notes, body editor or source-file changes.
 - Snapshots belong to sessions within projects. Only the active project family's
   selected-session references are visible: the project window and its own pop-outs
   share one focus scope. Other projects retain independently selected sessions and
@@ -25,17 +25,16 @@ Immutable source captures deduplicate per session/content/kind (and language for
 - Copy/Pop out are icon-only, in that left-to-right order: Pop out, Copy. Buttons
   have accessible labels/tooltips; copy success shows a checkmark for 1.2 seconds.
 - Identical content of the same kind anywhere in one session shares a Pop-out, including across assistant turns. Code also matches on language.
-- Switching sessions hides/shows references; closing the source session/project
-  preserves saved snapshots. Explicit pop-out Close removes the saved reference
-  and file. Confirmed source-session tree deletion removes associated windows, state references and files too, including unmounted projects. Failed/unknown deletions retain them. App Quit preserves snapshots.
-- Temporary/demo, non-Pi and pre-first-save Pop-outs are runtime-only. Provisional snapshots promote after verified Pi persistence, even in background.
+- Switching sessions hides/shows windows. Closing the source session/project or quitting keeps saved notes and the open set. Closing a note window preserves the note and clears its open bit. Restore instantiates only notes whose open bit is set.
+- Temporary/demo and pre-identity notes are runtime-only and can be closed/reopened while mounted. Provisional captures (including closed ones) promote when a saved owner is registered, even in the background.
+- Confirmed session removal purges its notes. Pi purges by confirmed native file results across project scopes; namespaced Copilot and Codex successes use project-scoped cleanup keys from shared deletion reconciliation. The review reports the count in its reviewed scope; later confirmed descendants are cleaned too. Cancellation and failed/unknown results do not remove notes.
 - No original message ID, block ordinal, transcript key or backlink is tracked.
   **Show in conversation is intentionally dropped, not a deferred requirement.**
 - Native title bars/window controls remain. On macOS, pop-outs opt out of native
   window cycling while remaining focusable by click; ⌘W still closes the reference.
   Frameless/custom chrome was discussed and deferred; do not implement it as part
   of unrelated maintenance.
-- Nimrod owns snapshots and window state. Harnesses own conversations. The shared transcript provides runtime captures; verified Pi session provenance is the current requirement for durable restoration.
+- Nimrod owns notes and window state. Harnesses own conversations. A saved note owner is exact Pi file/ID or the integration's namespaced saved identity under the registered project. This is not evidence or a promise that the harness can restore its history.
 
 ## File map
 
@@ -47,6 +46,7 @@ Immutable source captures deduplicate per session/content/kind (and language for
 | `src/response-markdown.ts`, `src/popout-trim.ts` | GFM block ranges, original source offsets, live trim controls and serialized commit |
 | `src/main.ts` | Session ownership/selection, native bridge, first-save promotion and errors |
 | `src/session-popouts.ts` | Serialized/coalesced sync/open queue and stale-open guards |
+| `src/command-palette.ts`, `src/session-context-menu.ts` | Session-scoped searchable browser with open/delete actions; native row-menu entry |
 | `src/popout.ts` | Dedicated window boot, rendering, clipboard, links, appearance, close shortcut |
 | `src/popout-presentation.ts` | Markdown aliases and content-derived display titles |
 | `src/popout.css` | Content-first layout; floating Markdown source Copy control |
@@ -120,7 +120,11 @@ Immutable source captures deduplicate per session/content/kind (and language for
   browser handoff. Stored cwd remains available independently of source history.
 - New/restored references also install the shared [native navigation guard](transcript-interaction.md#native-link-navigation), covering context-menu URL opening and new-window requests that bypass DOM interception. Browser failures target only the originating reference's notice strip; unsupported native navigation cannot replace the snapshot.
 - ⌘W / Ctrl+W calls native Close. Do not replace that with direct `destroy()`, which
-  bypasses persistence deletion semantics.
+  bypasses the saved window-intent update.
+
+### Session notes browser
+
+The bindable **Session notes…** action targets the selected session; the Session sidebar's row menu targets its own row without selecting or connecting it. The palette browser filters indexed title/snippet text, identifies existing windows, and uses its normal post-close acceptance boundary for Open note and Delete note. Opening a note for a different row selects it through normal navigation; listing itself never connects or restores a conversation. Delete uses the shared confirmation dialog and rechecks the mounted owner before dispatch. Browser listing never transports whole saved captures; legacy notes lacking summaries derive bounded metadata from their snapshots on demand. Native `list_session_notes`, `open_session_note` and `delete_session_note` scope every lookup to the calling project window and exact registered session; explicit open also requires current project/session eligibility.
 
 ### Response trim
 
@@ -139,8 +143,7 @@ Three identities serve different purposes:
 
 1. **Nimrod UUID:** durable snapshot/file/window identity. Native labels are
    `popout-<uuid>` and filenames are `<uuid>.json`.
-2. **Session owner:** canonical project cwd plus `PiSessionRef { path, sessionId }`
-   for saved sessions. Runtime-only entries use calling window/mounted session IDs.
+2. **Session owner:** canonical project cwd plus `PiSessionRef { path, sessionId }` or `NamedSessionRef { kind, sessionId }` for a saved session. Runtime-only entries use calling window/mounted session IDs.
 3. **Content fingerprint:** a within-session matching key, not a session identity
    or source location.
 
@@ -166,7 +169,7 @@ Default storage (XDG overrides follow existing Preferences paths):
   { version: 1, reference: SavedPopout, snapshot: CodeSnapshot }
 ```
 
-`SavedPopout` contains `id`, `cwd`, `pi`, `fingerprint`, `geometry` and optional `trim` (`start`/`end`, half-open zero-based block boundaries). Legacy inclusive `first`/`last` values decode to `start`/`end` with `end = last + 1`.
+`SavedPopout` contains `id`, `cwd`, a tagged `pi` or `named` owner, `fingerprint`, `geometry`, the `open` bit, optional bounded `details` (title, preview, created time), and optional `trim` (`start`/`end`, half-open zero-based block boundaries). Legacy inclusive `first`/`last` values decode to `start`/`end` with `end = last + 1`.
 `CodeSnapshot` contains `session`, `title`, `text`, `language` and optional `response` (omitted for legacy/code captures). Its `session` is a captured mounted identity, not the durable ownership key used for restoration.
 Old snapshot `key` fields are ignored on read and omitted on serialization; no
 migration or user-file rewrite is required.
@@ -181,12 +184,11 @@ migration or user-file rewrite is required.
 - `save_new` writes a same-directory temporary file, syncs it, then uses
   `persist_noclobber`. Only afterward does it insert the state reference. A failed
   index write rolls back only that newly created file, never an existing snapshot.
-- Files are immutable after creation. Geometry and trim changes update only the state reference; file/index identity comparison deliberately ignores both.
+- Files are immutable after creation. Geometry, trim and open/closed intent update only the index. File/index identity comparison ignores that presentation metadata. Legacy Pi records keep the same UUID, bytes, ownership and fingerprint; a missing open bit means open and a missing summary is loaded on demand.
 - Metadata writes use `update_existing_state`, not insert/merge: a late update must not resurrect a pop-out already closed. Unchanged metadata skips persistence.
 - Explicit deletion removes the state reference before unlinking the file.
   An unlink failure reports an unreferenced leftover file, rather than leaving a
-  reference that reopens after Close. A state-write failure retains the open window
-  and saved snapshot instead of pretending Close succeeded.
+  dangling note. A state-write failure retains the reference. An open-bit write failure retains the open window and reports the error.
 - Missing/corrupt/mismatched snapshots are reported and kept for recovery. Do not
   silently delete their references, rewrite them, scan Pi sessions, or replay prompts.
 - External state edits are not live window commands. Reconciliation happens at
@@ -209,20 +211,14 @@ before waiting for serialized operations; superseded work checks `current()` and
 cannot take ownership of the newest selection. Project retirement invalidates late
 opens/restores before child shutdown finishes.
 
-New/changed saved bindings are verified through Pi file identity checks. A bad
-binding is reported and downgraded to runtime-only rather than granting an unrelated
-session access to saved references. Restore finds state references by cwd and Pi
-file/ID, loads Nimrod's snapshot, and reattaches it to the new mounted session ID.
-The original transcript block need not exist or be visible. Pop-out restoration
-itself starts no Pi process; the surrounding session shell retains its existing
-selection/launch policy.
+New/changed Pi bindings use the exact file identity check; invalid Pi bindings remain runtime-only with a warning. The shell registers namespaced identities from mounted integration lifecycles; these never authorize access to native history files. Restore finds notes by project and exact saved owner, loads Nimrod's capture for open notes, and attaches it to the mounted session ID. No original transcript block is needed, and note restore itself does not connect the agent.
 
 After promotion/geometry saving, windows with no corresponding mounted session are
 released programmatically without deleting saved references. Source project Close
 retires the registry owner, saves geometry and destroys its windows. Native Quit
 captures geometry and flushes pop-out state before existing owned-child shutdown;
 there is also an event-cached final-exit fallback. Do not route project Close/Quit
-through the explicit pop-out deletion path.
+through explicit note-window Close (which clears restore intent) or Delete note.
 
 ## Project focus and visibility
 

@@ -1,6 +1,14 @@
-# Pop-outs
+# Pop-outs and session notes
 
 Hover an assistant turn to reveal **Pop out response** in its upper-right corner. The button also appears on keyboard focus. Click it to open the response text, including code blocks, in a separate reference window. Reasoning and tool cards stay in the transcript. To open just one code block, use its **Pop out** icon next to **Copy**.
+
+Every Pop-out is a session note. There’s no separate Save step. Close its window whenever you’re done with it; the note remains available.
+
+## Browse session notes
+
+Open **Session notes…** from the command palette or the session row’s context menu. Search capture titles and snippets. Select a note and press Enter or click **Open note** to reopen or focus it. **Open** indicates a note window that already exists. Browsing doesn’t connect the agent. Opening a note for a different open session selects that session first.
+
+Use **Delete note…** to permanently remove the selected capture without touching the source conversation. This is separate from closing a note window.
 
 ## Trim a response
 
@@ -28,17 +36,16 @@ Focusing a pop-out itself keeps its project's references visible.
 
 | Action | Result |
 | --- | --- |
-| Quit and reopen the saved session | Restore its pop-outs and window positions/sizes |
-| Close the source session or project | Keep saved pop-outs for reopening that session |
-| Close a pop-out, or press ⌘W / Ctrl+W in it | Remove that pop-out, without affecting the session |
-| Successfully delete the source session tree | Remove references belonging to the deleted sessions, including saved snapshots |
+| Quit and reopen a saved session | Keep all notes; restore only windows that were left open, with their positions and sizes |
+| Close the source session or project | Keep saved notes and remember which windows were open |
+| Close a note window, or press ⌘W / Ctrl+W in it | Keep the note and its trim in **Session notes…**, without reopening the window automatically |
+| Delete a session or session tree | Remove notes for each session whose deletion succeeds |
 
 On macOS, ⌘\` cycles project windows, skipping pop-outs. Click a pop-out to focus
 it; ⌘W still closes it. Automatic restoration leaves keyboard focus on the composer
 or active dialog.
 
-Pop-outs from temporary sessions and non-Pi sessions last only for the current run. Pi sessions gain persistent Pop-outs after the first verified save. Compaction does not remove
-captured content. Pop-outs do not provide editing or “Show in conversation.”
+Saved Pi, Copilot, and Codex sessions retain notes across restarts. Temporary-session notes are available only while that session stays open. Captures made before a session gets its saved identity are kept for the current session and become persistent when that identity is established. Existing saved Pop-outs appear as notes. Compaction does not remove a note. Notes are captures only; blank notes, editing and “Show in conversation” aren’t available.
 
 Snapshots are stored in `~/.local/state/nimrod/popouts/`, with references in app-managed
 state. `XDG_STATE_HOME` can change that root; Pi's session files are untouched.

@@ -40,6 +40,7 @@ const BUILTIN_ACTIONS = [
   { id: 'switch-session', label: 'Switch session…', scope: 'project', context: 'project', defaults: ['primary+t'] },
   { id: 'new-named', label: 'New named session…', scope: 'project', context: 'project', defaults: ['primary+alt+n'] },
   { id: 'rename', label: 'Rename session…', scope: 'project', context: 'session', defaults: ['primary+shift+r'] },
+  { id: 'session-notes', label: 'Session notes…', scope: 'project', context: 'session', defaults: [] },
   { id: 'reload', label: 'Reload session', scope: 'project', context: 'session', defaults: ['primary+r'] },
 ] as const;
 export type BuiltinActionDefinition = typeof BUILTIN_ACTIONS[number];

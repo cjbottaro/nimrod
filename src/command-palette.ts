@@ -25,6 +25,7 @@ export interface PaletteItem {
   /** Keep an alternative action available even when the query matches no choices. */
   alwaysVisible?: boolean;
   run(): void | Promise<void>;
+  remove?(): void | Promise<void>;
   next?: boolean;
 }
 export interface PalettePage { items: PaletteItem[]; notice?: string; }
@@ -83,6 +84,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   const back = dialog.querySelector<HTMLButtonElement>('#palette-back')!;
   const retry = dialog.querySelector<HTMLButtonElement>('#palette-refresh')!;
   const create = dialog.querySelector<HTMLButtonElement>('#palette-create')!;
+  const remove = doc.createElement('button'); remove.id = 'palette-remove'; remove.type = 'button'; remove.className = 'secondary'; remove.hidden = true;
+  const openItem = doc.createElement('button'); openItem.id = 'palette-open-item'; openItem.type = 'button'; openItem.className = 'secondary'; openItem.textContent = 'Open note'; openItem.hidden = true;
+  retry.after(openItem, remove);
   const hint = dialog.querySelector<HTMLElement>('#palette-hint')!;
   const nameHarnessLabel = doc.createElement('span');
   nameHarnessLabel.id = 'palette-name-harness-label'; nameHarnessLabel.hidden = true;
@@ -101,7 +105,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   hint.before(remaining);
   const controller = new realm.AbortController();
   const signal = controller.signal;
-  let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'inspection' | 'name' = 'commands';
+  let mode: 'commands' | 'sessions' | 'projects' | 'selection' | 'inspection' | 'browse' | 'name' = 'commands';
   let items: PaletteItem[] = [], matches: PaletteItem[] = [];
   let selected = 0;
   let selectionMarker: 'current' | 'selection' = 'current';
@@ -184,6 +188,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     dialog.dataset.mode = mode;
     list.hidden = false; create.hidden = !naming; hint.hidden = naming;
     nameActions.hidden = !naming; nameHarnessLabel.hidden = !naming;
+    remove.hidden = openItem.hidden = mode !== 'browse';
     list.setAttribute('aria-label', naming ? 'Harness' : 'Navigation results');
     if (naming) list.tabIndex = 0;
     else { list.removeAttribute('tabindex'); list.removeAttribute('aria-activedescendant'); }
@@ -268,7 +273,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
       status.textContent = [notice, harness ? `Harness: ${harness.label} · ↑/↓ to choose · Enter to create · Esc to cancel` : 'No harnesses support named sessions.'].filter(Boolean).join('\n');
       return;
     }
-    const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : 'options';
+    const noun = mode === 'commands' ? 'commands' : mode === 'sessions' ? 'sessions' : mode === 'projects' ? 'projects' : mode === 'inspection' ? 'servers' : mode === 'browse' ? 'notes' : 'options';
     status.textContent = loading ? `Loading ${noun}…` : notice || (matches.length ? `${matches.length} ${noun}` : items.length || mode === 'commands' ? `No matching ${noun}.` : mode === 'sessions' ? 'No sessions yet.' : mode === 'projects' ? 'No recent projects. Use Open project… (Cmd/Ctrl+O by default) to open a folder.' : 'No options available.');
     input.setAttribute('aria-busy', String(loading));
   }
@@ -290,6 +295,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     } else (mode === 'name' ? list : input).removeAttribute('aria-activedescendant');
     if (mode === 'name') { create.disabled = !validName(); updateStatus(); }
     const item = matches[selected];
+    if (mode === 'browse') { openItem.disabled = loading || !item; remove.disabled = loading || !item?.remove; }
     if (mode === 'inspection') {
       inspection.replaceChildren();
       if (item?.inspection) {
@@ -318,7 +324,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
-  function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
+  function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection' | 'browse', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
     endRetained(); endPreview();
@@ -379,6 +385,19 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     return {
       isCurrent: current,
       show(page) { if (current()) { items = page.items; notice = page.notice || ''; loading = false; draw(); } },
+      cancel() { if (current()) closeInteraction(); },
+    };
+  }
+  function startBrowse(heading: string, onRefresh: () => void, refresh = false) {
+    const request = beginPage('browse', heading, 'Search notes…', onRefresh, refresh);
+    if (request === undefined) return;
+    input.setAttribute('aria-label', 'Search notes');
+    retry.textContent = 'Refresh'; remove.textContent = 'Delete note…';
+    const current = () => !disposed && dialog.open && generation === request && mode === 'browse';
+    return {
+      isCurrent: current,
+      show(page: PalettePage) { if (current()) { items = page.items; notice = page.notice || ''; loading = false; draw(); } },
+      error(message: string) { if (current()) { loading = false; failure(message); draw(); } },
       cancel() { if (current()) closeInteraction(); },
     };
   }
@@ -568,7 +587,14 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   }, { signal });
   list.addEventListener('mousedown', event => event.preventDefault(), { signal });
   list.addEventListener('click', event => {
-    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]'); if (row) choose(Number(row.dataset.index));
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
+    if (!row) return;
+    if (mode === 'browse') { selected = Number(row.dataset.index); selection(); }
+    else choose(Number(row.dataset.index));
+  }, { signal });
+  list.addEventListener('dblclick', event => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-index]');
+    if (mode === 'browse' && row) choose(Number(row.dataset.index));
   }, { signal });
   list.addEventListener('mousemove', event => {
     if ((!preview && mode !== 'inspection' && !markerTracksSelection()) || !dialog.open || anotherDialog()) return;
@@ -579,11 +605,16 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
   cancelName.addEventListener('click', () => closeInteraction(), { signal });
   back.addEventListener('click', () => { if (parentDialog) closeInteraction(); else commands(); }, { signal });
   retry.addEventListener('click', () => retryAction?.(), { signal });
+  openItem.addEventListener('click', () => { if (mode === 'browse') choose(); }, { signal });
+  remove.addEventListener('click', () => {
+    const action = matches[selected]?.remove;
+    if (action && dialog.open && mode === 'browse' && !loading && !anotherDialog()) closeInteraction(action);
+  }, { signal });
   win.addEventListener('keydown', event => {
     if (options.shortcuts === false || event.defaultPrevented) return;
     if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.key.toLowerCase() !== 'p' || event.isComposing || event.keyCode === 229 || event.repeat) return;
     if (dialog.open) { event.preventDefault(); return; }
     if (open()) event.preventDefault();
   }, { signal });
-  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startRetainedSelection, startInspection, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); bufferedHistory = undefined; endRetained(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
+  return { get isDeleting() { return dialog.open && mode === 'sessions' && sessionKind === 'delete' && deleting; }, open, projects, close: () => closeInteraction(), sessions: () => sessions('resume'), openSessions: () => sessions('open'), deleteSessions: () => sessions('delete'), namedSession, startSelection, startRetainedSelection, startInspection, startBrowse, startPreviewSelection, dispose: () => { disposed = true; historyRequest?.abort(); bufferedHistory = undefined; endRetained(); endPreview(); cancelChoice(); createNamed = undefined; generation++; controller.abort(); } };
 }

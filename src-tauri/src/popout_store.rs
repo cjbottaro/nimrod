@@ -19,6 +19,53 @@ pub struct PiSessionRef {
     pub session_id: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NamedSessionRef {
+    pub kind: String,
+    pub session_id: String,
+}
+impl NamedSessionRef {
+    pub fn valid(&self) -> bool {
+        let kind = self.kind.as_bytes();
+        kind.first().is_some_and(u8::is_ascii_lowercase)
+            && kind.len() <= 64
+            && kind
+                .iter()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+            && !["file", "unassigned", "temporary", "demo", "legacy"].contains(&self.kind.as_str())
+            && !self.session_id.is_empty()
+            && self.session_id.len() <= 256
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteSession {
+    Pi(PiSessionRef),
+    Named(NamedSessionRef),
+}
+impl NoteSession {
+    pub fn key(&self) -> String {
+        match self {
+            Self::Pi(pi) => pi.path.to_string_lossy().into_owned(),
+            Self::Named(named) => format!(
+                "{}:{}",
+                named.kind,
+                serde_json::Value::String(named.session_id.clone())
+            ),
+        }
+    }
+    fn valid(&self) -> bool {
+        match self {
+            Self::Pi(pi) => {
+                pi.path.is_absolute() && !pi.session_id.is_empty() && pi.session_id.len() <= 256
+            }
+            Self::Named(named) => named.valid(),
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 // Ignore legacy snapshot fields (including the removed transcript key) on read.
 #[serde(rename_all = "camelCase")]
@@ -108,12 +155,79 @@ impl ResponseTrim {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteDetails {
+    pub title: String,
+    pub preview: String,
+    pub created: u64,
+}
+impl NoteDetails {
+    pub fn capture(snapshot: &CodeSnapshot, created: u64) -> Self {
+        fn excerpt(text: &str, max: usize) -> String {
+            text.split_whitespace()
+                .flat_map(|word| word.chars().chain(std::iter::once(' ')))
+                .take(max)
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        }
+        let line = snapshot
+            .text
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("")
+            .trim();
+        let title = if snapshot.response {
+            snapshot
+                .text
+                .lines()
+                .find_map(|line| {
+                    let line = line.trim_start();
+                    let heading = line.trim_start_matches('#');
+                    (heading.len() < line.len()
+                        && heading.starts_with(' ')
+                        && !heading.trim().is_empty())
+                    .then(|| heading.trim())
+                })
+                .unwrap_or(line)
+        } else {
+            line
+        };
+        Self {
+            title: if title.is_empty() {
+                "Captured note".into()
+            } else {
+                excerpt(title, 80)
+            },
+            preview: excerpt(
+                &snapshot.text[..snapshot
+                    .text
+                    .char_indices()
+                    .nth(320)
+                    .map_or(snapshot.text.len(), |(i, _)| i)],
+                180,
+            ),
+            created,
+        }
+    }
+}
+
+fn default_open() -> bool {
+    true
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedPopout {
     pub id: String,
     pub cwd: PathBuf,
-    pub pi: PiSessionRef,
+    #[serde(flatten)]
+    pub session: NoteSession, // Legacy Pi records already use the externally tagged `pi` field.
     pub fingerprint: String,
+    #[serde(default = "default_open")]
+    pub open: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<NoteDetails>,
     pub geometry: Option<Geometry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trim: Option<ResponseTrim>,
@@ -123,9 +237,11 @@ impl SavedPopout {
         let id = uuid::Uuid::parse_str(&self.id).map_err(|_| "Invalid pop-out ID")?;
         if id.to_string() != self.id
             || !self.cwd.is_absolute()
-            || !self.pi.path.is_absolute()
-            || self.pi.session_id.is_empty()
-            || self.pi.session_id.len() > 256
+            || !self.session.valid()
+            || self
+                .details
+                .as_ref()
+                .is_some_and(|details| details.title.len() > 320 || details.preview.len() > 720)
             || self.fingerprint.len() != 64
             || !self.fingerprint.bytes().all(|b| b.is_ascii_hexdigit())
         {
@@ -146,7 +262,7 @@ impl SavedPopout {
     fn same_source(&self, other: &Self) -> bool {
         self.id == other.id
             && self.cwd == other.cwd
-            && self.pi == other.pi
+            && self.session == other.session
             && self.fingerprint == other.fingerprint
     }
 }
@@ -194,7 +310,7 @@ impl SnapshotStore<'_> {
         }
         Ok(self.root()?.join(format!("{id}.json")))
     }
-    pub fn references(&self, cwd: &Path, pi: &PiSessionRef) -> (Vec<SavedPopout>, Vec<String>) {
+    pub fn references(&self, cwd: &Path, session: &NoteSession) -> (Vec<SavedPopout>, Vec<String>) {
         let state = self.0.snapshot();
         let mut found = Vec::new();
         let mut warnings = Vec::new();
@@ -209,7 +325,7 @@ impl SnapshotStore<'_> {
                 }
                 Ok(reference)
             }) {
-                Ok(reference) if reference.cwd == cwd && &reference.pi == pi => {
+                Ok(reference) if reference.cwd == cwd && &reference.session == session => {
                     found.push(reference)
                 }
                 Ok(_) => {}
@@ -304,6 +420,23 @@ impl SnapshotStore<'_> {
             })
             .collect()
     }
+    pub fn ids_for_keys(
+        &self,
+        cwd: &Path,
+        keys: &std::collections::HashSet<String>,
+    ) -> Vec<String> {
+        self.0
+            .snapshot()
+            .state
+            .iter()
+            .filter_map(|(key, value)| {
+                let id = key.strip_prefix(PREFIX)?;
+                let saved: SavedPopout = serde_json::from_value(value.clone()).ok()?;
+                (saved.id == id && saved.cwd == cwd && keys.contains(&saved.session.key()))
+                    .then(|| id.to_owned())
+            })
+            .collect()
+    }
     pub fn remove(&self, id: &str) -> Result<Option<String>, String> {
         let path = self.path(id)?;
         // Remove the reference first: an interrupted deletion leaves an unreferenced
@@ -313,7 +446,7 @@ impl SnapshotStore<'_> {
             Ok(()) => Ok(None),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Ok(Some(format!(
-                "Pop-out closed, but its unreferenced snapshot file could not be removed: {e}"
+                "Note deleted from the index, but its unreferenced snapshot file could not be removed: {e}"
             ))),
         }
     }
@@ -326,10 +459,12 @@ mod tests {
         SavedPopout {
             id: uuid::Uuid::new_v4().to_string(),
             cwd: cwd.into(),
-            pi: PiSessionRef {
+            session: NoteSession::Pi(PiSessionRef {
                 path: cwd.join("pi.jsonl"),
                 session_id: "session-a".into(),
-            },
+            }),
+            open: true,
+            details: None,
             fingerprint: snapshot.fingerprint(),
             geometry: None,
             trim: None,
@@ -345,15 +480,15 @@ mod tests {
         let b = reference(Path::new("/other-project"), &snapshot);
         store.save_new(&a, &snapshot).unwrap();
         store.save_new(&b, &snapshot).unwrap();
-        let files = [a.pi.path.clone()].into_iter().collect();
+        let files = [PathBuf::from(a.session.key())].into_iter().collect();
         assert_eq!(store.session_ids(&files), vec![a.id.clone()]);
         for id in store.session_ids(&files) {
             store.remove(&id).unwrap();
         }
         assert!(!store.path(&a.id).unwrap().exists());
         assert!(store.path(&b.id).unwrap().exists());
-        assert!(store.references(&a.cwd, &a.pi).0.is_empty());
-        assert_eq!(store.references(&b.cwd, &b.pi).0.len(), 1);
+        assert!(store.references(&a.cwd, &a.session).0.is_empty());
+        assert_eq!(store.references(&b.cwd, &b.session).0.len(), 1);
     }
     fn snapshot() -> CodeSnapshot {
         CodeSnapshot {
@@ -384,27 +519,32 @@ mod tests {
             )
             .unwrap();
         store.save_new(&reference, &snapshot).unwrap();
-        assert!(!reference.pi.path.exists()); // Restoration reads only Nimrod's snapshot.
+        assert!(!Path::new(&reference.session.key()).exists()); // Restoration reads only Nimrod's snapshot.
         let reopened = Preferences::isolated(dir.path());
         let reopened = SnapshotStore(&reopened);
-        let (references, warnings) = reopened.references(dir.path(), &reference.pi);
+        let (references, warnings) = reopened.references(dir.path(), &reference.session);
         assert!(warnings.is_empty());
         assert_eq!(references.len(), 1);
         assert_eq!(reopened.load(&references[0]).unwrap().text, snapshot.text);
-        let other = PiSessionRef {
+        let other = NoteSession::Pi(PiSessionRef {
             session_id: "replaced".into(),
-            ..reference.pi.clone()
-        };
+            path: PathBuf::from(reference.session.key()),
+        });
         assert!(reopened.references(dir.path(), &other).0.is_empty());
         assert!(
             reopened
-                .references(&dir.path().join("other"), &reference.pi)
+                .references(&dir.path().join("other"), &reference.session)
                 .0
                 .is_empty()
         );
         reopened.remove(&reference.id).unwrap();
         assert!(!store.path(&reference.id).unwrap().exists());
-        assert!(store.references(dir.path(), &reference.pi).0.is_empty());
+        assert!(
+            store
+                .references(dir.path(), &reference.session)
+                .0
+                .is_empty()
+        );
         assert_eq!(preferences.snapshot().state["other-window"], true);
     }
     #[test]
@@ -420,7 +560,7 @@ mod tests {
         assert!(store.load(&reference).is_err());
         fs::remove_file(&path).unwrap();
         assert!(store.load(&reference).is_err());
-        assert_eq!(store.references(dir.path(), &reference.pi).0.len(), 1);
+        assert_eq!(store.references(dir.path(), &reference.session).0.len(), 1);
         let mut bad = reference.clone();
         bad.id = "../../outside".into();
         assert!(store.load(&bad).is_err());
@@ -465,13 +605,13 @@ mod tests {
         store.update_reference(&saved).unwrap();
         let reopened = Preferences::isolated(dir.path());
         let reopened = SnapshotStore(&reopened);
-        let restored = reopened.references(dir.path(), &saved.pi).0.remove(0);
+        let restored = reopened.references(dir.path(), &saved.session).0.remove(0);
         assert_eq!(restored.geometry, saved.geometry);
         assert_eq!(reopened.load(&restored).unwrap().text, snapshot.text);
         assert_eq!(fs::read(store.path(&saved.id).unwrap()).unwrap(), original);
         store.remove(&saved.id).unwrap();
         assert!(store.update_reference(&saved).is_err());
-        assert!(store.references(dir.path(), &saved.pi).0.is_empty());
+        assert!(store.references(dir.path(), &saved.session).0.is_empty());
     }
     #[test]
     fn response_trim_is_separate_from_snapshot_source_and_identity() {
@@ -502,12 +642,56 @@ mod tests {
         store.update_reference(&saved).unwrap();
         let reopened = Preferences::isolated(dir.path());
         let reopened = SnapshotStore(&reopened);
-        let restored = reopened.references(dir.path(), &saved.pi).0.remove(0);
+        let restored = reopened.references(dir.path(), &saved.session).0.remove(0);
         assert_eq!(restored.trim, trim);
         let loaded = reopened.load(&restored).unwrap();
         assert!(loaded.response);
         assert_eq!(loaded.text, response.text);
         assert_eq!(fs::read(path).unwrap(), original);
+    }
+    #[test]
+    fn note_close_survives_restart_and_namespaced_cleanup_is_project_scoped() {
+        let dir = tempfile::tempdir().unwrap();
+        let preferences = Preferences::isolated(dir.path());
+        let store = SnapshotStore(&preferences);
+        let snapshot = snapshot();
+        let mut note = reference(dir.path(), &snapshot);
+        note.session = NoteSession::Named(NamedSessionRef {
+            kind: "codex".into(),
+            session_id: "thread".into(),
+        });
+        let sibling = SavedPopout {
+            id: uuid::Uuid::new_v4().to_string(),
+            cwd: dir.path().join("other"),
+            ..note.clone()
+        };
+        store.save_new(&note, &snapshot).unwrap();
+        store.save_new(&sibling, &snapshot).unwrap();
+        let original = fs::read(store.path(&note.id).unwrap()).unwrap();
+        note.open = false;
+        store.update_reference(&note).unwrap();
+        let reopened = Preferences::isolated(dir.path());
+        let reopened = SnapshotStore(&reopened);
+        let restored = reopened.references(dir.path(), &note.session).0.remove(0);
+        assert!(!restored.open);
+        assert_eq!(reopened.load(&restored).unwrap().text, snapshot.text);
+        assert_eq!(fs::read(store.path(&note.id).unwrap()).unwrap(), original);
+        let keys = [note.session.key()].into_iter().collect();
+        assert_eq!(
+            reopened.ids_for_keys(dir.path(), &keys),
+            vec![note.id.clone()]
+        );
+        assert_eq!(reopened.ids_for_keys(&sibling.cwd, &keys), vec![sibling.id]);
+    }
+    #[test]
+    fn legacy_pi_references_default_to_open() {
+        let saved = reference(Path::new("/project"), &snapshot());
+        let mut legacy = serde_json::to_value(&saved).unwrap();
+        assert!(legacy["pi"].is_object());
+        legacy.as_object_mut().unwrap().remove("open");
+        let decoded: SavedPopout = serde_json::from_value(legacy).unwrap();
+        assert!(decoded.open);
+        assert!(decoded.same_source(&saved));
     }
     #[test]
     fn legacy_inclusive_response_trims_keep_the_same_blocks() {
@@ -539,7 +723,7 @@ mod tests {
             serde_json::json!({"id":"../../outside"}),
         );
         preferences.update_state(entries).unwrap();
-        let (references, warnings) = store.references(dir.path(), &saved.pi);
+        let (references, warnings) = store.references(dir.path(), &saved.session);
         assert_eq!(references.len(), 1);
         assert_eq!(warnings.len(), 1);
         assert!(path.exists());

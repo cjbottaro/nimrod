@@ -78,7 +78,8 @@ Mounted IDs are unique per session; anchors above are semantic template names wi
 - **Reasoning card** — disclosure for thinking supplied by Pi.
 - **Tool card** — invocation and output. Its **summary row** contains a **disclosure arrow**, **input preview** and state indicator; the **expanded body** contains details, **raw inputs** and an independently scrolling **output viewport**.
 - **Code block** — formatted source with language label and Pop out/Copy controls.
-- **Pop-out** — separate reference window for captured code or rendered Markdown. **Pop out response** captures an assistant turn’s response text. The **trim slider** adjusts the kept Markdown block range. **Copy source** copies the visible Markdown range as source, distinct from nested code Copy.
+- **Session note / Session notes…** — a captured response or code block, and its session-scoped searchable browser. **Delete note…** removes a capture; closing its window does not.
+- **Pop-out** — separate reference window displaying a session note. **Pop out response** captures an assistant turn’s response text. The **trim slider** adjusts the kept Markdown block range. **Copy source** copies the visible Markdown range as source, distinct from nested code Copy.
 - **Parallel-tools overview** — temporary summary of overlapping invocations, not replacement tool cards.
 - **Skill disclosure** — collapsed skill body inside a user turn; user arguments remain outside.
 - **Pending user turn** — local user-turn preview awaiting acknowledgement/authoritative user event; includes ordinary sends and **pending steering turns**.

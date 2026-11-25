@@ -2,7 +2,7 @@
 export interface PiDeletionTreeSession { file: string; title: string; parent?: string | null; cwd?: string; }
 // Pi-specific frontend half of the native app-wide deletion transaction.
 export interface DeleteResult { file: string; deleted: boolean; error?: string | null; }
-export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'removing' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: PiDeletionTreeSession[] | null; message?: string | null; pending: boolean; }
+export interface DeletionEvent { id: string; phase: 'begin' | 'lock' | 'check' | 'review' | 'quarantine' | 'removing' | 'complete' | 'release'; files: string[]; results: DeleteResult[]; tree?: PiDeletionTreeSession[] | null; noteCount?: number; message?: string | null; pending: boolean; }
 export interface DeletionSnapshot { pending: boolean; quarantine: string[]; files: string[]; deleted?: string[]; error?: string | null; }
 export interface SessionDeletionReport { file: string; token?: string; title: string; busy: boolean; hasDraft: boolean; }
 export interface DeletionPanel {
@@ -23,7 +23,7 @@ export interface SessionDeletionDependencies {
   deleted?(files: string[]): void;
   recovered?(file: string): void;
   loadingReview?(): void;
-  review?(id: string, tree: PiDeletionTreeSession[]): Promise<boolean>;
+  review?(id: string, tree: PiDeletionTreeSession[], noteCount?: number): Promise<boolean>;
   confirm?(id: string, confirmed: boolean): Promise<void>;
   cancelReview?(): void;
   progressReview?(phase: 'stopping' | 'deleting'): void;
@@ -77,7 +77,7 @@ export class SessionDeletion {
         const reports = panels.map(panel => panel.report());
         if (!this.disposed) await this.deps.acknowledge(event.id, reports);
       } else if (event.phase === 'review') {
-        const confirmed = await this.deps.review?.(event.id, event.tree || []) ?? false;
+        const confirmed = await this.deps.review?.(event.id, event.tree || [], event.noteCount) ?? false;
         if (!this.disposed) await this.deps.confirm?.(event.id, confirmed);
       } else if (event.phase === 'quarantine') {
         event.files.forEach(file => this.quarantine.add(file));

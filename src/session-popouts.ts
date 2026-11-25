@@ -1,5 +1,6 @@
 export interface PiPopoutOwner { path: string; sessionId: string; }
-export interface PopoutSessionBinding { runtimeId: string; pi: PiPopoutOwner | null; }
+export interface PopoutSessionBinding { runtimeId: string; pi: PiPopoutOwner | null; named?: { kind: string; sessionId: string }; }
+export interface SessionNote { id: string; title: string; preview: string; open: boolean; created: number; }
 export interface PopoutSnapshot { session: string; title: string; text: string; language: string; response?: boolean; }
 
 interface PopoutHost {

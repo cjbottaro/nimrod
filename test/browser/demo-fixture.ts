@@ -124,6 +124,8 @@ export async function demoFixture(page: Page, appState: Record<string, unknown> 
       return { cwd: process.cwd(), current: true };
     }
     if (command === 'sync_popout_sessions') return { warnings: [] };
+    if (command === 'count_session_notes') return 0;
+    if (command === 'purge_session_notes') return;
     if (command === 'deletion_snapshot') return { pending: false, quarantine: [], files: [] };
     if (command === 'confirm_session_deletion' || command === 'acknowledge_deletion') return; // Recorded only, no native file deletion.
     if (command === 'plugin:window|is_focused') return true;

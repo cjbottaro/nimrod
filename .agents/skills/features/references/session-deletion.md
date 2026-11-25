@@ -60,8 +60,7 @@ membership validation, observed owned conversation stop and SDK deletion. Discov
 checks exact metadata again immediately before `client.deleteSession(id)`. This is one
 session plus SDK-owned artifacts, never a Pi descendants tree or private-file removal.
 
-Only confirmed success removes the exact sidebar/layout/draft scope and references
-through shared reconciliation. Background removal leaves selection unchanged;
+Only confirmed success removes the exact sidebar/layout/draft scope and references through shared reconciliation. [Session notes](pop-outs.md#session-notes-browser) are counted in the review scope and removed for confirmed successes only; Pi's native file transaction also covers closed descendant projects. Background removal leaves selection unchanged;
 removing the last row creates nothing. No prompts, Send recency, notifications,
 automatic retry or reconnect. Unknown/failed removal retains local identity/draft
 and reports through the deletion operation. Refresh verifies history before another

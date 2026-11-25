@@ -11,6 +11,7 @@ export interface SessionMenuAction {
 export interface SessionMenuTarget {
   pin: SessionMenuAction;
   rename: SessionMenuAction;
+  notes?: SessionMenuAction;
   close: SessionMenuAction;
   delete: SessionMenuAction;
   valid(): boolean;
@@ -23,15 +24,16 @@ export interface SessionMenuTarget {
 export function installSessionContextMenu() {
   let disposed = false;
   let target: { request: string; value: SessionMenuTarget } | undefined;
-  const listening = listen<{ request: string; action: 'pin' | 'close' | 'delete' | 'rename' }>('nimrod-session-menu', event => {
+  const listening = listen<{ request: string; action: 'pin' | 'close' | 'delete' | 'rename' | 'notes' }>('nimrod-session-menu', event => {
     const current = target;
     if (disposed || !current || event.payload.request !== current.request) return;
     const key = event.payload.action;
-    if (!['pin', 'close', 'delete', 'rename'].includes(key)) return;
+    if (!['pin', 'close', 'delete', 'rename', 'notes'].includes(key)) return;
     target = undefined; // A popup can accept at most one action.
-    if (!current.value.valid() || current.value[key].visible === false || !current.value[key].enabled) return;
+    const action = current.value[key];
+    if (!current.value.valid() || !action?.enabled || action.visible === false) return;
     void Promise.resolve().then(() => {
-      if (!disposed && current.value.valid()) return current.value[key].run();
+      if (!disposed && current.value.valid()) return action.run();
     }).catch(error => { if (!disposed && current.value.valid()) current.value.error(error); });
   }, { target: { kind: 'WebviewWindow', label: getCurrentWindow().label } });
   // Keep a failed listener from becoming an unhandled startup rejection; show()
@@ -49,6 +51,7 @@ export function installSessionContextMenu() {
           pinLabel: next.pin.label, pinEnabled: next.pin.enabled,
           renameVisible: next.rename.visible !== false, renameEnabled: next.rename.enabled, closeEnabled: next.close.enabled,
           deleteVisible: next.delete.visible !== false, deleteLabel: next.delete.label, deleteEnabled: next.delete.enabled,
+          ...(next.notes ? { notesEnabled: next.notes.enabled } : {}),
           x: position.x, y: position.y,
         } });
       } catch (error) {

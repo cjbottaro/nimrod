@@ -97,6 +97,7 @@ interface ShellOptions {
   modelChangeError?: string;
   popout?: { session: string; title: string; text: string; language: string };
   popoutSyncGate?: Promise<void>;
+  notes?: { id: string; title: string; preview: string; open: boolean; created: number }[];
   personalGate?: Promise<import('../src/pi/card-plugins/catalog').PersonalBundles>;
   deletionSnapshot?: DeletionSnapshot;
   deleteTree?: (emit: (event: DeletionEvent) => void, args: JsonRecord) => Promise<unknown>;
@@ -272,6 +273,9 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
       }
       if (command === 'sync_popout_sessions') { await options.popoutSyncGate; return { warnings: [] }; }
       if (command === 'code_popout_snapshot') return options.popout;
+      if (command === 'list_session_notes') return options.notes ?? [];
+      if (command === 'count_session_notes') return options.notes?.length ?? 0;
+      if (['open_session_note', 'delete_session_note', 'purge_session_notes'].includes(command)) return;
       if (command === 'deletion_snapshot') return options.deletionSnapshot || { pending: false, quarantine: [], files: [] };
       if (command === 'acknowledge_deletion' || command === 'recover_deletion_session') return;
       if (command === 'confirm_session_deletion') { options.confirmReview?.(args); return; }
@@ -485,6 +489,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
     return {
       pin: item('pin', String(current.options.pinLabel), current.options.pinEnabled === true),
       rename: item('rename', 'Rename session…', current.options.renameEnabled === true),
+      notes: item('notes', 'Session notes…', current.options.notesEnabled === true),
       close: item('close', 'Close session', current.options.closeEnabled === true),
       delete: item('delete', String(current.options.deleteLabel), current.options.deleteEnabled === true),
     };
@@ -5870,6 +5875,37 @@ test('session selection synchronizes only its own pop-outs and Close retains sav
     f.win.document.querySelector<HTMLButtonElement>('.session-close')!.click(); await f.tick(); await f.tick();
     sync = f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args;
     assert.deepEqual(JSON.parse(JSON.stringify(sync)), { sessions: [], active: null });
+  } finally { f.win.close(); }
+});
+
+test('the session notes browser searches captures and opens or deletes only the selected note', async () => {
+  const notes = [
+    { id: 'one', title: 'Architecture', preview: 'Read model', open: true, created: 2 },
+    { id: 'two', title: 'Checklist', preview: 'Verify files', open: false, created: 1 },
+  ];
+  const f = await fixture(undefined, { windowWorkspace: '/project', notes });
+  try {
+    f.element<HTMLButtonElement>('sidebar-new').click(); await f.tick(); await f.tick();
+    const session = f.calls.filter(c => c.command === 'sync_popout_sessions').at(-1)!.args.active;
+    const search = (query: string) => {
+      const input = f.element<HTMLInputElement>('palette-input'); input.value = query;
+      input.dispatchEvent(new f.win.Event('input')); return input;
+    };
+    f.openPalette(); search('Session notes').dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await f.tick(); await f.tick();
+    assert.match(f.element('palette-list').textContent!, /Architecture.*Open/);
+    search('Verify files');
+    assert.doesNotMatch(f.element('palette-list').textContent!, /Architecture/);
+    f.element<HTMLButtonElement>('palette-open-item').click(); await f.tick(); await f.tick();
+    const opened = f.calls.find(c => c.command === 'open_session_note')!.args;
+    assert.equal(opened.session, session); assert.equal(opened.id, 'two');
+    (await f.rowMenu(f.rows()[0])).notes.click(); await f.tick(); await f.tick();
+    search('Architecture'); f.element<HTMLButtonElement>('palette-remove').click(); await f.tick();
+    assert.equal(f.calls.some(c => c.command === 'delete_session_note'), false);
+    await f.confirm();
+    const deleted = f.calls.find(c => c.command === 'delete_session_note')!.args;
+    assert.equal(deleted.session, session); assert.equal(deleted.id, 'one');
+    assert.equal(f.calls.filter(c => c.command === 'start_pi').length, 1);
   } finally { f.win.close(); }
 });
 

@@ -6,6 +6,8 @@ Notable user-visible changes to Nimrod. **Unreleased** describes development cha
 
 ### Added
 
+- Pop-outs are automatically saved as **session notes** for saved Pi, Copilot, and Codex sessions. Find or delete captures in **Session notes…** from the command palette or session-row menu. Closing a note window keeps the capture and its trim; only windows left open restore automatically. Deleting a session removes its associated notes.
+
 - **Pop out response** appears in the corner of an assistant turn on hover or keyboard focus. It opens the response text and code without reasoning or tool cards. Use the two-handle Markdown trim slider next to **Copy source** to keep and copy just the blocks you want. Click or grab a handle to select it; the filled handle is the one the arrow keys move. Bring the handles together for an empty preview. Saved Pop-outs remember the trim.
 - Copilot asks whether to trust an untrusted project folder before the session becomes ready, including a restored session on project open. **Trust for this and future sessions** saves Copilot's native folder trust and reloads its configuration/plugins, including supported `.claude/settings.json` plugin defaults; **Continue without trust** leaves trust unchanged. Escape preserves the pending choice behind **Review folder trust**. Existing CLI trust is respected; no blanket tool approval is granted. Installed-runtime/native acceptance remains pending.
 

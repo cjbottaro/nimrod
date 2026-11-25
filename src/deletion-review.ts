@@ -2,7 +2,7 @@ import { showModal, closeModal } from './modal-motion';
 import { confirmationKey, labelDialogAction } from './dialog-actions';
 
 export interface DeletionReviewNode { key: string; title: string; parentKey?: string | null; cwd?: string; }
-export interface DeletionReviewData { id: string; sessions: DeletionReviewNode[]; title?: string; description?: string; }
+export interface DeletionReviewData { id: string; sessions: DeletionReviewNode[]; title?: string; description?: string; noteCount?: number | null; }
 
 function sessionIcon(doc: Document): SVGSVGElement {
   const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -186,7 +186,10 @@ export function installDeletionReview(dialog: HTMLDialogElement, options: { canC
       bodyProgressText = undefined; delete tree.dataset.executing;
       if (title) title.textContent = data.title || reviewTitle;
       progressText = undefined;
-      description.textContent = data.description || reviewDescription; description.removeAttribute('role');
+      const notes = data.noteCount === null ? 'Session notes will also be deleted.'
+        : data.noteCount ? `${data.noteCount} session ${data.noteCount === 1 ? 'note' : 'notes'} will also be deleted.` : '';
+      description.textContent = [data.description || reviewDescription, notes].filter(Boolean).join(' ');
+      description.removeAttribute('role');
       tree.setAttribute('aria-busy', 'false');
       tree.replaceChildren(list); tree.scrollTop = 0;
       labelDialogAction(confirm, `Delete ${data.sessions.length} ${data.sessions.length === 1 ? 'session' : 'sessions'}`, 'Enter');
