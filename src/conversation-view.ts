@@ -411,7 +411,10 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       ? source.some(block => block.type === 'text' && !!safeText(block.text).trim())
       : !!safeText(source).trim();
     let button = responseActions.get(node);
-    if (!hasText) { button?.parentElement?.remove(); responseActions.delete(node); return; }
+    if (!hasText) {
+      if (button) { button.remove(); responseActions.delete(node); node.classList.remove('has-response-popout'); }
+      return;
+    }
     if (!button) {
       button = document.createElement('button');
       button.type = 'button';
@@ -419,9 +422,8 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
       button.title = 'Pop out response';
       button.setAttribute('aria-label', button.title);
       setCodeIcon(button, 'popout');
-      const row = element('div', 'response-actions');
-      row.append(button);
-      node.insertBefore(row, node.firstElementChild?.classList.contains('message-origin') ? node.firstElementChild.nextSibling : node.firstChild);
+      node.prepend(button);
+      node.classList.add('has-response-popout');
       responseActions.set(node, button);
     }
     responseSources.set(button, source);

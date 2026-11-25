@@ -87,7 +87,16 @@ details { margin:8px 0; border:0; border-radius:0; padding:0; }
 .codemode-progress::-webkit-progress-value { background:var(--vscode-progressBar-background); }
 .codemode-progress::-moz-progress-bar { background:var(--vscode-progressBar-background); }
 .codemode-children { margin-left:14px; }
-.response-actions { display:flex; justify-content:flex-end; }
+/* Borrow part of the transcript gutter for the inset action without changing response width. */
+.message.has-response-popout { position:relative; margin-inline-end:-16px; padding-inline-end:28px; }
+.message > .response-popout {
+  position:absolute; inset-block-start:2px; inset-inline-end:3px; z-index:1;
+  box-sizing:border-box; width:22px; height:22px; padding:2px;
+}
+@media (hover:hover) {
+  .message > .response-popout { opacity:0; pointer-events:none; }
+  .message:hover > .response-popout, .message > .response-popout:focus { opacity:1; pointer-events:auto; }
+}
 .codemode-children > .message { margin:0; padding:0; border:0; }
 .codemode-children > .message > .tool-card, .codemode-children > .tool-card { margin:2px 0; }
 .codemode-incomplete { margin:6px 0; color:var(--vscode-descriptionForeground); font-size:.85em; }

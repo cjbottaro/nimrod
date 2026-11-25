@@ -93,7 +93,7 @@ This is a log renderer, not an interactive terminal: full-screen applications, a
 
 ## Code and links
 
-Code blocks have **Pop out** and **Copy** icons. Copy returns source text and briefly shows a checkmark on success. Use **Pop out response** on an assistant turn to capture all its response text, without reasoning or tool cards. [Pop-outs](pop-outs.md) are separate reference windows; later output does not update the capture.
+Code blocks have **Pop out** and **Copy** icons. Copy returns source text and briefly shows a checkmark on success. Hover an assistant turn to reveal **Pop out response**, or focus the button with the keyboard. Activate it to capture the response text without reasoning or tool cards. [Pop-outs](pop-outs.md) are separate reference windows; later output does not update the capture.
 
 Use a language label after a Markdown fence for reliable [syntax highlighting](syntax-highlighting.md). Unlabeled user code uses conservative detection; unlabeled agent/reasoning code stays plain.
 

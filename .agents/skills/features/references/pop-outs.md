@@ -66,7 +66,10 @@ Immutable source captures deduplicate per session/content/kind (and language for
    textContent. The renderer posts `popOutCode` with `text` and `language`, not a
    transcript locator. Source bytes include whatever newlines the rendered block
    contains; do not silently trim or normalize them. The retained **Pop out response**
-   button posts `popOutResponse` with the latest painted response text for its own
+   button is inset in the assistant turn’s upper-right corner, out of flow and revealed on
+   hover or focus (always shown on non-hover devices). It uses part of the transcript
+   gutter without changing the Markdown width or overlapping nested code actions.
+   It posts `popOutResponse` with the latest painted response text for its own
    assistant entry. It joins non-blank text blocks with a blank line without trimming
    individual blocks, omits thinking/tool cards, and never reads DOM text to recover
    Markdown. The shell maps this to the same native route with `response: true`
@@ -99,8 +102,8 @@ Immutable source captures deduplicate per session/content/kind (and language for
 - There is no in-content session/“Read-only snapshot” header. Code keeps its
   language/Copy row; Markdown-labeled code keeps the floating upper-right Copy
   source icon and `.popout-markdown` reserves 38 CSS pixels to keep it clear of
-  content. Responses have a toolbar outside the scroll viewport for Trim and Copy
-  source. The content gutter is 20 CSS pixels.
+  content. Responses have one toolbar row outside the scroll viewport for the trim
+  slider and Copy source. The content gutter is 20 CSS pixels.
 - Copy source returns original source for the visible range, not rendered text.
   Nested Copy returns only its own `pre > code` text. The pop-out and Nimrod's injected transcript presentation capability use native clipboard writes. Renderer fixtures/hosts without that capability retain browser clipboard plus the correlated host request/result fallback. Neither path submits prompts or needs a connected Pi child.
 - Title generation reads the first non-empty heading from the sanitized Markdown
@@ -121,7 +124,7 @@ Immutable source captures deduplicate per session/content/kind (and language for
 
 ### Response trim
 
-- **Trim** expands inline controls when there are at least two mappable top-level GFM blocks. One shared track has two separately focusable native range inputs. Their inclusive block indices cannot cross; at least one block stays visible. Paragraphs, headings, lists, tables, quotes and code fences remain whole. **Reset trim** clears the retained range.
+- The trim slider is always visible next to Copy source when there are at least two mappable top-level GFM blocks. One shared track has two separately focusable native range inputs. Their inclusive block indices cannot cross; at least one block stays visible. Paragraphs, headings, lists, tables, quotes and code fences remain whole. Returning both handles to the ends clears the retained range.
 - Use the full capture's parsed tokens for preview (including resolved reference links), then the same sanitized renderer and code decoration as ordinary Markdown. Copy slices the exact original string, including its line endings; definitions outside the selected source aren't appended. If token boundaries cannot be mapped safely, show the full capture without Trim.
 - Slider movement updates locally and coalesces preview to at most one render per frame. The moved boundary is revealed in the Pop-out’s viewport only. The title remains derived from the full response. No transcript change, new window, or native write is needed while dragging.
 - Committed changes use `set_response_popout_trim` for the caller's own response window. Native operations serialize trim alongside geometry, promotion and Close. Pending commits coalesce without replacing optimistic local state. Errors use the Pop-out notice strip. Runtime-only references retain trim in the native registry; saved references use the same update-existing index path as geometry. Restore uses a saved range only if it still fits the parsed blocks.
@@ -315,7 +318,7 @@ Relevant tests:
   runtime IDs, first-save promotion, selection/close, standalone route, copying,
   links/themes/titles and composer/dialog focus during delayed sync.
 - `test/browser/popout.spec.ts`: real WebKit content-first layout, corner Copy
-  clearance while scrolling, source copying, title dispatch, and restored response trim/preview/reset with mocked IPC.
+  clearance while scrolling, source copying, title dispatch, restored response trim and preview, and transcript hover/focus without layout shift, with mocked IPC.
 - Rust tests in `popout_store.rs`: disk round-trips without Pi/history, bounds,
   hashing, owner isolation, corrupt/missing files, rollback, geometry/no resurrection,
   legacy metadata compatibility and content larger than global state limits.

@@ -1,12 +1,12 @@
 # Pop-outs
 
-Click **Pop out response** at the top of an assistant turn to open its response text, including code blocks, in a separate reference window. Reasoning and tool cards stay in the transcript. To open just one code block, use its **Pop out** icon next to **Copy**.
+Hover an assistant turn to reveal **Pop out response** in its upper-right corner. The button also appears on keyboard focus. Click it to open the response text, including code blocks, in a separate reference window. Reasoning and tool cards stay in the transcript. To open just one code block, use its **Pop out** icon next to **Copy**.
 
 ## Trim a response
 
-In the response Pop-out, click **Trim**. Drag either end of the slider, or focus a handle and use the arrow keys. Each stop is a whole Markdown block: a paragraph, heading, list, table, quote, or code block. The window previews the kept blocks as you move a handle. The trim controls are available when there's more than one block to keep or cut.
+When there's more than one Markdown block, the trim slider sits next to **Copy source**. Drag either handle, or focus it and use the arrow keys. Each stop is a whole paragraph, heading, list, table, quote, or code block. The preview updates as you move a handle. Move both handles back to the ends to restore the full response.
 
-**Copy source** copies the kept Markdown. Reference-style links still work in the Pop-out, but their definitions aren't copied if they're outside the kept range. **Reset trim** brings back the full response. Saved Pop-outs remember the trim; it never edits the transcript or discards the rest of the snapshot.
+**Copy source** copies the kept Markdown. Reference-style links still work in the Pop-out, but their definitions aren't copied if they're outside the kept range. Saved Pop-outs remember the trim; it never edits the transcript or discards the rest of the snapshot.
 
 ## What you get
 

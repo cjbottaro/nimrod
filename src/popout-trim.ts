@@ -11,22 +11,10 @@ interface TrimOptions {
 }
 
 export function createPopoutTrim({ initial, full, preview, save, report }: TrimOptions) {
-  const toggle = document.createElement('button');
-  const reset = document.createElement('button');
-  for (const button of [toggle, reset]) { button.type = 'button'; button.className = 'utility-button'; }
-  toggle.textContent = 'Trim';
-  toggle.setAttribute('aria-expanded', 'false');
-  toggle.setAttribute('aria-controls', 'popout-trim');
-  reset.textContent = 'Reset trim';
-  const panel = document.createElement('div');
-  panel.id = 'popout-trim';
-  panel.className = 'popout-trim';
-  panel.hidden = true;
-  panel.setAttribute('role', 'group');
-  panel.setAttribute('aria-label', 'Response trim');
-  const summary = document.createElement('span');
   const track = document.createElement('div');
   track.className = 'popout-trim-control';
+  track.setAttribute('role', 'group');
+  track.setAttribute('aria-label', 'Response trim');
   const rail = document.createElement('div');
   rail.className = 'popout-trim-rail';
   rail.setAttribute('aria-hidden', 'true');
@@ -42,7 +30,6 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     return input;
   };
   const handles = { first: createHandle('first', 'First block to keep'), last: createHandle('last', 'Last block to keep') };
-  panel.append(track, summary, reset);
 
   let range = initial, saved = initial, requested = initial;
   let reveal: Edge = 'first', frame: number | undefined;
@@ -54,9 +41,6 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
       handles[edge].setAttribute('aria-valuetext', `Block ${range[edge] + 1} of ${full.last + 1}`);
       rail.style.setProperty(`--trim-${edge}`, `${range[edge] / full.last * 100}%`);
     }
-    summary.textContent = range.first === range.last
-      ? `Block ${range.first + 1} of ${full.last + 1}`
-      : `Blocks ${range.first + 1}–${range.last + 1} of ${full.last + 1}`;
   }
   function update(next: ResponseTrim, edge: Edge) {
     const changed = !same(range, next);
@@ -102,13 +86,8 @@ export function createPopoutTrim({ initial, full, preview, save, report }: TrimO
     move(edge, value);
     void commit();
   });
-  toggle.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    toggle.setAttribute('aria-expanded', String(!panel.hidden));
-  });
-  reset.addEventListener('click', () => { update(full, 'first'); void commit(); });
   paint();
-  return { toggle, panel, range: () => range, dispose: () => {
+  return { track, range: () => range, dispose: () => {
     disposed = true;
     if (frame !== undefined) cancelAnimationFrame(frame);
   } };

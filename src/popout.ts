@@ -85,8 +85,8 @@ export async function mountPopout(): Promise<void> {
     document.title = title;
     void getCurrentWindow().setTitle(title).catch(report);
     if (isMarkdown) {
-      const actions = document.createElement('div');
-      actions.className = snapshot.response ? 'popout-response-actions' : 'popout-copy-source';
+      const actions = document.createElement(snapshot.response ? 'header' : 'div');
+      actions.className = snapshot.response ? 'popout-response-toolbar' : 'popout-copy-source';
       const copy = document.createElement('button'); copy.type = 'button';
       copy.className = 'code-copy code-action'; copy.dataset.copySnapshot = 'true';
       copy.title = 'Copy Markdown source to clipboard'; copy.setAttribute('aria-label', 'Copy Markdown source');
@@ -95,10 +95,7 @@ export async function mountPopout(): Promise<void> {
       status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       actions.append(copy, status);
       if (snapshot.response) {
-        const toolbar = document.createElement('header');
-        toolbar.className = 'popout-response-toolbar';
-        toolbar.append(actions);
-        content.before(toolbar);
+        content.before(actions);
         const markdown = responseMarkdown(snapshot.text);
         if (markdown) {
           const preview = (range: ResponseTrim, reveal: keyof ResponseTrim) => {
@@ -113,8 +110,7 @@ export async function mountPopout(): Promise<void> {
             save: trim => invoke('set_response_popout_trim', { trim }),
             report: error => report(`Could not save response trim: ${String(error)}`),
           });
-          actions.prepend(trim.toggle);
-          toolbar.append(trim.panel);
+          actions.prepend(trim.track);
           copySource = () => markdown.source(trim.range());
           window.addEventListener('unload', trim.dispose, { once: true });
         }

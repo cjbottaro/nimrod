@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { demoFixture, visible } from './demo-fixture';
 
 type FixtureWindow = Window & { __popoutTitle?: string; __copiedText?: string; __trimWrites?: unknown[] };
 
@@ -81,7 +82,34 @@ test('Markdown Copy stays at the upper-right without a header or obscuring scrol
   expect(errors).toEqual([]);
 });
 
-test('response trim restores, previews, copies and resets a contiguous Markdown range', async ({ page }) => {
+test('response Pop-out reveals the inset action on hover and keyboard focus without moving the response', async ({ page }) => {
+  const demo = await demoFixture(page);
+  try {
+    await demo.turn(1);
+    const turn = page.locator(visible('messages')).locator('.assistant.has-response-popout').last();
+    const button = turn.getByRole('button', { name: 'Pop out response' });
+    const prose = turn.locator(':scope > .markdown').first();
+    await turn.scrollIntoViewIfNeeded();
+    await page.locator(visible('prompt')).hover();
+    await expect(button).toHaveCSS('opacity', '0');
+    await expect(button).toHaveCSS('position', 'absolute');
+    const before = await prose.boundingBox();
+    await turn.hover();
+    await expect(button).toHaveCSS('opacity', '1');
+    expect(await prose.boundingBox()).toEqual(before);
+    const [turnBounds, buttonBounds] = await Promise.all([turn.boundingBox(), button.boundingBox()]);
+    expect(buttonBounds!.x).toBeGreaterThanOrEqual(before!.x + before!.width);
+    expect(buttonBounds!.x + buttonBounds!.width).toBeLessThan(turnBounds!.x + turnBounds!.width);
+    await page.locator(visible('prompt')).hover();
+    await button.focus();
+    await expect(button).toHaveCSS('opacity', '1');
+    await button.press('Enter');
+    await expect.poll(() => demo.calls.filter(call => call.command === 'open_code_popout').length).toBe(1);
+    expect(demo.errors).toEqual([]);
+  } finally { await demo.close(); }
+});
+
+test('response toolbar shows the slider next to Copy and can restore a contiguous Markdown range', async ({ page }) => {
   const text = '# Complete response\n\nA middle paragraph.\n\n```ts\nconst value = 1;\n```\n\nLast paragraph.';
   const errors = await popoutFixture(page, text, 'markdown', true, { first: 1, last: 2 });
   const document = page.locator('.popout-document');
@@ -89,20 +117,29 @@ test('response trim restores, previews, copies and resets a contiguous Markdown 
   await expect(document).toContainText('A middle paragraph.');
   await expect(document).not.toContainText('Last paragraph.');
   await expect(document.locator('.code-popout')).toHaveCount(0);
-  await expect(page.getByRole('slider')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Trim', exact: true }).click();
-  const first = page.getByRole('slider', { name: 'First block to keep' });
-  const last = page.getByRole('slider', { name: 'Last block to keep' });
+  const toolbar = page.locator('.popout-response-toolbar');
+  const first = toolbar.getByRole('slider', { name: 'First block to keep' });
+  const last = toolbar.getByRole('slider', { name: 'Last block to keep' });
+  const copy = toolbar.getByRole('button', { name: 'Copy Markdown source', exact: true });
+  await expect(toolbar.getByRole('button')).toHaveCount(1);
+  await expect(copy).toBeVisible();
+  const [sliderBounds, copyBounds] = await Promise.all([first.boundingBox(), copy.boundingBox()]);
+  expect(sliderBounds!.x + sliderBounds!.width).toBeLessThan(copyBounds!.x);
+  expect(copyBounds!.y + copyBounds!.height / 2).toBeCloseTo(sliderBounds!.y + sliderBounds!.height / 2);
   await expect(first).toHaveValue('1');
   await first.press('ArrowRight');
   await expect(document).not.toContainText('A middle paragraph.');
   await expect(last).toHaveValue('2');
   await first.press('ArrowRight');
   await expect(first).toHaveValue('2');
-  await page.getByRole('button', { name: 'Copy Markdown source', exact: true }).click();
+  await copy.click();
   expect(await page.evaluate(() => (window as FixtureWindow).__copiedText)).toMatch(/^```ts\nconst value = 1;\n```\n*$/);
-  await page.getByRole('button', { name: 'Reset trim' }).click();
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites)).toEqual([{ first: 2, last: 2 }]);
+  await first.press('ArrowLeft');
+  await first.press('ArrowLeft');
+  await last.press('ArrowRight');
+  await expect(document).toContainText('Complete response');
   await expect(document).toContainText('Last paragraph.');
-  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites)).toEqual([{ first: 2, last: 2 }, null]);
+  await expect.poll(() => page.evaluate(() => (window as FixtureWindow).__trimWrites?.at(-1))).toBeNull();
   expect(errors).toEqual([]);
 });
