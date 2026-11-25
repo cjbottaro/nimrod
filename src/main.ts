@@ -1137,7 +1137,38 @@ async function runProjectAction(id: `harness-${string}`): Promise<void> {
 function sessionConfiguration(tab: Tab) { return tab.integration.configuration.current(); }
 function sessionActions(tab: Tab): readonly SessionAction[] {
   if (!tab.project.availability.available()) return [];
-  return availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
+  const actions = availableSessionActions(tab.integration, () => pickConfigurationCancellation(tab));
+  if (!isConnected(tab) || !invocableSkills(tab).length) return actions;
+  return [...actions, { id: 'browse-skills', label: 'Browse skills…', detail: 'Find a skill and insert it before your draft text', run: () => browseSkills(tab) }];
+}
+function invocableSkills(tab: Tab) {
+  return tab.integration.commands.catalog().commands.filter(command => command.source === 'Skill' && /^[^/\s\u0000-\u001f]+$/.test(command.name));
+}
+async function browseSkills(tab: Tab): Promise<void> {
+  const token = tab.token, lifetime = tab.view.userTextLifetime;
+  const valid = () => !unloading && presentation.current === tab && tabs.includes(tab) && isConnected(tab)
+    && !settings.isOpen && !locked(tab) && token === tab.token && lifetime === tab.view.userTextLifetime;
+  if (!valid()) return;
+  const request = palette.startSelection('Browse skills', () => { void browseSkills(tab); }, message => {
+    if (valid()) notices.report({ id: `${tab.id}:browse-skills:${++noticeSequence}`, owner: tab.id, operation: 'Browse skills', message });
+  });
+  if (!request) return;
+  tab.cancelPreference?.(); tab.cancelPreference = request.cancel;
+  try {
+    const skills = invocableSkills(tab).sort((a, b) => a.name.localeCompare(b.name));
+    const name = await request.chooseItems(skills.map(skill => ({ id: skill.name, label: `/${skill.name}`, detail: skill.description })),
+      undefined, skills.length ? undefined : 'No invocable skills are currently reported by this session.');
+    if (!name || !valid() || tab.cancelPreference !== request.cancel) return;
+    if (!invocableSkills(tab).some(skill => skill.name === name)) {
+      request.error('This skill is no longer available. Your draft was kept.');
+      return;
+    }
+    const error = tab.view.stageSlashCommand(`/${name}`);
+    if (error) request.error(error);
+  } finally {
+    request.finish();
+    if (tab.cancelPreference === request.cancel) tab.cancelPreference = undefined;
+  }
 }
 async function runSessionAction(tab: Tab, id: SessionAction['id']): Promise<void> {
   if (!tabs.includes(tab) || tab.closing || tab.reloading || tab.deleting) return;

@@ -1283,6 +1283,15 @@ export function mountConversationView(host: ConversationViewHost, root: HTMLElem
     get userTextLifetime() { return userTextLifetime; },
     validateUserText: text => { const prepared = prepareUserText(text); return 'error' in prepared ? prepared.error : undefined; },
     submitUserText,
+    stageSlashCommand(command) {
+      if (disposed || !active || deletionLocked || prompt.readOnly || document.querySelector('dialog[open]'))
+        return 'The composer is not available. Your draft was kept.';
+      if (preparing || composer.attachments?.length) return 'Remove the images from your draft before inserting a skill.';
+      if (composer.draft.trimStart().startsWith('/')) return 'Finish or clear the slash command in your draft before inserting a skill.';
+      updateComposer(updateDraft(composer, `${command} ${composer.draft}`));
+      prompt.setSelectionRange(prompt.value.length, prompt.value.length);
+      prompt.focus({ preventScroll: true });
+    },
     scrollToBottom: () => { if (!disposed) transcriptScroll.scrollToBottom(); },
     hasConnectionOutcome: () => steeringTranscript.hasConnectionOutcome || configurationTranscript.hasConnectionOutcome,
     setActive(value) {

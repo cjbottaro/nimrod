@@ -33,6 +33,28 @@ Image attachment behavior and its text-only queue recovery boundary are covered 
 
 [Customize Nimrod](customize-nimrod.md) supplies a separate modal-owned text input through the same view validation, pending-preview, Send-effects and typed prompt dispatch helpers. It never consumes or swaps the Composer draft/attachments. The view's user-text lifetime retires on Reset/disconnection; harness interaction policies remain authoritative.
 
+## Skills browser
+
+**Browse skills…** is a bindable session action in the command palette, with no
+default shortcut. It appears for a connected session whose command catalog
+advertises invocable `Skill` entries (currently Pi). Use the cached canonical
+names and descriptions, not config files, raw skill bodies, aliases or inferred
+command syntax. A read-only skill report is not an invocation catalog.
+
+The searchable selection page stages the exact advertised slash command plus a
+space before the ordinary draft text, retaining that text as arguments. Selection
+focuses the composer; sending remains explicit. Escape leaves the draft intact.
+If the draft has images or already starts with a slash command, leave it intact
+and report the rejection to the owning session. Revalidate the originating
+session, connection, picker and catalog on acceptance. Staging uses the normal
+local draft update path; it performs no harness RPC, creates no Command card
+and has no Send recency or forced transcript navigation effect.
+
+`src/main.ts` supplies the catalog projection and session-bound palette action;
+`ConversationView.stageSlashCommand` owns the draft edit. The shell fixture
+covers filtering to skills, cancellation, staging, existing-command rejection
+and no prompt dispatch.
+
 ## Shared slash completion
 
 `src/pi/slash-completion.ts` owns presentation-only completion using each

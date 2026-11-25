@@ -4,6 +4,11 @@ A dedicated cross-platform app for directory-backed coding projects and agent se
 
 **One project directory per window, with bespoke harness integrations.** Pi is primary, using your installed Pi and its configuration, extensions, models and authentication. Built-in [Copilot](docs/copilot.md) uses the bundled official SDK with your installed/authenticated CLI. [Codex](docs/codex.md) uses your installed CLI's native app-server; installed-runtime/native acceptance is pending. Generic ACP infrastructure is retained internally for possible future harnesses, without creation/options UI. SDK fixtures, packaging and real-agent/native acceptance are pending.
 
+Use Nimrod to work in a session: read the transcript, invoke skills, inspect MCP
+status and change supported session controls. Use the harness's TUI or config
+files to administer the harness. Nimrod does not mirror each harness's slash
+catalog or terminal menus.
+
 ## Get started
 
 For packaged macOS releases, see [Installation](docs/installation.md): signed/notarized Apple Silicon DMGs (no Intel downloads), plus `brew install --cask cjbottaro/tap/nimrod` once the first stable release and tap are published. The release pipeline is implemented; first-run distribution acceptance is pending.

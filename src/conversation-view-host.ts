@@ -40,6 +40,8 @@ export interface ConversationView {
   readonly userTextLifetime: object;
   validateUserText(text: string): string | undefined;
   submitUserText(text: string): void;
+  /** Stage a slash command before ordinary draft text without submitting. Returns a rejection reason. */
+  stageSlashCommand(command: string): string | undefined;
   /** Error presentation ownership only; never used to infer transport/delivery state. */
   hasConnectionOutcome?(): boolean;
 }

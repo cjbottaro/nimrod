@@ -31,6 +31,28 @@ Share UI mechanics, not harness semantics. [Consumer-oriented interfaces](consum
 
 The initial POC aliased `mountPiView` and introduced `ViewHost.acp` branches. It also made ACP construct empty Pi queues/extensions and Pi model controls. That proved reuse, but would make each new integration another set of conditions in the shared renderer. The review extracts only boundaries exercised by Pi and ACP rather than inventing a generic controller or public app-extension framework.
 
+### GUI-first harness scope
+
+Nimrod is a GUI for working in a harness, not its administration surface or a
+second TUI. Keep supported controls for the active session (model, effort, mode,
+permissions and session lifecycle) and Nimrod-owned Settings. Use the harness's
+TUI or configuration files for persistent harness defaults, authentication,
+and installing or configuring MCP servers, skills and extensions.
+
+Skills are the primary slash-invocation workflow. Beyond skills, support a
+curated set of useful, reliably executable commands, not the TUI catalog. A
+missing TUI command or bare-command picker is not an integration defect. Prefer
+command-name discovery and literal arguments; support an explicit argument
+form without reproducing a bare TUI picker when that is the only reliable form.
+Add rich argument completion or a modal only for a concrete high-value workflow
+with a supported contract. Existing supported forms are not removed by this
+policy alone.
+
+The [MCP inspector](mcp-inspector.md) and [skills browser](composer.md#skills-browser)
+are GUI workflows in their own right: inspect effective session capabilities
+and stage a native skill invocation. Project only what the owning harness can
+report reliably; these surfaces do not manage harness configuration.
+
 ### Harness command ownership
 
 The dedicated [slash commands skill](../../slash-commands/SKILL.md) owns the
@@ -53,10 +75,10 @@ results/effects, cancellation and explicit unknown-result failure. Shared
 pickers/modals may present a harness-owned interaction, but presentation reuse
 does not change command ownership or dispatch an application action.
 
-When a supported harness interface cannot express a command's required
-interaction or host effect, add the narrowest concrete harness adapter that
-completes the original command semantics. Key adapters by stable harness
-semantics or typed effects where possible; a command-name-specific adapter is a
+If a command meets the [GUI-first scope](#gui-first-harness-scope) and needs a
+concrete adapter, use the narrowest one that completes the supported form's
+semantics. Otherwise, omit the unsupported form. Key adapters by stable
+harness semantics or typed effects where possible; a command-name-specific adapter is a
 last resort justified by an observed interface gap. It must still invoke or
 finalize the harness command rather than redirecting to a similar Nimrod action.
 Unknown or ambiguous operations fail explicitly without prompt fallback,

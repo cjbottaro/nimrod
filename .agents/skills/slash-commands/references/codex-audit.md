@@ -29,13 +29,13 @@ methods** and generated schema fingerprints. It is development evidence, never
 runtime advertisement or an execution allowlist. Some deferred rows below have
 only catalog/dispatch/schema evidence; they are candidates, not proven adapters.
 
-## Repeat on upgrades and anomalies
+## Optional full inventory procedure
 
-Run this audit whenever the supported/installed Codex version changes, command
-semantics fail, a protocol schema changes, or a new candidate command is requested.
-An audit is a one-time task, not a timer, background watcher or permission to
-invoke commands. Also review newly exposed APIs even if command names did not
-change: an old terminal-only command can become implementable through a new API.
+Use this procedure when a deliberate broad inventory is needed. Ordinary
+upgrades and regressions use the [supported-command review policy](../SKILL.md#codex-upgrade-and-new-command-audit),
+not a full TUI audit. The inventory is evidence, not a backlog: a newly exposed
+API is not in itself a reason to add a command. An audit is not a timer,
+background watcher or permission to invoke commands.
 
 1. Record installed CLI version **without starting an app-server** and obtain the
    exact matching official source tag plus generated stable/experimental schema

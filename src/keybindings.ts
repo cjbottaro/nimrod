@@ -18,6 +18,7 @@ const BUILTIN_ACTIONS = [
   { id: 'reload-customizations', label: 'Reload customizations', keywords: 'ui templates layout project bar cards plugins', scope: 'project', context: 'application', defaults: [] },
   { id: 'select-theme', label: 'Select theme…', scope: 'app', context: 'application', defaults: [] },
   { id: 'mcp', label: 'MCP servers…', scope: 'project', context: 'session', defaults: [] },
+  { id: 'browse-skills', label: 'Browse skills…', scope: 'project', context: 'session', defaults: [] },
   { id: 'model', label: 'Select model…', scope: 'project', context: 'session', defaults: ['primary+shift+m'] },
   { id: 'thinking', label: 'Select thinking level…', keywords: 'effort reasoning', scope: 'project', context: 'session', defaults: ['primary+shift+e'] },
   { id: 'mode', label: 'Select mode…', keywords: 'interactive plan autopilot', scope: 'project', context: 'session', defaults: [] },

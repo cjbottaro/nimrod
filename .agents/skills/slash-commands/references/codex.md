@@ -11,9 +11,8 @@ native APIs, not copied terminal output or unknown slash text sent as chat.
 
 The [0.164.0 source audit](codex-audit.md) inventories all **65 native enum
 commands**, aliases, dynamic families, API candidates and exclusions. It also owns
-the repeatable upgrade procedure and source/schema fingerprint snapshot. Re-audit
-on CLI upgrades and protocol/command anomalies; two implemented commands were
-never an exhaustive Codex catalog. [Codex integration](../../codex-integration/SKILL.md)
+the optional full-inventory procedure and source/schema fingerprint snapshot.
+For upgrades and regressions, use the [supported-command review policy](../SKILL.md#codex-upgrade-and-new-command-audit). [Codex integration](../../codex-integration/SKILL.md)
 owns protocol evidence; [session commands](../../features/references/session-commands.md)
 owns the required consumer contract. No runtime semver gate or all-version promise
 is implied: unsupported native APIs fail explicitly on their Command card.

@@ -75,6 +75,7 @@ interface ShellOptions {
   filePath?: string | null;
   holdPrompts?: boolean;
   mcpReport?: string;
+  piCommands?: JsonRecord[];
   focused?: () => boolean;
   performanceControl?: { after: (() => void)[]; writeError?: string; copyError?: string };
   notificationError?: string;
@@ -463,7 +464,7 @@ async function fixture(startGate?: Promise<void>, options: ShellOptions = {}) {
           ...(target.name !== undefined ? { sessionName: target.name } : {}),
           ...(activeConfig.mode !== 'temporary' ? options.state?.() ?? { sessionFile: activeConfig.sessionFile || target.file, sessionId: 'fixture-id' } : {}) }
           : request.type === 'get_messages' ? { messages: options.history || [] }
-          : request.type === 'get_commands' ? { commands: options.mcpReport ? [{ name: 'mcp', source: 'extension', sourceInfo: { path: 'builtin:mcp' } }] : [] } : {};
+          : request.type === 'get_commands' ? { commands: options.piCommands ?? (options.mcpReport ? [{ name: 'mcp', source: 'extension', sourceInfo: { path: 'builtin:mcp' } }] : []) } : {};
         channel.onmessage({ kind: 'rpc', value: { type: 'response', id: request.id, success: true, data } });
       }
     },
@@ -5566,6 +5567,48 @@ test('Pi dialogs retain focus priority above the palette without dismissing it',
     assert.equal(f.win.document.activeElement, prompt);
     f.disconnect();
   } finally { f.dom.window.close(); }
+});
+
+test('the skills browser searches advertised skills and stages without sending or replacing a slash draft', async () => {
+  const f = await fixture(undefined, { piCommands: [
+    { name: 'skill:review', source: 'skill', description: 'Inspect a change' },
+    { name: 'skill:document', source: 'skill', description: 'Write a guide' },
+    { name: 'settings', source: 'extension', description: 'Edit persistent settings' },
+  ] });
+  try {
+    f.element<HTMLButtonElement>('start-temporary').click(); await f.tick(); await f.tick();
+    const prompt = f.element<HTMLTextAreaElement>('prompt');
+    const input = f.element<HTMLInputElement>('palette-input');
+    const set = (field: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      field.value = value; field.dispatchEvent(new f.win.Event('input'));
+    };
+    const key = (key: string) => input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    const browse = async () => {
+      f.win.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'P', metaKey: true, shiftKey: true, cancelable: true }));
+      set(input, 'Browse skills'); key('Enter'); await f.tick();
+      assert.equal(f.element('palette-title').textContent, 'Browse skills');
+    };
+    prompt.focus(); set(prompt, 'this diff\nand the tests');
+    await browse();
+    assert.match(f.element('palette-list').textContent!, /\/skill:review/);
+    assert.doesNotMatch(f.element('palette-list').textContent!, /Edit persistent settings/);
+    key('Escape'); await f.tick();
+    assert.equal(prompt.value, 'this diff\nand the tests');
+    assert.equal(f.win.document.activeElement, prompt);
+
+    await browse(); set(input, 'Inspect a change');
+    assert.doesNotMatch(f.element('palette-list').textContent!, /skill:document/);
+    key('Enter'); await f.tick();
+    assert.equal(prompt.value, '/skill:review this diff\nand the tests');
+    assert.equal(f.win.document.activeElement, prompt);
+    assert.equal(prompt.selectionStart, prompt.value.length);
+
+    await browse(); set(input, 'Write a guide'); key('Enter'); await f.tick();
+    assert.equal(prompt.value, '/skill:review this diff\nand the tests');
+    assert.match(f.element('session-notices').textContent!, /Finish or clear the slash command/);
+    assert.equal(f.calls.some(call => (call.args.message as JsonRecord)?.type === 'prompt'), false);
+    f.disconnect();
+  } finally { f.win.close(); }
 });
 
 test('MCP inspector routes palette and composer entries to the same session without status notices', async () => {

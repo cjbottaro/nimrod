@@ -10,7 +10,11 @@ description: Design, implement, debug, audit or review slash commands for any Ni
 Use this skill for slash-command work across Pi, Copilot, curated future
 integrations and generic ACP agents. It owns the implementation workflow,
 decision criteria and cross-harness review checklist. It does not define a
-universal harness wire protocol or duplicate concrete command catalogs.
+universal harness wire protocol or duplicate concrete command catalogs. Apply
+[GUI-first harness scope](../features/references/harness-presentation.md#gui-first-harness-scope)
+before any command discovery or adapter expansion. Existing dynamic catalogs
+permit native dispatch where documented; advertisement does not certify TUI
+interaction parity.
 
 Read repository `AGENTS.md`, `README.md`, the
 [features skill](../features/SKILL.md), and:
@@ -43,7 +47,7 @@ and known built-ins; do not pretend a snapshot is exhaustive forever.
 | --- | --- | --- |
 | Pi | [Pi slash commands](references/pi.md) | Current flagship integration |
 | Copilot | [Copilot slash commands](references/copilot.md) | Current built-in SDK integration |
-| Codex | [Codex client commands](references/codex.md), [complete inventory and upgrade audit](references/codex-audit.md) | Bounded app-server-backed client catalog |
+| Codex | [Codex client commands](references/codex.md), [optional full native inventory](references/codex-audit.md) | Bounded app-server-backed client catalog |
 | Generic ACP | [Generic ACP command baseline](references/generic-acp.md) | Retained internal baseline; no current product entry point |
 
 When adding another supported harness, create `references/<harness>.md` and add
@@ -231,9 +235,11 @@ Preserve reader position, auto-follow intent, focus and newer drafts.
 
 ## Narrow adapter criteria
 
-Add an adapter only when all are true:
+Add an adapter only when the workflow is within the GUI-first scope and all of
+these are true:
 
-1. The command is advertised by the harness.
+1. The command is advertised by the harness (see the terminal-client-only
+   exception below).
 2. Generic metadata/results/effects cannot express required behavior.
 3. The missing behavior is observed in a pinned supported interface/version,
    not inferred from terminal appearance alone.
@@ -260,17 +266,12 @@ runtime or route the adapter through an unrelated Nimrod action.
 
 ## Codex upgrade and new-command audit
 
-Codex requires a source/schema audit because its app-server does not advertise
-its terminal command catalog. **On every Codex version/protocol upgrade, command
-anomaly, or request for broader command coverage**, follow the
-[Codex audit procedure](references/codex-audit.md). Inventory the complete native
-enum/aliases and dynamic families, diff source and generated APIs against the
-pinned snapshot, then reclassify newly possible adapters—even when command names
-have not changed. Record explicit blockers and next steps for unsupported rows.
-Do not treat the current Nimrod catalog as the entire Codex catalog, confuse
-native `/stop` with active-turn Stop, or promote source evidence to native
-acceptance. The procedure includes the source-only audit/diff script and rules
-for safely authorized probes; it never grants blanket command invocation.
+Review the public app-server contracts used by Nimrod's supported Codex commands
+when versions change or those commands regress. For a nominated addition,
+review only the relevant native form and supported APIs after evaluating product
+scope. The [Codex inventory and audit procedure](references/codex-audit.md)
+remains available for deliberate broader audits, not a routine upgrade gate or
+implementation backlog. Source evidence does not establish native acceptance.
 
 ## Compatibility audit
 
@@ -299,8 +300,9 @@ Maintain a compatibility matrix:
 | --- | --- | --- | --- | --- | --- |
 | Harness command | Yes/No | Yes/No | Event/read | Exact gap | None/typed/narrow |
 
-Repeat the audit on SDK/CLI/agent upgrades. An existing adapter is not proof the
-new version still needs it.
+On SDK/CLI/agent upgrades, recheck supported forms and their concrete adapters;
+an existing adapter is not proof the new version still needs it. Do not audit
+unrelated TUI commands unless a broader inventory is explicitly needed.
 
 ## Safety and interaction invariants
 
