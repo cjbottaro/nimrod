@@ -268,6 +268,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     restoreScroll?.();
   }
   function updateStatus(): void {
+    status.hidden = mode === 'inspection' && !loading && matches.length > 0;
     if (mode === 'name') {
       const harness = matches[selected];
       status.textContent = [notice, harness ? `Harness: ${harness.label} · ↑/↓ to choose · Enter to create · Esc to cancel` : 'No harnesses support named sessions.'].filter(Boolean).join('\n');
@@ -324,7 +325,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     title.textContent = 'Commands'; input.placeholder = 'Type a command…'; input.setAttribute('aria-label', 'Search commands');
     input.value = commandQuery; back.hidden = true; retry.hidden = true; retryAction = undefined; draw(); input.focus();
   }
-  function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection' | 'browse', heading: string, placeholder: string, onRetry: () => void, keepQuery = false): number | undefined {
+  function beginPage(kind: 'sessions' | 'projects' | 'selection' | 'inspection' | 'browse', heading: string, placeholder: string, onRetry?: () => void, keepQuery = false): number | undefined {
     if (!dialog.open && !open()) return;
     historyRequest?.abort(); historyRequest = undefined;
     endRetained(); endPreview();
@@ -332,7 +333,7 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     if (mode === 'commands') commandQuery = input.value;
     cancelChoice(); createNamed = undefined; selectionMarker = 'current'; mode = kind; title.textContent = heading; input.placeholder = placeholder;
     input.setAttribute('aria-label', kind === 'sessions' ? 'Search project sessions' : heading);
-    back.hidden = false; retry.hidden = false; retryAction = onRetry;
+    back.hidden = false; retry.hidden = !onRetry; retryAction = onRetry;
     retry.textContent = kind === 'sessions' ? 'Refresh' : 'Retry';
     loading = true; notice = ''; items = []; matches = []; selected = 0;
     if (!keepQuery) input.value = '';
@@ -377,10 +378,9 @@ export function installCommandPalette(win: Window, dialog: HTMLDialogElement, op
     }
     if (dialog.open && generation === request) { loading = false; draw(); }
   }
-  function startInspection(heading: string, onRefresh: () => void): InspectionRequest | undefined {
-    const request = beginPage('inspection', heading, 'Search servers…', onRefresh);
+  function startInspection(heading: string): InspectionRequest | undefined {
+    const request = beginPage('inspection', heading, 'Search servers…');
     if (request === undefined) return;
-    retry.textContent = 'Refresh';
     const current = () => !disposed && dialog.open && generation === request && mode === 'inspection';
     return {
       isCurrent: current,

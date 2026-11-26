@@ -1,4 +1,4 @@
-import type { McpSnapshot } from '../mcp-inspector';
+import { mcpConnectionLabel, type McpSnapshot } from '../mcp-inspector';
 import { record } from './connection';
 import type { CopilotSession } from './session';
 
@@ -13,12 +13,12 @@ export async function copilotMcpPage(session: CopilotSession, current: () => boo
     names.add(value.name);
     // This row already came from effective configuration. The runtime sentinel
     // does not establish a live connection state for that configured server.
-    const state = typeof value.status === 'string' && value.status !== 'not_configured' ? value.status : undefined;
+    const state = mcpConnectionLabel(value.status);
     return { id: value.name, label: typeof value.displayName === 'string' && value.displayName.trim() ? value.displayName : value.name,
-      badge: value.enabled ? state ?? 'No live status' : 'disabled', keywords: value.name,
+      badge: value.enabled ? state : 'Disabled', keywords: value.name,
       inspection: { fields: [['Server', value.name], ['Configuration', value.enabled ? 'Enabled' : 'Disabled'],
-        ['Connection', state ?? 'No live status reported'], ['Source', typeof value.source === 'string' ? value.source : 'Not reported']] as [string, string][],
+        ['Connection', state], ['Source', typeof value.source === 'string' ? value.source : 'Not reported']] as [string, string][],
         text: typeof value.error === 'string' ? value.error : undefined }, run() {} };
   });
-  return { count: items.length, items, notice: items.length ? 'Read-only configured-server snapshot from Copilot · Refresh to update.' : 'No MCP servers reported by Copilot.' };
+  return { count: items.length, items, notice: items.length ? undefined : 'No MCP servers reported by Copilot.' };
 }

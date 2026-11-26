@@ -18,7 +18,7 @@ Color-theme preview uses `startPreviewSelection()` with lifecycle-owned rollback
 
 Ordinary Settings field choices use `startSelection` with an explicit open Settings parent, alongside the existing theme preview exception. They cannot replace an already-open palette or bypass unrelated nested-dialog priority; cancellation leaves preferences unchanged and restores the field opener. [Control patterns](controls.md#settings-choice-lifecycle) owns this composition; field commits remain with the concrete Settings controllers.
 
-Read-only MCP inspection uses `startInspection()` in the same lifecycle: details follow the selected row, Enter does not execute a row action, Refresh replaces the page generation, and Escape/Back/cancellation suppress stale presentation. See [MCP inspector](mcp-inspector.md).
+Read-only MCP inspection uses `startInspection()` in the same lifecycle: details follow the selected row, Enter does not execute a row action, each open requests a new snapshot, and Escape/Back/cancellation suppress stale presentation. See [MCP inspector](mcp-inspector.md).
 
 Add a picker through `startSelection()` or the existing page lifecycle, not a feature-specific dialog key handler. `beginPage()` owns query reset, Back/Retry controls and request generation. Page content may differ; dismissal must not branch on page mode or entry point. There is no new generic harness or global modal framework.
 

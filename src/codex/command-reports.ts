@@ -1,4 +1,5 @@
 import { nonempty, record } from './protocol';
+import { mcpConnectionLabel } from '../mcp-inspector';
 import type { RpcRecord } from '../json-rpc-connection';
 
 const string = (value: unknown, label: string) => {
@@ -27,7 +28,7 @@ export function mcpReport(servers: readonly RpcRecord[], verbose: boolean): stri
     const resources = verbose ? array(server.resources, 'MCP resources').map(value => {
       const resource = record(value, 'MCP resource'); return `  ${string(resource.name, 'resource name')} — ${string(resource.uri, 'resource URI')}`;
     }) : [];
-    return [`${server.name} · ${server.runtimeStatus ?? 'Runtime status not reported'} · Auth: ${server.authStatus}`,
+    return [`${server.name} · ${mcpConnectionLabel(server.runtimeStatus)} · Auth: ${server.authStatus}`,
       ...(server.toolsError ? [`Tool discovery: ${string(server.toolsError, 'MCP tool error')}`] : []),
       `Tools (${tools.length}):`, ...tools, ...(verbose ? [`Resources (${resources.length}):`, ...resources,
         `Resource templates: ${array(server.resourceTemplates, 'MCP resource templates').length}`] : [])].join('\n');

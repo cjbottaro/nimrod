@@ -5664,7 +5664,7 @@ test('MCP inspector routes palette and Status area entries to the same session w
     input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await f.tick(); await f.tick();
     assert.equal(f.element('palette-title').textContent, 'MCP servers');
-    assert.match(f.element('palette-inspection').textContent!, /playwright.*failed/s);
+    assert.match(f.element('palette-inspection').textContent!, /playwright.*Failed/s);
     assert.match(f.element('palette-inspection').textContent!, /ENOENT/);
     assert.equal(prompt.value, 'Keep this draft');
     assert.equal(f.element('session-notices').hidden, true);
@@ -5713,7 +5713,7 @@ test('Codex MCP action uses the connected thread and shows reported tools and au
   } finally { f.win.close(); }
 });
 
-test('Copilot MCP count comes from the structured catalog and disappears on an empty refresh', async () => {
+test('Copilot MCP inspection rereads on reopen, labels reported states and hides an empty count', async () => {
   const options: ShellOptions = { windowWorkspace: '/project', copilotMcp: [{ name: 'fixture', enabled: true, status: 'failed', error: 'Offline fixture', source: 'workspace' }] };
   const f = await fixture(undefined, options);
   try {
@@ -5724,14 +5724,23 @@ test('Copilot MCP count comes from the structured catalog and disappears on an e
     const button = f.element('main-activity').querySelector<HTMLButtonElement>('.mcp-inspector-action')!;
     assert.equal(button.hidden, false); assert.equal(String(button.textContent), '1 MCP server');
     button.click(); await f.tick();
-    assert.match(f.element('palette-inspection').textContent!, /failed.*workspace.*Offline fixture/s);
-    options.copilotMcp = [{ name: 'fixture', enabled: true, status: 'not_configured', source: 'workspace' }];
-    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
-    assert.match(f.element('palette-list').textContent!, /No live status/);
-    assert.match(f.element('palette-inspection').textContent!, /Enabled.*No live status reported/s);
+    assert.match(f.element('palette-inspection').textContent!, /Failed.*workspace.*Offline fixture/s);
+    assert.equal(f.element<HTMLButtonElement>('palette-refresh').hidden, true);
+    assert.equal(f.element('palette-status').hidden, true);
+    const reopen = async () => {
+      input.dispatchEvent(new f.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await f.tick();
+      button.click(); await f.tick();
+    };
+    options.copilotMcp = [{ name: 'fixture', enabled: true, status: 'not_configured', source: 'workspace' },
+      { name: 'remote', enabled: true, status: 'needs-auth' }];
+    await reopen();
+    assert.match(f.element('palette-list').textContent!, /Unknown.*Auth required/s);
+    assert.match(f.element('palette-inspection').textContent!, /Enabled.*Unknown/s);
     assert.doesNotMatch(f.element('palette-inspection').textContent!, /not_configured/);
     options.copilotMcp = [];
-    f.element<HTMLButtonElement>('palette-refresh').click(); await f.tick();
+    await reopen();
+    assert.equal(f.element('palette-status').hidden, false);
+    assert.match(f.element('palette-status').textContent!, /No MCP servers/);
     assert.equal(button.hidden, true); assert.equal(button.textContent, '');
     const requests = f.calls.filter(call => call.command === 'write_copilot').map(call => call.args.message as JsonRecord);
     const reads = requests.filter(request => request.method === 'mcp-configured');

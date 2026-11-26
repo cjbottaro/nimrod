@@ -228,8 +228,8 @@ test('incremental history obeys query selection, refresh cancellation and stale-
 test('inspection shares palette focus/cancellation, shows safe details and ignores stale reports', async () => {
   const f = fixture();
   try {
-    let refreshes = 0, runs = 0;
-    const request = f.palette.startInspection('MCP servers', () => { refreshes++; })!;
+    let runs = 0;
+    const request = f.palette.startInspection('MCP servers')!;
     request.show({ items: [
       { id: 'failed', label: 'Playwright', detail: 'codemode', badge: 'failed', inspection: { fields: [['Connection', 'failed']], text: '<script>not markup</script>\nsecond line' }, run() { runs++; } },
       { id: 'ready', label: 'ADO', detail: '40 tools · codemode', inspection: { fields: [['Tools', '40']] }, run() { runs++; } },
@@ -245,8 +245,8 @@ test('inspection shares palette focus/cancellation, shows safe details and ignor
     assert.equal(runs, 0, 'inspection never executes row actions');
     f.query('Playwright');
     assert.match(details().textContent!, /Playwright/);
-    f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.click();
-    assert.equal(refreshes, 1);
+    assert.equal(f.win.document.querySelector<HTMLButtonElement>('#palette-refresh')!.hidden, true);
+    assert.equal(f.win.document.querySelector<HTMLElement>('#palette-status')!.hidden, true);
     f.key('Escape'); await tick();
     assert.equal(f.win.document.activeElement, f.opener);
     assert.equal(request.isCurrent(), false);

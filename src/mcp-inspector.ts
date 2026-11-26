@@ -4,6 +4,18 @@ import type { HarnessSessionHost } from './harness-host';
 export const mcpAction = { id: 'mcp', label: 'MCP servers…', detail: 'Inspect this session’s MCP servers' } as const;
 export const mcpSlashUnavailable = 'MCP slash commands are unavailable in Nimrod. Your draft was kept.';
 
+export function mcpConnectionLabel(status: unknown): string {
+  switch (status) {
+    case 'connected': return 'Live';
+    case 'closed': case 'stopped': case 'disconnected': return 'Disconnected';
+    case 'starting': case 'connecting': case 'pending': return 'Connecting';
+    case 'needs sign-in': case 'needs-auth': case 'authenticationRequired': return 'Auth required';
+    case 'failed': return 'Failed';
+    case 'disabled': return 'Disabled';
+    default: return 'Unknown';
+  }
+}
+
 export interface SessionMcpInspector {
   readonly count: number | undefined;
   prime(): void;
@@ -39,7 +51,7 @@ export function createMcpInspector<Session extends object>(host: HarnessSessionH
     const session = read(), token = host.ownership.token;
     const valid = () => !!session && available(session, token) && host.ui.canPresent();
     if (!session || !valid()) return;
-    const page = host.ui.palette.startInspection('MCP servers', () => { void run(); });
+    const page = host.ui.palette.startInspection('MCP servers');
     if (!page) return;
     cancel(); cancelPage = page.cancel;
     initialOwner = session;

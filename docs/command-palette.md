@@ -29,7 +29,7 @@ Some commands open a picker or name field:
 - [Open recent project](projects.md#open-a-recent-project) searches directories.
 - [Switch/Resume session](sessions.md#switch-or-resume) searches open conversations or saved history.
 - [Delete sessions](sessions.md#delete-several-conversations) supports repeated cleanup.
-- [MCP servers](mcp.md) shows a read-only server snapshot with selected-server details and Refresh.
+- [MCP servers](mcp.md) shows a read-only server snapshot with selected-server details. Reopen it for a fresh snapshot.
 - [Session configuration](model-thinking.md) marks the acknowledged current value with a **•**.
 - [Select theme](themes.md#select-and-preview-themes) previews colors before saving.
 
